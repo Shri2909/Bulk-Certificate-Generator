@@ -24,7 +24,7 @@ from certgen.errors import (
     request_validation_handler,
     unhandled_exception_handler,
 )
-from certgen.middleware import NoStoreMiddleware, async_lifespan
+from certgen.middleware import BodySizeLimitMiddleware, NoStoreMiddleware, async_lifespan
 from certgen.rendering import render_certificate
 from certgen.storage import Storage
 from certgen.worker import Renderer
@@ -51,7 +51,8 @@ def create_app(
     app.state.settings = settings
     app.state.clock = clock
     app.state.renderer = renderer
-    app.add_middleware(NoStoreMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_bytes)
+    app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 413 responses
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)

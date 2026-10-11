@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -11,10 +10,10 @@ from fastapi import APIRouter, Request, Response
 from pydantic import ValidationError
 
 from certgen import service
-from certgen.errors import ApiError, ProblemCode, body_errors_from_pydantic
+from certgen.errors import ApiError, FieldCode, FieldError, ProblemCode, body_errors_from_pydantic
 from certgen.models import CertificateOut, Counts, CreateJobRequest, JobCreated, JobLinks, JobResource
 from certgen.storage import HEX32
-from certgen.validation import canonical_json, validate_request
+from certgen.validation import JsonBodyError, canonical_json, decode_json_body, validate_request
 
 router = APIRouter()
 
@@ -45,18 +44,53 @@ def job_resource(view: service.JobView) -> dict[str, Any]:
     ).model_dump()
 
 
+def invalid(errors: list[FieldError], detail: str = "Request is invalid.") -> ApiError:
+    return ApiError(ProblemCode.VALIDATION_FAILED, detail, errors)
+
+
+def is_json_media_type(content_type: str | None) -> bool:
+    """application/json, optionally with charset=utf-8, case-insensitive (§24.5 step 1)."""
+    if content_type is None:
+        return False
+    media_type, *params = (part.strip().lower() for part in content_type.split(";"))
+    return media_type == "application/json" and all(p.replace('"', "") == "charset=utf-8" for p in params)
+
+
+def read_json_body(request: Request) -> Any:
+    """§24.5: the body is parsed here instead of by FastAPI, so duplicate keys, NaN and deep nesting
+    are rejected rather than silently accepted."""
+    if not is_json_media_type(request.headers.get("content-type")):
+        raise ApiError(ProblemCode.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json.")
+    # Request.body() is async; this sync route runs in a worker thread, which may call into the loop.
+    raw: bytes = anyio.from_thread.run(request.body)
+    if not raw:
+        raise invalid([FieldError(None, FieldCode.REQUIRED, "A JSON request body is required.")])
+    try:
+        return decode_json_body(raw)
+    except JsonBodyError as exc:
+        raise invalid([FieldError(None, FieldCode.INVALID_JSON, str(exc))]) from None
+
+
 @router.post(JOBS_PATH, status_code=202, response_model=JobCreated)
 def create_job(request: Request, response: Response) -> JobCreated:
     state = request.app.state
-    # Request.body() is async; this sync route runs in a worker thread, which may call back into the loop.
-    raw = anyio.from_thread.run(request.body)
-    obj = json.loads(raw)
+    obj = read_json_body(request)
     try:
         body = CreateJobRequest.model_validate(obj)
     except ValidationError as exc:
-        errors = body_errors_from_pydantic(exc.errors())
-        raise ApiError(ProblemCode.VALIDATION_FAILED, "Request is invalid.", errors) from None
-    validated = validate_request(body, print_email=state.settings.print_email)
+        raise invalid(body_errors_from_pydantic(exc.errors())) from None
+    today = datetime.fromtimestamp(state.clock() // 1000, UTC).date()
+    validated = validate_request(
+        body,
+        today=today,
+        print_email=state.settings.print_email,
+        max_recipients=state.settings.max_recipients,
+    )
+    if validated.request_errors:
+        raise invalid(validated.all_errors)
+    if validated.valid_count == 0:
+        n = len(validated.rows)
+        raise invalid(validated.all_errors, f"{n} of {n} recipients are invalid; no job was created.")
     view = service.create_job(state.engines, state.settings, state.clock, validated, canonical_json(obj))
     response.headers["Location"] = f"{JOBS_PATH}/{view.id}"
     return JobCreated(**job_resource(view), errors=[e.as_flat() for e in validated.row_errors])

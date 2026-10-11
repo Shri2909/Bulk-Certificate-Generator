@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M2 | STATUS: red | NEXT ACTION: Write M2 RED tests (test_validation, test_errors, test_limits body/media cases, test_layout), then fonts.py, layout.py, full validation.py, strict body parsing and BodySizeLimitMiddleware.
+CURRENT MILESTONE: M3 | STATUS: red | NEXT ACTION: Write test_rendering.py (RED), then implement the §10 template with §24.8 filesystem hardening in storage.py, then the automated visual check.
 
 # Build log (Phase 5)
 
@@ -20,7 +20,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 |---|---|---|---|
 | M0 | Freeze | done (sha256 93537bde…, inputs commit cd7d461) | `blueprint-locked` |
 | M1 | Pins + walking skeleton | done — 64 passed; gate PASS (`docs/evidence/gates/M1.txt`) | `m1-done` |
-| M2 | Validation, fonts, fit_text, errors, middleware, limits | pending | `m2-done` |
+| M2 | Validation, fonts, fit_text, errors, middleware, limits | done — 169 passed; gate PASS (`docs/evidence/gates/M2.txt`) | `m2-done` |
 | M3 | Real template, print_email snapshot, determinism, visual check | pending | `m3-done` |
 | M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | pending | `m4-done` |
 | M5 | Listing, downloads, archive | pending | `m5-done` |
@@ -70,6 +70,9 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | G11 | §16 M1 skeleton uses a "placeholder renderer" then M3 replaces it | None; noted. | M1 renders a minimal ReportLab PDF via the same `render_certificate` signature; M3 replaces the body. |
 | G12 | §6.10 `/healthz` with embedded workers off | Gap: expected/alive both 0. | Reports `0/0` and `"status": "ok"`. |
 | G14 | §24.10 "regenerates the colliding ID" with a bulk insert of many items | SQLite's IntegrityError does not say which row collided. | Regenerate every certificate ID of the batch and retry the savepoint (≤ 5 times). No ID has been exposed yet, so this is equivalent and needs no per-row lookup. |
+| G15 | §6.3 "422 with every request-level and row-level error" vs. Pydantic structural failures | When the envelope itself is malformed (missing/mistyped/unknown top-level field, non-object row) there is no model to validate rows against. | Structural (Pydantic) failure → 422 with the Pydantic errors only. Domain request-level errors (title/issuer/issued_on/recipients count) → 422 with request errors first, then every row error (§24.11). TOO_MANY_RECIPIENTS skips row validation per §9.1. |
+| G16 | §2/§9 "allow_smtputf8=False (ASCII only)" | email-validator 2.3.0 still accepts internationalized **domains** (e.g. `zoe@exämple.com`) with `allow_smtputf8=False`; the blueprint's premise that emails are ASCII is then false. | Explicit `email.isascii()` check before `validate_email` → `INVALID_EMAIL` ("The email address must be ASCII only."). Implements the blueprint's stated rule; no new code or field. |
+| G17 | §10.3 "widest printable ASCII glyph in DejaVu Sans (`W`, ≈ 0.99 em)" | Measured: `@` is widest (1.000 em), `W` 0.989 em. | Conclusion unaffected: 254 × `@` (wider than any valid address, which has one `@`) still fits at 8 pt in 3 lines. `test_worst_case_email_fits` checks both 254 × `W` (blueprint case) and 254 × widest glyph. No amendment needed. |
 | G13 | §24.8 umask "at startup" in tests that call `create_app` in-process | Process-wide umask affects pytest's tmp dirs. | `lifespan` and `worker.main()` set the umask; `storage.py` additionally creates dirs with mode 0700 and files with `os.open(..., 0o600)` so permissions do not depend on who set the umask. |
 
 ## Milestone notes
@@ -81,3 +84,11 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 - `test_jobs_api::test_created_items_have_ids_only_when_valid` needs rejected rows, i.e. M2 validation; it is written in M2.
 - Built ahead of its own test milestone because the M1 skeleton needs it: `status.derive_job_status` (full §5.2 table; tested in M4 `test_job_status.py`) and `storage.save_atomic` (tmp + fsync + replace; tested in M4). Their M4 RED runs will therefore be partly green; recorded here so that is not mistaken for a weak test. Mutation proofs at M4 cover both.
 - Sanity mutation (not in the official list): counting active items in a read transaction outside the write lock makes `test_capacity_check_is_atomic_under_concurrent_posts` fail (verified, file restored).
+
+### M2 (2026-10-11)
+- Fonts vendored from the system `fonts-dejavu-core` package; sha256 of both TTFs equals §14 exactly. License text copied from the package's copyright file into `certgen/assets/LICENSE-DejaVu.txt`.
+- §10.3 probe outcomes depend on the exact string; `test_layout.py` uses realistic strings of the named lengths that reproduce every blueprint outcome (25→40/1, 61→28/2, 120→16/2, 120×W→None, 85→24/2, 200 title→16/3, 200 issuer→13/2, 48-char email→13/1).
+- `fit_text` measures each word once at 1 pt and scales (TTF widths are linear, no kerning). 10,000-row validation measured at 864 ms on this laptop (probe said 534 ms); routes are sync `def`, so the event loop is not blocked (K7).
+- `test_errors::test_error_codes_listed_in_readme` needs README `## Error codes`; written in M6 with the README.
+- The Write tool decoded `\uXXXX` escapes in test sources into literal invisible characters; they were converted back to escapes so tests are readable and ruff RUF001 passes.
+- RED: 77 failed + 1 collection error (missing `certgen.fonts`), 32 already passing (Pydantic structural cases inherited from M1).

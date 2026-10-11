@@ -209,3 +209,16 @@ def test_no_store_header_on_json_and_pdf(client: TestClient, drain: Any, app: Fa
     ]
     for resp in responses:
         assert resp.headers["cache-control"] == "no-store", resp.request.url
+
+
+@pytest.mark.req("R1", "R3")
+def test_created_items_have_ids_only_when_valid(client: TestClient, app: FastAPI) -> None:
+    rows = [recipient(0), recipient(1, email="nope"), recipient(2), recipient(3, name="")]
+    assert post_job(client, job_payload(recipients=rows)).status_code == 202
+    stored = _rows(app, "SELECT row_index, status, certificate_id, attempts FROM items ORDER BY row_index")
+    assert [r["status"] for r in stored] == ["pending", "rejected", "pending", "rejected"]
+    valid_ids = [r["certificate_id"] for r in stored if r["status"] == "pending"]
+    assert all(HEX32.match(cid) for cid in valid_ids)
+    assert len(set(valid_ids)) == 2
+    assert [r["certificate_id"] for r in stored if r["status"] == "rejected"] == [None, None]
+    assert all(r["attempts"] == 0 for r in stored)

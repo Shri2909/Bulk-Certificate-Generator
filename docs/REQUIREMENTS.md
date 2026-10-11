@@ -81,20 +81,20 @@ Updated at every Phase 5 milestone. "Status" is the milestone at which the liste
 | ID  | Code (BLUEPRINT §3) | Tests | README section | Status |
 |-----|---------------------|-------|----------------|--------|
 | R1  | `api.py:create_job`, `service.py:create_job`, `models.py:CreateJobRequest` | `test_jobs_api.py` | Submit a certificate generation request | M1 |
-| R2  | `validation.py`, `errors.py` | `test_validation.py`, `test_errors.py` | Submit a certificate generation request | planned (M2) |
+| R2  | `validation.py`, `errors.py` | `test_validation.py`, `test_errors.py` | Submit a certificate generation request | M2 |
 | R3  | `worker.py:Worker.process`, `service.py:create_job` | `test_worker.py` | Design decisions | planned (M2/M4) |
 | R4  | `rendering.py:render_certificate` | `test_rendering.py` | Design decisions | planned (M3) |
-| R5  | `rendering.py`, `layout.py` | `test_rendering.py`, `test_layout.py` | Design decisions | planned (M2/M3) |
+| R5  | `rendering.py`, `layout.py` | `test_rendering.py`, `test_layout.py` | Design decisions | M2 (layout); M3 planned |
 | R6  | `tables.py`, `worker.py`, `status.py` | `test_jobs_api.py`, `test_worker.py`, `test_job_status.py` | Design decisions | M1 (partial) |
 | R7  | `api.py:get_job`, `service.py:get_job`, `status.py` | `test_jobs_api.py` | Retrieve generated certificates | M1 |
 | R8  | `api.py:download_certificate`, `api.py:download_archive`, `archive.py`, `storage.py` | `test_retrieval.py` | Retrieve generated certificates | M1 (single download) |
 | R9  | `worker.py:Worker.process` | `test_failure_isolation.py`, `test_crash_recovery.py`, `test_worker.py` | Recovery and guarantees | planned (M4) |
 | R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates | planned (M4/M5) |
-| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M1 (partial) |
+| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M2 (partial) |
 | R12 | `README.md` | `test_docs.py` | Design decisions | planned (M6) |
 | R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py` | Setup | M1 (partial) |
 | R14 | — | `test_jobs_api.py` | Run tests | M1 |
-| R15 | — | `test_validation.py`, `test_limits.py` | Run tests | M1 (partial) |
+| R15 | — | `test_validation.py`, `test_limits.py` | Run tests | M2 |
 | R16 | — | `test_rendering.py`, `test_worker.py` | Run tests | planned (M3/M4) |
 | R17 | — | `test_jobs_api.py`, `test_job_status.py` | Run tests | M1 (partial) |
 | R18 | — | `test_failure_isolation.py` | Run tests | planned (M4) |

@@ -12,6 +12,8 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from certgen.errors import ProblemCode, problem_response
+
 SyncLifespan = Callable[[Any], AbstractContextManager[None]]
 
 
@@ -45,3 +47,60 @@ class NoStoreMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_header)
+
+
+class BodySizeLimitMiddleware:
+    """Reject bodies over `max_body_bytes` with 413 before anything parses them (§7.1 step 1).
+
+    Content-Length is checked first; chunked bodies are counted while buffering, so a client cannot
+    bypass the limit by omitting the header. The buffered body is then replayed to the app.
+    """
+
+    def __init__(self, app: ASGIApp, max_body_bytes: int) -> None:
+        self.app = app
+        self.max_body_bytes = max_body_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        if self._declared_length(scope) > self.max_body_bytes:
+            await self._reject(scope, receive, send)
+            return
+        body = bytearray()
+        while True:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            body += message.get("body", b"")
+            if len(body) > self.max_body_bytes:
+                await self._reject(scope, receive, send)
+                return
+            if not message.get("more_body", False):
+                break
+
+        replayed = False
+
+        async def replay() -> Message:
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {"type": "http.request", "body": bytes(body), "more_body": False}
+            return await receive()  # after the body, only a disconnect can arrive
+
+        await self.app(scope, replay, send)
+
+    @staticmethod
+    def _declared_length(scope: Scope) -> int:
+        for key, value in scope.get("headers", []):
+            if key == b"content-length":
+                try:
+                    return int(value)
+                except ValueError:
+                    return 0  # the server rejects a malformed header; counting still applies
+        return 0
+
+    @staticmethod
+    async def _reject(scope: Scope, receive: Receive, send: Send) -> None:
+        response = problem_response(ProblemCode.PAYLOAD_TOO_LARGE, "The request body is too large.")
+        await response(scope, receive, send)

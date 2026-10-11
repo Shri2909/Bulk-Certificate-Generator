@@ -60,3 +60,13 @@ MUTATION 5b (added after the M6 fresh-context audit, finding 4)
   mutation: claim SELECT committed in one BEGIN IMMEDIATE transaction, claim UPDATE in a second one
   5 consecutive runs: 5/5 FAILED (KILLED); failure: item claimed twice, e.g. 'At index 89 diff: 2 != 1' (attempts 2, no failures)
   git checkout -> certgen/worker.py restored (git diff --quiet certgen/worker.py)
+
+MUTATION 11 (after D3): /retry does not clear lease_token
+  file: certgen/service.py (RETRY_FAILED_SQL without "lease_token = NULL"); tests: test_retry_fences_out_stale_worker
+  pytest: 1 passed — SURVIVED
+  verdict: EQUIVALENT MUTANT (cannot be killed by any behavioral test). Every path into "failed" (T7, T8)
+  already sets lease_token = NULL, and the schema CHECK ((status = 'processing') = (lease_token IS NOT NULL))
+  rejects a failed row holding a token, so the mutated UPDATE writes exactly the same row.
+  Proven by tests/test_retry.py::test_failed_rows_never_hold_a_lease_token (an UPDATE giving a failed row a
+  token raises IntegrityError). The fence-out itself is still tested end to end by test_retry_fences_out_stale_worker.
+  git checkout -> certgen/service.py restored from the pre-mutation copy (diff identical to branch work).

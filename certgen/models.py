@@ -84,3 +84,18 @@ class ItemsPage(BaseModel):
     limit: int
     next_after: int | None
     items: list[ItemResource]
+
+
+class DryRunCounts(BaseModel):
+    total: int
+    valid: int
+    rejected: int
+
+
+class DryRunReport(BaseModel):
+    """D3: what a real submission would do; nothing is stored."""
+
+    dry_run: bool
+    would_create_job: bool
+    counts: DryRunCounts
+    errors: list[dict[str, Any]]

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 
 import anyio.from_thread
 from fastapi import APIRouter, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
@@ -17,6 +17,8 @@ from certgen.models import (
     CertificateOut,
     Counts,
     CreateJobRequest,
+    DryRunCounts,
+    DryRunReport,
     Health,
     ItemResource,
     ItemsPage,
@@ -69,23 +71,36 @@ def is_json_media_type(content_type: str | None) -> bool:
     return media_type == "application/json" and all(p.replace('"', "") == "charset=utf-8" for p in params)
 
 
-def read_json_body(request: Request) -> Any:
+def raw_body(request: Request) -> bytes:
+    # Request.body() is async; this sync route runs in a worker thread, which may call into the loop.
+    body: bytes = anyio.from_thread.run(request.body)
+    return body
+
+
+def parse_json(request: Request, raw: bytes) -> Any:
     """§24.5: the body is parsed here instead of by FastAPI, so duplicate keys, NaN and deep nesting
     are rejected rather than silently accepted."""
     if not is_json_media_type(request.headers.get("content-type")):
         raise ApiError(ProblemCode.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json.")
-    # Request.body() is async; this sync route runs in a worker thread, which may call into the loop.
-    raw: bytes = anyio.from_thread.run(request.body)
-    if not raw:
-        raise invalid([FieldError(None, FieldCode.REQUIRED, "A JSON request body is required.")])
     try:
         return decode_json_body(raw)
     except JsonBodyError as exc:
         raise invalid([FieldError(None, FieldCode.INVALID_JSON, str(exc))]) from None
 
 
-@router.post(JOBS_PATH, status_code=202, response_model=JobCreated)
-def create_job(request: Request, response: Response) -> JobCreated:
+def read_json_body(request: Request) -> Any:
+    if not is_json_media_type(request.headers.get("content-type")):
+        raise ApiError(ProblemCode.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json.")
+    raw = raw_body(request)
+    if not raw:
+        raise invalid([FieldError(None, FieldCode.REQUIRED, "A JSON request body is required.")])
+    return parse_json(request, raw)
+
+
+@router.post(JOBS_PATH, status_code=202, response_model=JobCreated, responses={200: {"model": DryRunReport}})
+def create_job(
+    request: Request, response: Response, dry_run: Annotated[bool, Query()] = False
+) -> JobCreated | JSONResponse:
     state = request.app.state
     obj = read_json_body(request)
     try:
@@ -101,6 +116,18 @@ def create_job(request: Request, response: Response) -> JobCreated:
     )
     if validated.request_errors:
         raise invalid(validated.all_errors)
+    if dry_run:  # D3: the same admission decision as a real submission, reported instead of stored
+        report = DryRunReport(
+            dry_run=True,
+            would_create_job=validated.valid_count > 0,
+            counts=DryRunCounts(
+                total=len(validated.rows),
+                valid=validated.valid_count,
+                rejected=len(validated.rows) - validated.valid_count,
+            ),
+            errors=[e.as_flat() for e in validated.row_errors],
+        )
+        return JSONResponse(report.model_dump(), status_code=200)
     if validated.valid_count == 0:
         n = len(validated.rows)
         raise invalid(validated.all_errors, f"{n} of {n} recipients are invalid; no job was created.")
@@ -218,3 +245,28 @@ def download_archive(request: Request, job_id: str) -> StreamingResponse:
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="certificates-{job_id}.zip"'},
     )
+
+
+@router.post(JOBS_PATH + "/{job_id}/retry", status_code=202, response_model=JobResource)
+def retry_job(request: Request, job_id: str) -> dict[str, Any]:
+    """D3: re-queue every failed item of the job (T9). No request fields; an empty body or {}."""
+    state = request.app.state
+    raw = raw_body(request)
+    if raw:
+        body = parse_json(request, raw)
+        if not isinstance(body, dict):
+            raise invalid(
+                [FieldError(None, FieldCode.INVALID_TYPE, "The request body must be a JSON object.")]
+            )
+        if body:
+            raise invalid(
+                [FieldError(key, FieldCode.UNKNOWN_FIELD, f"Unknown field {key!r}.") for key in sorted(body)]
+            )
+    view = (
+        service.retry_failed(state.engines, state.settings, state.clock, job_id)
+        if HEX32.fullmatch(job_id)
+        else None
+    )
+    if view is None:
+        raise not_found()
+    return job_resource(view)

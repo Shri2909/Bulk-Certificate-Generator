@@ -180,6 +180,32 @@ The ZIP holds `certificates/{row_index:05d}_{certificate_id}.pdf` for every succ
 It can be downloaded in any job state (a snapshot). Cells that a spreadsheet would run as a formula are
 prefixed with `'`. At most two archives are built at once per process; a third gets `503 ARCHIVE_BUSY`.
 
+## Fix and retry: dry run and retry
+
+Two optional helpers for large submissions (differentiator D3):
+
+- **Dry run:** add `?dry_run=true` to the POST to get the exact admission result without storing
+  anything: `200 {"dry_run": true, "would_create_job": …, "counts": {"total", "valid", "rejected"}, "errors": [...]}`.
+  Row errors are the same as a real submission would report; request-level errors are still `422`.
+  `would_create_job` is `false` (still `200`) when every row is invalid. A dry run never checks capacity.
+
+  ```bash
+  curl -s -X POST "http://127.0.0.1:8000/v1/certificate-jobs?dry_run=true" -H 'Content-Type: application/json' --data @job.json
+  ```
+
+- **Retry failed certificates:** after fixing the cause of `GENERATION_FAILED`/`WORKER_LOST` failures
+  (e.g. a full disk), re-queue every `failed` item of a job in one call:
+
+  ```bash
+  curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/retry
+  ```
+
+  `202` with the job resource. Failed items go back to `pending` with attempts, errors, lease and
+  completion cleared, and keep their `certificate_id`, so download links stay valid. `409 NOTHING_TO_RETRY`
+  if nothing failed, `404` for an unknown job, `503 CAPACITY_EXCEEDED` if the queue cannot take them.
+  No body, or `{}`. A worker still holding an old claim on such an item cannot publish over the new attempt
+  (`tests/test_retry.py` `test_retry_fences_out_stale_worker`).
+
 ## Design decisions
 
 The full specification is [docs/BLUEPRINT.md](docs/BLUEPRINT.md); the ADRs record the reasoning at the
@@ -329,6 +355,7 @@ Every non-2xx response is `application/problem+json`:
 | `METHOD_NOT_ALLOWED` | 405 | wrong HTTP method |
 | `CERTIFICATE_NOT_READY` | 409 | certificate still pending or processing |
 | `CERTIFICATE_GENERATION_FAILED` | 409 | certificate failed after all attempts |
+| `NOTHING_TO_RETRY` | 409 | `POST …/retry` on a job with no failed certificates |
 | `CERTIFICATE_FILE_MISSING` | 410 | item succeeded but its file is gone from disk |
 | `INTERNAL_ERROR` | 500 | unexpected error (details only in the server log) |
 | `DB_UNAVAILABLE` | 503 | database lock wait over 5 s, or the database cannot be read (`Retry-After: 1`) |
@@ -411,8 +438,8 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
   3 such expiries the item ends `failed` with `WORKER_LOST` although no worker died. Raise
   `CERTGEN_LEASE_SECONDS` if renders can stall that long.
 - **Fixed retry budget:** a failed attempt is retried after 2 s, 3 attempts in total. An outage of the
-  certificate storage lasting longer than that fails the affected items permanently; resubmit those
-  recipients (they get new certificate ids).
+  certificate storage lasting longer than that fails the affected items; after fixing the cause, re-queue
+  them with `POST …/retry` (see [Fix and retry](#fix-and-retry-dry-run-and-retry)).
 - **Archives are built before the first byte is sent** (spilling to a temp file above 8 MiB), which holds
   one request thread per build; at most two builds run at once. Request bodies are buffered up to the
   body limit before parsing.
@@ -439,5 +466,6 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
     ("any required test regresses") tripped: embedding the job's verify URL changes every worker-rendered
     PDF, which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
     The implementation is kept, unmerged, on branch `dropped/d1-verify`.
+  - D3 fix-and-retry (`?dry_run=true`, `POST …/retry`): **included** (`tests/test_dry_run.py`, `tests/test_retry.py`).
   - D2 crash-safety proof: **included** — 2- and 4-process benchmarks and the kill-demo transcript
     (kill check: the slow crash tests passed 5 consecutive runs).

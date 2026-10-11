@@ -251,7 +251,9 @@ Testing approach: [ADR-012](docs/decisions/ADR-012-test-strategy.md).
   is **not** claimed.
 - **Crash-safe:** a worker process killed with SIGKILL mid-job loses nothing and duplicates nothing; a
   second worker finishes the job with one PDF per item and the killed item at 2 attempts
-  (`tests/test_crash_recovery.py` `test_kill_mid_job_no_duplicates`, a real subprocess).
+  (`tests/test_crash_recovery.py` `test_kill_mid_job_no_duplicates`, a real subprocess; passed 5
+  consecutive runs). A hand-run transcript with a real server, `curl` and `kill -9` is in
+  [docs/evidence/kill-demo.txt](docs/evidence/kill-demo.txt).
 - **No duplicates under concurrency:** two workers never process the same item
   (`tests/test_worker.py` `test_two_concurrent_workers_never_double_process`,
   `tests/test_crash_recovery.py` `test_two_worker_processes_never_double_process`); a stale worker's late
@@ -365,11 +367,14 @@ The data directory was on the local disk (ext4), so every commit and PDF write p
 | Processes | Recipients | Wall (s) | Throughput (certs/s) | Render p50 (ms) | Per item p50 (ms) | Per item max (ms) | POST latency (ms) | Evidence |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 1000 | 11.95 | 83.7 | 4.2 | 10.8 | 38.2 | 114 | [benchmark-1p.json](docs/evidence/benchmark-1p.json) |
+| 2 | 1000 | 7.18 | 139.3 | 4.1 | 11.3 | 35.0 | 119 | [benchmark-2p.json](docs/evidence/benchmark-2p.json) |
+| 4 | 1000 | 5.97 | 167.6 | 4.1 | 11.3 | 33.4 | 113 | [benchmark-4p.json](docs/evidence/benchmark-4p.json) |
 
 `serial_estimate_ms` in each file (recipients × median per-item time) is what a synchronous POST would
 have to take at minimum; it is an estimate, not a measured synchronous latency. Rendering is CPU-bound
-and threads share the GIL, so throughput is expected to scale with worker processes rather than threads;
-only the single-process run is measured in this version.
+and threads share the GIL, so throughput scales with worker processes rather than threads. Scaling is
+sublinear: every claim and completion is a write to the single SQLite writer and each commit and PDF
+write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2- and 4-process rows).
 
 ## Operations
 
@@ -434,3 +439,5 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
     ("any required test regresses") tripped: embedding the job's verify URL changes every worker-rendered
     PDF, which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
     The implementation is kept, unmerged, on branch `dropped/d1-verify`.
+  - D2 crash-safety proof: **included** — 2- and 4-process benchmarks and the kill-demo transcript
+    (kill check: the slow crash tests passed 5 consecutive runs).

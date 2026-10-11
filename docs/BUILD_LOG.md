@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M8 | STATUS: red | NEXT ACTION: Branch d2-proof: run benchmarks at 2 and 4 processes, record the kill-demo transcript, run the M4 slow tests 5 consecutive times (D2 kill check), update README Benchmarks/Recovery.
+CURRENT MILESTONE: M9 | STATUS: red | NEXT ACTION: Branch d3-fix-retry: write test_dry_run.py and test_retry.py (RED, incl. §24.1 retry capacity and fence-out), implement ?dry_run and POST /retry, README section.
 
 # Build log (Phase 5)
 
@@ -26,7 +26,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M5 | Listing, downloads, archive | done — 279 passed; gate PASS; flake 3/3 (`docs/evidence/gates/M5.txt`) | `m5-done` |
 | M6 | README, docs tests, traceability, benchmark-1p, audit | done — 296 passed; gate PASS; flake 3/3; §24.17 PASS; audit fixes applied (`docs/evidence/gates/M6.txt`, `docs/evidence/audit/M6-audit.md`) | `m6-done`, `v1.0-required` |
 | M7 | D1 verify | **DROPPED** — kill criterion tripped (required test regressed); branch `dropped/d1-verify` | `m7-done` |
-| M8 | D2 proof | pending | `m8-done` |
+| M8 | D2 proof | done — merged; slow tests 5/5; benchmarks 1p/2p/4p; kill demo (`docs/evidence/kill-demo.txt`, `docs/evidence/gates/M8.txt`) | `m8-done` |
 | M9 | D3 dry-run + retry | pending | `m9-done` |
 | M10 | D4 Idempotency-Key | pending | `m10-done` |
 | M11 | Final verification, audit, walkthrough | pending | `v1.0-rc` |
@@ -146,3 +146,9 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - §18 binary kill check: determinism ✓, required layout unchanged (content-stream prefix test) ✓, no email leak ✓, **required test regression ✗**: `tests/test_rendering.py::test_generated_file_matches_direct_render` asserts worker output == render of the stored row without a verify URL; with D1 the worker embeds the URL (`At index 88 diff: b'8' != b'7'`). Required tests may not be edited → criterion trips.
 - Action per instructions: branch renamed `dropped/d1-verify`, not merged; README marks D1 omitted; D1 visual check not run (it is only required after a merge).
 - Interpretation note for the reviewer: the regression is caused by a pre-existing required test encoding pre-D1 semantics, not by a defect in D1. Merging D1 would require updating that one test to include the snapshotted verify URL (a non-pre-approved change, so not done).
+
+### M8 — D2 (2026-10-11): MERGED
+- Kill check: `pytest -m slow` 5 consecutive runs, 5/5 passed → criterion not tripped.
+- Benchmarks (`scripts/benchmark.py`, 1000 recipients, work dir on ext4): 1p 83.7/s, 2p 139.3/s, 4p 167.6/s (from the JSON files; README rows generated from them). Sublinear scaling explained in README (single SQLite writer, fsync per commit). All acceptance checks true; max per-item ≪ 10% of the lease (no §7.3 amendment needed).
+- Kill demo: real `python -m certgen` + curl + `kill -9` on a worker mid-render + second worker; raw transcript in `docs/evidence/kill-demo.txt` (killed item attempts 2, 6/6 succeeded, 6 PDFs, 0 tmp).
+- Files touched: README, docs/evidence only (scripts/benchmark.py unchanged).

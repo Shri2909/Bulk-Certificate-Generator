@@ -100,3 +100,63 @@ Updated at every Phase 5 milestone. "Status" is the milestone at which the liste
 | R18 | — | `test_failure_isolation.py` | Run tests | M4 |
 | R19 | — | `test_retrieval.py` | Run tests | M5 |
 | R20–R25 | `README.md` | `test_docs.py` | each section | planned (M6) |
+
+## 7. Obligations (one heading per requirement, BLUEPRINT §24.16)
+
+Each heading names the obligation; the rows above quote the PDF and the traceability table lists code and tests.
+
+### R1 — Accept a bulk request: a list of recipients plus certificate information in one call
+
+### R2 — Validate recipient data and report invalid rows with row index, field and code
+
+### R3 — Generate exactly one certificate per valid recipient
+
+### R4 — Use a single predefined template
+
+### R5 — Put the recipient-specific information provided on the certificate
+
+### R6 — Track generation status per job and per item
+
+### R7 — Let the client check progress and result
+
+### R8 — Let the client retrieve generated certificates (single and whole job)
+
+### R9 — Keep one certificate's failure from blocking the other valid certificates
+
+### R10 — Make job status identify which generations succeeded and which failed, and why
+
+### R11 — Design for many recipients: non-blocking, explicit limits, paginated listings
+
+### R12 — Document the synchronous-vs-background choice and its reasoning
+
+### R13 — Use Python, FastAPI and a relational database
+
+### R14 — Test creating a generation job
+
+### R15 — Test input validation
+
+### R16 — Test certificate generation
+
+### R17 — Test job status and progress
+
+### R18 — Test handling an individual certificate failure
+
+### R19 — Test retrieving generated certificates
+
+### R20 — README: how to set up the project
+
+### R21 — README: how to run the application
+
+### R22 — README: how to run tests
+
+### R23 — README: how to submit a certificate generation request
+
+### R24 — README: how to retrieve generated certificates
+
+### R25 — README: important implementation and design decisions
+
+### P1 — Optional features must not cost required functionality
+
+### P2 — The author can explain, debug and modify the code
+
+### P3 — Setup is pip install plus one run command; no Docker, Redis or broker

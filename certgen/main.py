@@ -82,7 +82,7 @@ def create_app(
 
 def serve() -> None:
     """`python -m certgen`: one command, embedded workers included (§15, §24.12)."""
-    settings = Settings.from_env()
+    settings: Settings = app.state.settings  # parsed once, at import, by the module-level app below
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     uvicorn.run(
         "certgen.main:app",

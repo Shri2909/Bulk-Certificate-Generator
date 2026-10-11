@@ -2,6 +2,8 @@
 
 Status: Accepted (Gate 1 A3) · Requirements: R4, R5, R16 · Evidence: RESEARCH §6 [measured]
 
+> **Superseded in part (Gate 3, 2026-10-11):** the email is **printed by default**, with a per-job snapshotted opt-out `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` (BLUEPRINT §0 decision 1, §10.2, §15). Where this ADR differs from `docs/BLUEPRINT.md`, the blueprint is authoritative.
+
 ## Context
 One fixed design (R4) showing recipient data (R5). Must `pip install` with no system libraries (P3), and must handle real-world names.
 

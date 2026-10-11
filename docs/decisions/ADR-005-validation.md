@@ -2,6 +2,8 @@
 
 Status: Accepted (Gate 1 Q1, Q2) · Requirements: R2, R3, R10, R15 · Evidence: RESEARCH §5
 
+> **Superseded in part (Gate 3, 2026-10-11):** emails are ASCII-only, so no charset check runs on them; the email is printed by default and always fits (BLUEPRINT §9, §10.3). Where this ADR differs from `docs/BLUEPRINT.md`, the blueprint is authoritative.
+
 ## Context
 "Validate the provided recipient data" + "Generate a certificate for **each valid** recipient" implies some recipients may be invalid while others proceed.
 

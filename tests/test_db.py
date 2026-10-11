@@ -247,3 +247,19 @@ def test_query_plans_use_indexes(tmp_path: Path) -> None:
                 assert "USING" in details, f"{name}: {details}"
     finally:
         engines.dispose()
+
+
+@pytest.mark.req("R11")
+def test_sql_errors_do_not_carry_parameters(tmp_path: Path) -> None:
+    # Errors are logged; bound values (names, emails) must not ride along into the log.
+    engines = create_engines(tmp_path / "db.sqlite3")
+    try:
+        create_schema(engines)
+        with pytest.raises(IntegrityError) as caught, engines.write.begin() as conn:
+            conn.execute(
+                items.insert(), {**VALID_ITEM, "name": "Secret Person", "email": "secret@example.com"}
+            )
+        assert "secret@example.com" not in str(caught.value)
+        assert "Secret Person" not in str(caught.value)
+    finally:
+        engines.dispose()

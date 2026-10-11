@@ -468,3 +468,18 @@ def test_error_order_is_stable(client: TestClient) -> None:
         (3, "email", "DUPLICATE_RECIPIENT"),
     ]
     assert post_job(client, payload).json() == resp.json()  # same input, same order every time
+
+
+@pytest.mark.req("R15")
+@pytest.mark.parametrize(
+    "literal",
+    ["1e400", "-1e400", "9" * 4301],  # overflow to infinity; beyond Python's integer digit limit
+)
+def test_out_of_range_numbers_422(client: TestClient, literal: str) -> None:
+    # Valid JSON syntax, but not storable as JSON again: a client error, never a 500.
+    raw = json.dumps(job_payload(recipients=[recipient(0), recipient(1, name="__X__")])).replace(
+        '"__X__"', literal
+    )
+    resp = post_raw(client, raw.encode())
+    assert resp.status_code == 422
+    assert [e["code"] for e in resp.json()["errors"]] == ["INVALID_JSON"]

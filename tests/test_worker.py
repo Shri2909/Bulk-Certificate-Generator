@@ -462,3 +462,27 @@ def test_monitor_retires_exhausted_lease_without_claims(
     assert stored[0]["completed_at"] == fake_clock()
     assert stored[0]["lease_token"] is None
     assert (stored[1]["status"], stored[1]["attempts"]) == ("pending", 0)
+
+
+@pytest.mark.req("R3", "R9")
+def test_many_threads_claim_each_item_exactly_once(
+    client: TestClient, app: FastAPI, make_worker: Any
+) -> None:
+    # Stress complement to the barrier test: 8 real threads race over 400 items with a trivial
+    # renderer, so claims dominate. A claim that is not one atomic transaction claims some item twice.
+    post_job(client, job_payload(n=400))
+    workers = [make_worker(lambda data: b"%PDF-1.4 stub", worker_id=f"w{i}") for i in range(8)]
+    start = threading.Barrier(len(workers))
+
+    def run(worker: Worker) -> None:
+        start.wait()
+        worker.run_until_idle()
+
+    threads = [threading.Thread(target=run, args=(w,)) for w in workers]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=60)
+    stored = items(app)
+    assert {r["status"] for r in stored} == {"succeeded"}
+    assert [r["attempts"] for r in stored] == [1] * 400

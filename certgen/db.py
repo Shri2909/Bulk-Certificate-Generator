@@ -62,7 +62,10 @@ def _enable_wal(cursor: sqlite3.Cursor) -> None:
 
 
 def _make_engine(db_path: Path, begin_statement: str) -> Engine:
-    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    # hide_parameters: SQL errors would otherwise put bound values (names, emails) into logs.
+    engine = create_engine(
+        f"sqlite:///{db_path}", connect_args={"check_same_thread": False}, hide_parameters=True
+    )
 
     @event.listens_for(engine, "connect")
     def _on_connect(dbapi_connection: Any, _record: Any) -> None:

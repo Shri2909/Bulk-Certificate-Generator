@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 
 import pytest
@@ -84,3 +85,19 @@ def test_other_operational_errors_are_500(app: FastAPI, monkeypatch: pytest.Monk
         resp = c.get(f"{JOBS}/{'0' * 32}")
     assert_problem(resp, 500, "INTERNAL_ERROR")
     assert "no such table" not in resp.text
+
+
+@pytest.mark.req("R2")
+def test_error_codes_listed_in_readme() -> None:
+    from conftest import ROOT
+
+    from certgen.errors import PROBLEMS, FieldCode, ProblemCode
+
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    start = text.index("## Error codes\n")
+    end = text.find("\n## ", start + 1)
+    codes_section = text[start:end]
+    for code in [*ProblemCode, *FieldCode]:
+        assert f"`{code.value}`" in codes_section, f"{code.value} is not documented in README ## Error codes"
+    for code, (status, _title) in PROBLEMS.items():
+        assert re.search(rf"`{code.value}`\s*\|\s*{status}\b", codes_section), f"{code.value} status {status}"

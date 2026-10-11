@@ -1,0 +1,47 @@
+== RED ==
+FAILED tests/test_docs.py::test_readme_has_required_sections - FileNotFoundEr...
+FAILED tests/test_docs.py::test_readme_adr_links_exist - FileNotFoundError: [...
+FAILED tests/test_docs.py::test_readme_documents_background_processing_choice
+FAILED tests/test_docs.py::test_readme_numbers_match_evidence - AssertionErro...
+FAILED tests/test_docs.py::test_readme_curl_example_is_valid - FileNotFoundEr...
+FAILED tests/test_spec_traceability.py::test_every_requirement_has_a_heading
+FAILED tests/test_errors.py::test_error_codes_listed_in_readme - FileNotFound...
+7 failed, 11 passed in 0.35s
+
+== GATE ==
+GATE M6  2026-10-11T14:24:51Z  HEAD 43892a5  python Python 3.11.9
+
+$ .venv/bin/pytest tests/test_docs.py tests/test_spec_traceability.py tests/test_errors.py -q -p no:cacheprovider
+..................                                                       [100%]
+18 passed in 0.23s
+[exit 0]
+
+$ .venv/bin/pytest tests -q -p no:cacheprovider
+........................................................................ [ 24%]
+........................................................................ [ 49%]
+........................................................................ [ 74%]
+........................................................................ [ 98%]
+...                                                                      [100%]
+291 passed in 10.78s
+[exit 0]
+
+$ .venv/bin/ruff check .
+All checks passed!
+[exit 0]
+
+$ .venv/bin/ruff format --check .
+40 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 20 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (20 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M6 RESULT: PASS

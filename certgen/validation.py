@@ -8,6 +8,7 @@ silently changing it.
 from __future__ import annotations
 
 import json
+import math
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -46,7 +47,13 @@ def decode_json_body(raw: bytes) -> Any:
     except UnicodeDecodeError:
         raise JsonBodyError("The request body is not valid UTF-8.") from None
     try:
-        value = json.loads(text, object_pairs_hook=_reject_duplicate_keys, parse_constant=_reject_constant)
+        value = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_constant,
+            parse_float=_finite_float,
+            parse_int=_bounded_int,
+        )
     except JsonBodyError:
         raise
     except RecursionError:
@@ -66,6 +73,21 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise JsonBodyError(f"Duplicate key {key!r} in a JSON object.")
         out[key] = value
     return out
+
+
+def _finite_float(literal: str) -> float:
+    # 1e400 parses to inf, which cannot be stored back as valid JSON.
+    value = float(literal)
+    if not math.isfinite(value):
+        raise JsonBodyError(f"Number {literal[:20]} is out of range.")
+    return value
+
+
+def _bounded_int(literal: str) -> int:
+    try:
+        return int(literal)
+    except ValueError:  # Python refuses integers longer than its digit limit
+        raise JsonBodyError("An integer in the request body has too many digits.") from None
 
 
 def _reject_constant(name: str) -> Any:
@@ -278,7 +300,7 @@ def _check_email(raw: dict[str, Any], print_email: bool) -> tuple[str | None, Fi
         validate_email(email, check_deliverability=False, allow_smtputf8=False)
     except EmailNotValidError as exc:
         return email, FieldError("email", FieldCode.INVALID_EMAIL, str(exc))
-    # Unreachable by the §10.3 arithmetic (254 x "W" fits at 8 pt); kept as a guard.
+    # Unreachable: 254 copies of the widest ASCII glyph ("@") fit at 8 pt (§10.3); kept as a guard.
     if print_email and fit_text(email, EMAIL) is None:
         return email, FieldError("email", FieldCode.DOES_NOT_FIT, "email does not fit on the certificate.")
     return email, None

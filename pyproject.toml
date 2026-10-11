@@ -21,8 +21,7 @@ timeout = 60
 line-length = 110
 target-version = "py311"
 # docs/ holds frozen specs whose code blocks are illustrative, not source.
-# test_spec_traceability.py predates this config; it is reformatted when §24.16 extends it at M6.
-extend-exclude = ["docs", "tests/test_spec_traceability.py"]
+extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]

@@ -15,6 +15,7 @@ import pytest
 from conftest import ROOT, wait_until
 
 from certgen import main
+from certgen.config import Settings
 
 
 @pytest.mark.req("R11", "R13")
@@ -25,8 +26,8 @@ def test_server_limits_passed_to_uvicorn(monkeypatch: pytest.MonkeyPatch) -> Non
         captured.update(app=app, **kwargs)
 
     monkeypatch.setattr(main.uvicorn, "run", fake_run)
-    monkeypatch.setenv("CERTGEN_HOST", "127.0.0.1")
-    monkeypatch.setenv("CERTGEN_PORT", "8123")
+    # serve() uses the settings the module-level app parsed from the environment at import.
+    monkeypatch.setattr(main.app.state, "settings", Settings(host="127.0.0.1", port=8123))
     main.serve()
     assert captured["app"] == "certgen.main:app"
     assert (captured["host"], captured["port"]) == ("127.0.0.1", 8123)

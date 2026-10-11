@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M10 | STATUS: red | NEXT ACTION: Branch d4-idempotency: write test_idempotency.py + test_limits::test_idempotency_key_too_long_422 (RED), implement Idempotency-Key in api.py/service.py (+ A-03 code), README section; then mutation proof 10.
+CURRENT MILESTONE: M11 | STATUS: red | NEXT ACTION: Final verification: clean venvs on 3.11 and 3.14, README verbatim, full suite 3x, lint/type; fresh-context audit #2; README conformance; WALKTHROUGH.md; tag v1.0-rc.
 
 # Build log (Phase 5)
 
@@ -28,7 +28,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M7 | D1 verify | **DROPPED** — kill criterion tripped (required test regressed); branch `dropped/d1-verify` | `m7-done` |
 | M8 | D2 proof | done — merged; slow tests 5/5; benchmarks 1p/2p/4p; kill demo (`docs/evidence/kill-demo.txt`, `docs/evidence/gates/M8.txt`) | `m8-done` |
 | M9 | D3 dry-run + retry | done — merged; 310 passed; gate PASS (`docs/evidence/gates/M9.txt`) | `m9-done` |
-| M10 | D4 Idempotency-Key | pending | `m10-done` |
+| M10 | D4 Idempotency-Key | done — merged; 323 passed; concurrent test 5/5; mutation 10 killed (`docs/evidence/gates/M10.txt`) | `m10-done` |
 | M11 | Final verification, audit, walkthrough | pending | `v1.0-rc` |
 
 ## Effective rules: where §24 supersedes earlier text
@@ -158,3 +158,9 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Kill check: `test_retry_fences_out_stale_worker` green; dry run stores nothing (`test_dry_run_creates_nothing`); no schema change; no required test regressed; 1 fix cycle (a test filtered rows across jobs).
 - Files: api.py, service.py, models.py, README, tests + `errors.py` for `NOTHING_TO_RETRY` (amendment A-03, auto-approved).
 - Mutation 11 is an equivalent mutant (see `docs/evidence/mutation-checks.txt`); the invariant making it equivalent is now tested (`test_failed_rows_never_hold_a_lease_token`). Mutation 10 runs after D4.
+
+### M10 — D4 (2026-10-11): MERGED
+- RED: 12 failed. GREEN: header validation (1–255 chars 0x21–0x7E → else 422 field `Idempotency-Key`), read-engine replay lookup before validation (200, current state, `Location`, `Idempotent-Replayed: true`), 409 on a different body, key + `request_hash = sha256(request_json)` stored in the create transaction with a re-check under the write lock; IntegrityError backstop documented as unreachable. Dry run ignores the header.
+- Kill check: concurrent same-key test (8 threads, barrier) passed 5/5; replay path needed no validation change; no required test regressed after the README error-code row.
+- Files: api.py, service.py, README, tests (`test_idempotency.py`, added §16 case in `test_limits.py`), `errors.py` (A-03).
+- Mutation 10 killed; mutation 11 equivalent (re-run).

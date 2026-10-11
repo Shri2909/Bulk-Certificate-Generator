@@ -1,0 +1,77 @@
+== RED ==
+FAILED tests/test_idempotency.py::test_replay_returns_same_job - AssertionErr...
+FAILED tests/test_idempotency.py::test_replay_header_and_200 - assert 202 == 200
+FAILED tests/test_idempotency.py::test_same_key_different_body_409 - assert 2...
+FAILED tests/test_idempotency.py::test_key_order_and_whitespace_do_not_change_hash
+FAILED tests/test_idempotency.py::test_concurrent_same_key_creates_one_job - ...
+FAILED tests/test_idempotency.py::test_hash_matches_stored_request_json - ass...
+FAILED tests/test_idempotency.py::test_replay_skips_capacity_check - Assertio...
+FAILED tests/test_limits.py::test_idempotency_key_too_long_422[kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+FAILED tests/test_limits.py::test_idempotency_key_too_long_422[has space] - a...
+FAILED tests/test_limits.py::test_idempotency_key_too_long_422[tab\tkey] - as...
+FAILED tests/test_limits.py::test_idempotency_key_too_long_422[caf\xe9] - Uni...
+FAILED tests/test_limits.py::test_idempotency_key_too_long_422[] - assert 202...
+12 failed, 15 passed in 1.72s
+
+== GATE ==
+GATE M10  2026-10-11T14:57:03Z  HEAD 5f743e5  python Python 3.11.9
+
+$ .venv/bin/pytest tests/test_idempotency.py tests/test_limits.py tests/test_dry_run.py -q -p no:cacheprovider
+.................................                                        [100%]
+33 passed in 1.66s
+[exit 0]
+
+$ .venv/bin/pytest tests -q -p no:cacheprovider
+........................................................................ [ 22%]
+........................................................................ [ 44%]
+........................................................................ [ 66%]
+........................................................................ [ 89%]
+...................................                                      [100%]
+323 passed in 12.30s
+[exit 0]
+
+$ .venv/bin/ruff check .
+F401 [*] `conftest.post_job` imported but unused
+  --> tests/test_idempotency.py:11:41
+   |
+10 | import pytest
+11 | from conftest import JOBS, job_payload, post_job, recipient
+   |                                         ^^^^^^^^
+12 | from fastapi import FastAPI
+13 | from fastapi.testclient import TestClient
+   |
+help: Remove unused import: `conftest.post_job`
+   |
+10 | import pytest
+   - from conftest import JOBS, job_payload, post_job, recipient
+11 + from conftest import JOBS, job_payload, recipient
+12 | from fastapi import FastAPI
+   |
+
+Found 1 error.
+[*] 1 fixable with `--fix`.
+[exit 1]
+
+$ .venv/bin/ruff format --check .
+43 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 20 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (20 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M10 RESULT: FAIL
+
+== D4 KILL CHECK: concurrent same-key test, 5 consecutive runs ==
+concurrent run 1: 1 passed in 0.07s
+concurrent run 2: 1 passed in 0.08s
+concurrent run 3: 1 passed in 0.08s
+concurrent run 4: 1 passed in 0.08s
+concurrent run 5: 1 passed in 0.07s

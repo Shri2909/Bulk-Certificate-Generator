@@ -31,6 +31,7 @@ class ProblemCode(StrEnum):
     METHOD_NOT_ALLOWED = "METHOD_NOT_ALLOWED"
     CERTIFICATE_NOT_READY = "CERTIFICATE_NOT_READY"
     CERTIFICATE_GENERATION_FAILED = "CERTIFICATE_GENERATION_FAILED"
+    IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED"
     NOTHING_TO_RETRY = "NOTHING_TO_RETRY"
     CERTIFICATE_FILE_MISSING = "CERTIFICATE_FILE_MISSING"
     INTERNAL_ERROR = "INTERNAL_ERROR"
@@ -48,6 +49,7 @@ PROBLEMS: dict[ProblemCode, tuple[int, str]] = {
     ProblemCode.METHOD_NOT_ALLOWED: (405, "Method not allowed"),
     ProblemCode.CERTIFICATE_NOT_READY: (409, "Certificate not ready"),
     ProblemCode.CERTIFICATE_GENERATION_FAILED: (409, "Certificate generation failed"),
+    ProblemCode.IDEMPOTENCY_KEY_REUSED: (409, "Idempotency key reused"),
     ProblemCode.NOTHING_TO_RETRY: (409, "Nothing to retry"),
     ProblemCode.CERTIFICATE_FILE_MISSING: (410, "Certificate file missing"),
     ProblemCode.INTERNAL_ERROR: (500, "Internal server error"),

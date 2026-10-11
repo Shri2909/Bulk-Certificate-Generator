@@ -137,8 +137,25 @@ marks and right-to-left scripts are rejected (`UNSUPPORTED_CHARACTERS`); text th
 a repeated email within one request (trimmed, case-insensitive) is `DUPLICATE_RECIPIENT` on the later row.
 Duplicates across jobs are allowed.
 
-**Lost responses.** If the `202` response is lost, look the job up by its id rather than resubmitting:
-a blind resubmission creates a second job. Keep the returned `id`/`Location`.
+**Lost responses and safe retries (Idempotency-Key).** Send an `Idempotency-Key` header (1–255 printable
+ASCII characters, e.g. a UUID) to make the POST safe to repeat after a timeout:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: 6f1c2a9e-order-42' --data @job.json
+```
+
+- Same key and the same JSON body (key order and whitespace do not matter): `200` with the job's
+  **current** state, `Location` and `Idempotent-Replayed: true`; no second job is created and the body is
+  not validated again.
+- Same key, different body: `409 IDEMPOTENCY_KEY_REUSED`.
+- A request that fails with `422`/`413`/`415` stores nothing, so the key can be reused once the body is
+  fixed. Keys never expire and are global (there is no authentication). `?dry_run=true` ignores the header.
+- Concurrent requests with the same key create exactly one job (`tests/test_idempotency.py`
+  `test_concurrent_same_key_creates_one_job`).
+
+Without the header, a blind resubmission after a lost response creates a second job; keep the returned
+`id`/`Location` instead.
 
 ## Retrieve generated certificates
 
@@ -355,6 +372,7 @@ Every non-2xx response is `application/problem+json`:
 | `METHOD_NOT_ALLOWED` | 405 | wrong HTTP method |
 | `CERTIFICATE_NOT_READY` | 409 | certificate still pending or processing |
 | `CERTIFICATE_GENERATION_FAILED` | 409 | certificate failed after all attempts |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | the `Idempotency-Key` was already used with a different body |
 | `NOTHING_TO_RETRY` | 409 | `POST …/retry` on a job with no failed certificates |
 | `CERTIFICATE_FILE_MISSING` | 410 | item succeeded but its file is gone from disk |
 | `INTERNAL_ERROR` | 500 | unexpected error (details only in the server log) |
@@ -424,7 +442,8 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 - **No authentication or rate limiting.** Job and certificate ids are unguessable (128 bits) and act as
   capability URLs, which expose names and emails to anyone holding them. The server binds to `127.0.0.1`
   by default; authentication is the first change before any wider deployment.
-- **No idempotent resubmission** in this version: keep the job id from the first response.
+- **Idempotency keys are global and never expire** (no tenants to scope them to); a key used once is
+  bound to that body forever.
 - **SQLite is a single writer.** Fine for one machine: every write is a short single-row transaction. Larger scale would
   move to PostgreSQL with `FOR UPDATE SKIP LOCKED` (see BLUEPRINT §22).
 - **FIFO claiming:** a very large job delays smaller jobs submitted after it.
@@ -467,5 +486,6 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
     PDF, which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
     The implementation is kept, unmerged, on branch `dropped/d1-verify`.
   - D3 fix-and-retry (`?dry_run=true`, `POST …/retry`): **included** (`tests/test_dry_run.py`, `tests/test_retry.py`).
+  - D4 Idempotency-Key: **included** (`tests/test_idempotency.py`).
   - D2 crash-safety proof: **included** — 2- and 4-process benchmarks and the kill-demo transcript
     (kill check: the slow crash tests passed 5 consecutive runs).

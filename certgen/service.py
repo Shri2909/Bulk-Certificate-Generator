@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import uuid
@@ -75,11 +76,92 @@ def ping(engines: Engines) -> None:
         conn.execute(text("SELECT 1")).scalar_one()
 
 
+def request_hash(request_json: str) -> str:
+    """D4 fingerprint of the canonical request (§24.4): the audit copy and the key check agree."""
+    return hashlib.sha256(request_json.encode("utf-8")).hexdigest()
+
+
+def key_reused() -> ApiError:
+    return ApiError(
+        ProblemCode.IDEMPOTENCY_KEY_REUSED,
+        "This Idempotency-Key was already used with a different request body.",
+    )
+
+
+def _job_for_key(conn: Connection, key: str, fingerprint: str) -> str | None:
+    """Job id for a replay (same key, same body); raises 409 if the key belongs to another body."""
+    row = conn.execute(
+        text("SELECT id, request_hash FROM jobs WHERE idempotency_key = :key"), {"key": key}
+    ).first()
+    if row is None:
+        return None
+    if row.request_hash != fingerprint:
+        raise key_reused()
+    return str(row.id)
+
+
+def find_replay(engines: Engines, key: str, fingerprint: str) -> JobView | None:
+    """D4 fast path before validation: an earlier job created with this key and body."""
+    with engines.read.begin() as conn:
+        job_id = _job_for_key(conn, key, fingerprint)
+        return _load_job(conn, job_id) if job_id is not None else None
+
+
+def rejected_row_errors(engines: Engines, job_id: str) -> list[dict[str, Any]]:
+    """Flat row errors of a job's rejected rows, as the 202 body listed them (for replays)."""
+    with engines.read.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT row_index, errors FROM items WHERE job_id = :job_id AND status = 'rejected' "
+                "ORDER BY row_index"
+            ),
+            {"job_id": job_id},
+        ).all()
+    return [{"row_index": r.row_index, **e} for r in rows for e in json.loads(r.errors)]
+
+
 def create_job(
-    engines: Engines, settings: Settings, clock: Clock, validated: ValidatedRequest, request_json: str
-) -> JobView:
-    """Insert the job and all its items in one write transaction; any exception rolls everything back."""
+    engines: Engines,
+    settings: Settings,
+    clock: Clock,
+    validated: ValidatedRequest,
+    request_json: str,
+    idempotency_key: str | None = None,
+) -> tuple[JobView, bool]:
+    """Insert the job and all its items in one write transaction; any exception rolls everything back.
+
+    Returns (job, replayed). With a key, the lookup is repeated under the write lock, so concurrent
+    requests with the same key create exactly one job; the others become replays.
+    """
+    fingerprint = request_hash(request_json) if idempotency_key is not None else None
+    try:
+        return _create_job(engines, settings, clock, validated, request_json, idempotency_key, fingerprint)
+    except IntegrityError as exc:
+        # Backstop only: BEGIN IMMEDIATE serializes creators, so the re-check below sees every key first.
+        if idempotency_key is None or fingerprint is None or "jobs.idempotency_key" not in str(exc.orig):
+            raise
+        replay = find_replay(engines, idempotency_key, fingerprint)
+        if replay is None:
+            raise
+        return replay, True
+
+
+def _create_job(
+    engines: Engines,
+    settings: Settings,
+    clock: Clock,
+    validated: ValidatedRequest,
+    request_json: str,
+    idempotency_key: str | None,
+    fingerprint: str | None,
+) -> tuple[JobView, bool]:
     with engines.write.begin() as conn:
+        if idempotency_key is not None and fingerprint is not None:
+            existing = _job_for_key(conn, idempotency_key, fingerprint)
+            if existing is not None:  # replays skip the capacity check: no new work is admitted
+                view = _load_job(conn, existing)
+                assert view is not None
+                return view, True
         now = clock()  # read after BEGIN IMMEDIATE holds the lock, so timestamps follow commit order
         active = count_active_items(conn)
         if active + validated.valid_count > settings.max_active_items:
@@ -88,15 +170,21 @@ def create_job(
                 f"The queue holds {active} unfinished certificates; accepting {validated.valid_count} more "
                 f"would exceed the limit of {settings.max_active_items}. Retry later.",
             )
-        job_id = _insert_job(conn, settings, validated, request_json, now)
+        job_id = _insert_job(conn, settings, validated, request_json, now, idempotency_key, fingerprint)
         _insert_items(conn, job_id, validated.rows)
         view = _load_job(conn, job_id)
     assert view is not None
-    return view
+    return view, False
 
 
 def _insert_job(
-    conn: Connection, settings: Settings, validated: ValidatedRequest, request_json: str, now: int
+    conn: Connection,
+    settings: Settings,
+    validated: ValidatedRequest,
+    request_json: str,
+    now: int,
+    idempotency_key: str | None = None,
+    fingerprint: str | None = None,
 ) -> str:
     for _ in range(MAX_ID_ATTEMPTS):
         job_id = new_job_id()
@@ -111,6 +199,8 @@ def _insert_job(
                         print_email=int(validated.print_email),
                         verify_base_url=settings.public_base_url,
                         request_json=request_json,
+                        idempotency_key=idempotency_key,
+                        request_hash=fingerprint,
                         created_at=now,
                     )
                 )

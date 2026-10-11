@@ -1,0 +1,86 @@
+# Research log
+
+Rule: every row is a page that was actually opened (fetched) on 2026-10-11. Each finding ends as an **ADR input**, a
+**test**, or an explicit **rejected because…**. Where a source was paywalled or did not contain the claim, that is
+stated rather than guessed. Local experiments are labelled **[measured]** and were run against the pinned stack
+(Python 3.11.9, SQLite 3.46.1, ReportLab 5.0.1, FastAPI 0.143.0, SQLAlchemy 2.1.4, Pydantic 2.14.0).
+
+## 1. Idempotency
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [Stripe docs — Idempotent requests](https://docs.stripe.com/api/idempotent_requests) | Client sends `Idempotency-Key` (≤255 chars, V4 UUID suggested). "The idempotency layer compares incoming parameters to those of the original request and errors if they're not the same." Results are saved only once execution begins; **validation failures are not saved** and can be retried. Keys can be pruned after 24 h. | **ADR-006**: store SHA-256 of canonical body; mismatch → `409 IDEMPOTENCY_KEY_REUSED`; a `422` is not stored. **Test** `test_idempotency.py::test_same_key_different_body_409`, `::test_validation_failure_not_stored`. |
+| [Stripe blog — Designing robust APIs with idempotency](https://stripe.com/blog/idempotency) | Server "simply replies with a cached result of the successful operation" on retry. Clients should use exponential backoff (2^n) + jitter. | **ADR-006**: replay returns the existing job (`200`, `Idempotent-Replayed: true`). Backoff: **ADR-004** (worker retry delay). |
+| [brandur.org — Implementing Stripe-like idempotency keys in Postgres](https://brandur.org/idempotency-keys) | Unique index on the key makes concurrent creations race-safe: "only one insert succeeds", the loser gets 409. Keys are reaped after 24–72 h. | **ADR-006**: `UNIQUE(idempotency_key)`, catch `IntegrityError` → re-read and compare hash. **Test** `test_idempotency.py::test_concurrent_same_key_creates_one_job`. Reaping → **rejected for v1** (no retention job; documented limitation). |
+| [AlgoMaster blog — Idempotency in distributed systems](https://blog.algomaster.io/p/idempotency-in-distributed-systems) | Unique request IDs + unique constraints/upserts; pitfall: "requires maintaining state" and an unclear retention window. | Confirms ADR-006. Retention-window pitfall → README "Limitations". |
+| [IETF draft-ietf-httpapi-idempotency-key-header (-07)](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/) | Opened page showed only the abstract; it is an **expired** draft. Status codes not visible on that page. | **Rejected as an authority**: we cite Stripe's documented behaviour instead and do not claim draft conformance. |
+
+## 2. Queues, job scheduling, at-least-once delivery
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [AlgoMaster — Message Queues](https://algomaster.io/learn/system-design/message-queues) | Ack after work succeeds; crash before ack → redelivery; assume **at-least-once**; consumers must be idempotent (keys, unique constraints, processed records); DLQ after retry limit. | **ADR-004**: item marked `succeeded` only after the PDF is durably on disk; re-processing the same item overwrites the same deterministic path (idempotent consumer). `failed` after `MAX_ATTEMPTS` is our DLQ equivalent, and D3 `/retry` is the replay. |
+| [AlgoMaster blog — Design a distributed job scheduler](https://blog.algomaster.io/p/design-a-distributed-job-scheduler) | Heartbeats every few seconds; worker unhealthy after missed heartbeats; coordinator re-queues; `retry_count`/`max_retries`; status table + per-attempt log. **Gap the article leaves open:** a slow worker returning after being declared dead. | **ADR-004**: we close that gap with **fencing** (completion `UPDATE … WHERE lease_owner = :me`). **Test** `test_crash_recovery.py::test_stale_worker_cannot_overwrite`. Per-attempt log table → **rejected**: `attempts` + last `error` on the item satisfy R10 without a second table. |
+| [Procrastinate docs — Retry stalled jobs](https://procrastinate.readthedocs.io/en/stable/howto/production/retry_stalled_jobs.html) | Uses per-**worker** heartbeats (10 s) and stalled threshold (30 s); deprecated the time-only `nb_seconds` approach "because it can retry jobs that are still running". | **ADR-004** input. That warning is the reason for fencing plus a lease far longer than one item's work (20 ms measured vs 30 s lease). Heartbeat vs lease-only → **Gate Q4**. |
+| [Procrastinate GitHub](https://github.com/procrastinate-org/procrastinate) (1.4k★) | Postgres-backed Python task queue; storage, locks, dispatch all in Postgres. | Reference only. **Rejected as a dependency**: requires PostgreSQL 13+, which violates zero-external-services (P3). |
+| [River GitHub](https://github.com/riverqueue/river) (5.8k★) | Jobs live in the same DB as application data; jobs are "guaranteed to be enqueued if their transaction commits" (transactional enqueue). Supports Postgres **or SQLite**. | **ADR-002/004**: job + items inserted in **one transaction**, so there is never a job without its items and never an orphan item. **Test** `test_jobs_api.py::test_job_and_items_atomic`. |
+| [River docs — Maintenance services](https://riverqueue.com/docs/maintenance-services) | Rescuer re-queues jobs running past `RescueStuckJobsAfter` (default 1 h) or discards at max attempts. Caveat: a still-running job "will be rescheduled to run again", so attempts can overlap. | **ADR-004**: same overlap risk → fencing + idempotent output path. Attempts counted at claim time, so a crash consumes an attempt (no infinite crash loop). |
+| [malthe/pq GitHub](https://github.com/malthe/pq) (380★) | Python Postgres queue using `SKIP LOCKED`; transactional context manager. Page does not describe crash recovery. | Confirms SKIP LOCKED as the Postgres path (100× section of ADR-004). Not adopted as a dependency (Postgres only). |
+| DDIA (Kleppmann) — via [book page](https://martin.kleppmann.com/2017/03/27/designing-data-intensive-applications.html) and secondary notes from search | The opened page covers only the book intro. The idea that **exactly-once means "the final effect is the same as if no faults had occurred"**, achieved via at-least-once + idempotence end-to-end, is cited from secondary notes and **not verified against the book text**. | Framing adopted in **ADR-004** ("effectively-once"), cited as a concept rather than a quote. **Test** `test_crash_recovery.py::test_kill_mid_job_no_duplicates` proves the effect property directly, so we do not rely on the citation. |
+
+## 3. Databases, transactions, locking
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [SQLite — WAL](https://www.sqlite.org/wal.html) | "readers do not block writers and a writer does not block readers" but "there can only be one writer at a time". WAL does not work over network filesystems. | **ADR-002**: enable WAL so status polling (reads) never blocks the worker. Single-writer → the claim `UPDATE` is serialized by SQLite itself, which makes claiming atomic without `SKIP LOCKED`. Limitation in README: local disk only. |
+| [SQLite — PRAGMA](https://www.sqlite.org/pragma.html) | `foreign_keys` enforcement "default … is OFF"; `busy_timeout` sets the busy handler. | **ADR-002**: set `foreign_keys=ON` and `busy_timeout=5000` on every connection. **Test** `test_db.py::test_pragmas_applied`. |
+| [SQLite — RETURNING](https://www.sqlite.org/lang_returning.html) | Supported since 3.35.0; rows "appear in an arbitrary order". | **ADR-004**: claim uses `UPDATE … WHERE id IN (SELECT … ORDER BY … LIMIT n) RETURNING id`; we re-sort in Python. Startup check: SQLite ≥ 3.35 else fail fast. [measured] local 3.46.1. |
+| [SQLite — Appropriate uses](https://www.sqlite.org/whentouse.html) | "Writers queue up… no lock lasts for more than a few dozen milliseconds"; with many concurrent writers or multiple servers, use client/server. | **ADR-002** decision + its "100× scale" section (move to Postgres). |
+| [PostgreSQL — SELECT locking clause](https://www.postgresql.org/docs/current/sql-select.html) | `SKIP LOCKED` "provides an inconsistent view of the data… but can be used to avoid lock contention with multiple consumers accessing a queue-like table". | **ADR-004** 100× path: the claim sub-select adds `FOR UPDATE SKIP LOCKED`. **Not built in v1** (Postgres is untested, so it is not shipped, per your rule). |
+| [SQLAlchemy — SQLite dialect](https://docs.sqlalchemy.org/en/20/dialects/sqlite.html) | pysqlite legacy transaction behaviour; "database is locked" is easy to hit; foreign keys must be emitted per connection via a `connect` event. | **ADR-002**: `connect` event listener sets the pragmas. Short write transactions only (never hold a transaction while rendering a PDF). **Test** `test_worker.py::test_render_outside_transaction` (monkeypatched renderer asserts no open write txn). |
+| [SQLAlchemy — Session transactions](https://docs.sqlalchemy.org/en/20/orm/session_transaction.html) | `with Session() as s: with s.begin(): …` commits or rolls back on exception. | Code idiom for every unit of work (**ADR-002**). |
+| [Django — select_for_update](https://docs.djangoproject.com/en/5.2/ref/models/querysets/) | On SQLite `select_for_update()` "will have no effect"; `skip_locked` raises on unsupported backends. | **ADR-001** input: Django's row-locking abstraction buys nothing on SQLite. Raw conditional `UPDATE` is portable. |
+| [Django — Transactions](https://docs.djangoproject.com/en/5.2/topics/db/transactions/) | `ATOMIC_REQUESTS` is simple but "inefficient when traffic increases". | ADR-001 context (framework comparison); no adoption. |
+| [AlgoMaster — Optimistic vs pessimistic locking](https://algomaster.io/learn/concurrency-interview/optimistic-vs-pessimistic-locking) | Visible intro only (rest paywalled): choose by expected conflict rate. | **ADR-004**: lease claim = pessimistic (conflict expected among workers); completion = optimistic compare-and-set on `lease_owner` (conflict rare). Detail beyond the intro **not cited**. |
+
+## 4. API design, errors, rate limiting
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [AlgoMaster blog — Master the art of REST API design](https://blog.algomaster.io/p/master-the-art-of-rest-api-design) | Visible part: meaningful status codes (201, 204, 4xx incl. 429, 5xx) help clients decide "how they can fix or retry". Pagination/versioning sections paywalled. | **ADR-010** status-code table. Pagination/versioning detail **not cited** from here. |
+| [AlgoMaster — Rate limiting](https://algomaster.io/learn/system-design/rate-limiting) | Five algorithms; "limit the resource that can actually run out". | **ADR-011**: the scarce resource is generation work + disk, so we cap **recipients per job** and **name length**, not requests/sec. Request-rate limiting → **rejected for v1** (no auth/tenant identity to key on; belongs at the gateway). |
+| [RFC 9457 — Problem Details](https://www.rfc-editor.org/rfc/rfc9457.html) | `type/title/status/detail/instance`, `application/problem+json`; "MAY extend… with additional members"; the RFC's own example adds an `errors` array. | **ADR-010**: all errors are problem+json with `code` and `errors[] {row_index, field, code, message}`. **Test** `test_errors.py::test_problem_json_shape`. |
+| [FastAPI — Background Tasks](https://fastapi.tiangolo.com/tutorial/background-tasks/) | BackgroundTasks run "after returning a response"; for heavy work in other processes, use bigger tools like Celery, which "require … RabbitMQ or Redis". | **ADR-003**: BackgroundTasks **rejected** as the execution mechanism (in-memory, lost on crash, no progress). Celery **rejected** (broker, P3). Chosen: DB-backed queue + worker loop. |
+| [FastAPI — Lifespan events](https://fastapi.tiangolo.com/advanced/events/) | `lifespan` is the recommended startup/shutdown hook; `on_event` is deprecated. | **ADR-003**: embedded worker threads started/stopped in `lifespan`. |
+| [FastAPI — Testing](https://fastapi.tiangolo.com/tutorial/testing/) | `TestClient` (HTTPX) calls the app without a server; plain `def` tests. | **ADR-012** test strategy. |
+| [Flask — Background tasks with Celery](https://flask.palletsprojects.com/en/stable/patterns/celery/) | Flask's documented pattern for long tasks is Celery + Redis broker. Flask has no built-in body validation. | **ADR-001**: Flask rejected (would need Celery or hand-rolled queue + a validation library). |
+
+## 5. Security (OWASP)
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [OWASP — Input Validation](https://cheatsheetseries.owasp.org/cheatsheets/Input_Validation_Cheat_Sheet.html) | Allowlist over denylist ("Blocking apostrophes… rejects legitimate names"); syntactic + semantic validation; use a maintained email library; server-side always. | **ADR-005**: names allow any printable Unicode the font can render (`O'Brien` is valid); reject control chars; NFC-normalize; `email-validator` library. **Tests** `test_validation.py::test_apostrophe_name_valid`, `::test_control_chars_rejected`, `::test_semantic_issued_on_not_future`. |
+| [OWASP — File Upload](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) | Server-generated random filenames (UUID); never let users control paths; store outside webroot; serve via an ID→file handler; size limits. | **ADR-008**: path = `STORAGE_DIR/{job_id}/{certificate_id}.pdf` from server-generated IDs only; download handler looks up by ID. **Test** `test_retrieval.py::test_path_traversal_id_rejected`. |
+| [OWASP — Query Parameterization](https://cheatsheetseries.owasp.org/cheatsheets/Query_Parameterization_Cheat_Sheet.html) | "SQL Injection is best prevented through the use of parameterized queries." | **ADR-002**: SQLAlchemy Core/ORM with bound parameters only; the one raw SQL claim statement uses `text()` with bind params. **Test** `test_validation.py::test_sql_meta_chars_stored_verbatim`. |
+| [Python — hmac](https://docs.python.org/3/library/hmac.html) | `compare_digest` avoids "content-based short circuiting", so it resists timing attacks. | **ADR-013** (if HMAC kept, Gate Q3): verification uses `compare_digest`. |
+| [Python — zipfile](https://docs.python.org/3/library/zipfile.html) | `ZIP_DEFLATED` needs zlib; untrusted archives risk path traversal / zip bombs (extraction side). | **ADR-009**: we only **create** ZIPs, with server-generated entry names. PDFs are already compressed → `ZIP_STORED` [rationale], `manifest.csv` deflated. |
+
+## 6. PDF generation
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [ReportLab user guide — Fonts](https://docs.reportlab.com/reportlab/userguide/ch3_fonts/) | Standard-14 fonts cover Latin-1 only; TrueType via `TTFont` "not limited to 256 characters". | **ADR-007**: bundle DejaVu Sans TTF. |
+| [ReportLab user guide — Graphics](https://docs.reportlab.com/reportlab/userguide/ch2_graphics/) | Canvas API: `drawCentredString`, `stringWidth`. | **ADR-007**: template is code (canvas); `stringWidth` drives auto-shrink of long names. **Test** `test_rendering.py::test_long_name_fits_page`. |
+| [WeasyPrint — First steps](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html) | Requires **Pango ≥ 1.44** system library; on Windows needs MSYS2. | **Rejected** (ADR-007): system deps break "pip install + one command" (P3). |
+| [fpdf2 — Unicode](https://py-pdf.github.io/fpdf2/Unicode.html) | Core fonts are Latin-only and raise on other characters; TTF fonts + `set_text_shaping(True)` support RTL/complex scripts (needs extra deps). | Strong alternative (ADR-007 option). Rejected only because ReportLab ships a QR widget (no extra dep) and we don't need shaping in v1. |
+| ReportLab QR — via search; [measured] `from reportlab.graphics.barcode.qr import QrCodeWidget` imports on 5.0.1 | Built-in QR widget, drawn via `Drawing` + `renderPDF.draw`. | **ADR-013**: no separate QR library. [`segno`](https://github.com/heuer/segno) (pure-Python, 811★) **rejected** as unnecessary. |
+| [Pydantic — networks / EmailStr](https://pydantic.dev/docs/validation/latest/api/pydantic/networks/) | `EmailStr` needs the optional `email-validator` package. | **ADR-005** dependency; pinned in requirements. |
+| **[measured]** 200 certificates (landscape A4, DejaVu, QR) | **20.3 ms/PDF**, ~24 KB each. | **ADR-003**: 1,000 recipients ≈ 20 s → too long for a synchronous request; background processing. Benchmark target in PLAN. |
+| **[measured]** Helvetica drawing `李小龍` | **No exception**: the PDF renders with missing glyphs. | **ADR-007** + **test** `test_validation.py::test_unrenderable_name_rejected`: validate glyph coverage against the bundled font's cmap. |
+| **[measured]** DejaVu cmap coverage | Latin (incl. `Ngọc`, `Łukasz`), Greek, Cyrillic: covered. CJK: missing. Arabic: glyphs present, but ReportLab does no RTL shaping. | **ADR-007**: reject chars missing from cmap **and** strong-RTL bidi classes (`R`, `AL`) → `UNSUPPORTED_CHARACTERS`. Limitation listed in README. |
+
+## 7. Testing
+
+| Source | Key insight | Outcome |
+|---|---|---|
+| [pytest — markers](https://docs.pytest.org/en/stable/how-to/mark.html) | Register markers in config; `--strict-markers` turns unknown marks into errors. | `pyproject.toml` registers `req`; `--strict-markers` on. `tests/test_spec_traceability.py` built and currently failing as intended (no tests yet). |

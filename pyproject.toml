@@ -1,0 +1,14 @@
+[project]
+name = "certgen"
+version = "0.0.0"
+description = "Bulk certificate generator API"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# --strict-markers turns a typo like @pytest.mark.reqs into an error instead of a silent no-op,
+# which would otherwise hide a requirement from the traceability check.
+addopts = ["--strict-markers"]
+markers = [
+    "req(*ids): links a test to requirement IDs in docs/REQUIREMENTS.md",
+]

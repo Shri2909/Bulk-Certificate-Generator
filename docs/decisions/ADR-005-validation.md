@@ -27,7 +27,7 @@ Two layers:
    | `INVALID_CHARACTERS` | contains control / format characters (Unicode category `C*`) |
    | `UNSUPPORTED_CHARACTERS` | a char missing from the bundled font, or a strong-RTL char (ADR-007) |
    | `INVALID_EMAIL` | fails `email-validator` syntax check (no DNS lookup; deterministic tests) |
-| `UNSUPPORTED_CHARACTERS` on `email` | only when `PRINT_EMAIL_ON_CERTIFICATE=true` (ADR-007), because the email is then rendered (internationalized addresses may contain non-ASCII) |
+   | `UNSUPPORTED_CHARACTERS` on `email` | only when `PRINT_EMAIL_ON_CERTIFICATE=true` (ADR-007), because the email is then rendered (internationalized addresses may contain non-ASCII) |
    | `DUPLICATE_RECIPIENT` | `email.strip().casefold()` already seen **earlier in this request**. Message names the first occurrence: `"duplicate of row 3"`, and the error also carries `"duplicate_of_row_index": 3` for machines. Only valid rows register as first occurrences: if row 3's email is malformed, row 7 with the same string is reported for its own malformed email, not as a duplicate. **Duplicates across different jobs are allowed** (re-issuing next year's course to the same person is normal). |
 
    Row-level checks are done by hand, not by Pydantic per row, so one bad row can't fail the request model. The row index is the original array position.

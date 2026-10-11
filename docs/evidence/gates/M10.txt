@@ -13,12 +13,12 @@ FAILED tests/test_limits.py::test_idempotency_key_too_long_422[caf\xe9] - Uni...
 FAILED tests/test_limits.py::test_idempotency_key_too_long_422[] - assert 202...
 12 failed, 15 passed in 1.72s
 
-== GATE ==
-GATE M10  2026-10-11T14:57:03Z  HEAD 5f743e5  python Python 3.11.9
+== GATE (first run FAILED on one unused import in tests/test_idempotency.py, F401; fixed in a follow-up commit; re-run below) ==
+GATE M10  2026-10-11T14:57:38Z  HEAD d7786e5  python Python 3.11.9
 
 $ .venv/bin/pytest tests/test_idempotency.py tests/test_limits.py tests/test_dry_run.py -q -p no:cacheprovider
 .................................                                        [100%]
-33 passed in 1.66s
+33 passed in 1.74s
 [exit 0]
 
 $ .venv/bin/pytest tests -q -p no:cacheprovider
@@ -27,30 +27,12 @@ $ .venv/bin/pytest tests -q -p no:cacheprovider
 ........................................................................ [ 66%]
 ........................................................................ [ 89%]
 ...................................                                      [100%]
-323 passed in 12.30s
+323 passed in 12.14s
 [exit 0]
 
 $ .venv/bin/ruff check .
-F401 [*] `conftest.post_job` imported but unused
-  --> tests/test_idempotency.py:11:41
-   |
-10 | import pytest
-11 | from conftest import JOBS, job_payload, post_job, recipient
-   |                                         ^^^^^^^^
-12 | from fastapi import FastAPI
-13 | from fastapi.testclient import TestClient
-   |
-help: Remove unused import: `conftest.post_job`
-   |
-10 | import pytest
-   - from conftest import JOBS, job_payload, post_job, recipient
-11 + from conftest import JOBS, job_payload, recipient
-12 | from fastapi import FastAPI
-   |
-
-Found 1 error.
-[*] 1 fixable with `--fix`.
-[exit 1]
+All checks passed!
+[exit 0]
 
 $ .venv/bin/ruff format --check .
 43 files already formatted
@@ -67,7 +49,7 @@ $ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator
 INVARIANTS: OK (20 files scanned, blueprint sha256 93537bded6bb… matches)
 [exit 0]
 
-GATE M10 RESULT: FAIL
+GATE M10 RESULT: PASS
 
 == D4 KILL CHECK: concurrent same-key test, 5 consecutive runs ==
 concurrent run 1: 1 passed in 0.07s

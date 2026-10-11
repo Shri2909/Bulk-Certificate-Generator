@@ -164,3 +164,4 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Kill check: concurrent same-key test (8 threads, barrier) passed 5/5; replay path needed no validation change; no required test regressed after the README error-code row.
 - Files: api.py, service.py, README, tests (`test_idempotency.py`, added §16 case in `test_limits.py`), `errors.py` (A-03).
 - Mutation 10 killed; mutation 11 equivalent (re-run).
+- Process slip: the first M10 gate run failed `ruff check` (F401, unused import in a new test), but the shell chain continued and the branch was merged and tagged. Fixed on main in a follow-up commit, gate re-run PASS, tag `m10-done` moved to the fixed commit. The gate runner's result line is now checked explicitly before any commit.

@@ -8,7 +8,7 @@ import threading
 from typing import Any
 
 import pytest
-from conftest import JOBS, job_payload, post_job, recipient
+from conftest import JOBS, job_payload, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -97,12 +98,48 @@ def read_json_body(request: Request) -> Any:
     return parse_json(request, raw)
 
 
+IDEMPOTENCY_KEY = re.compile(r"[\x21-\x7e]{1,255}")
+
+
+def idempotency_key(request: Request) -> str | None:
+    """D4: optional header, 1-255 printable ASCII characters (§12)."""
+    raw = request.headers.get("idempotency-key")
+    if raw is None:
+        return None
+    if not IDEMPOTENCY_KEY.fullmatch(raw):
+        raise invalid(
+            [
+                FieldError(
+                    "Idempotency-Key",
+                    FieldCode.INVALID_VALUE,
+                    "Idempotency-Key must be 1-255 printable ASCII characters without spaces.",
+                )
+            ]
+        )
+    return raw
+
+
+def replayed(state: Any, view: service.JobView) -> JSONResponse:
+    body = JobCreated(**job_resource(view), errors=service.rejected_row_errors(state.engines, view.id))
+    return JSONResponse(
+        body.model_dump(),
+        status_code=200,
+        headers={"Location": f"{JOBS_PATH}/{view.id}", "Idempotent-Replayed": "true"},
+    )
+
+
 @router.post(JOBS_PATH, status_code=202, response_model=JobCreated, responses={200: {"model": DryRunReport}})
 def create_job(
     request: Request, response: Response, dry_run: Annotated[bool, Query()] = False
 ) -> JobCreated | JSONResponse:
     state = request.app.state
     obj = read_json_body(request)
+    # D4: a dry run ignores the header completely; it neither reads nor stores a key.
+    key = None if dry_run else idempotency_key(request)
+    if key is not None:
+        replay = service.find_replay(state.engines, key, service.request_hash(canonical_json(obj)))
+        if replay is not None:  # same key, same body: answer with the job's current state, no re-validation
+            return replayed(state, replay)
     try:
         body = CreateJobRequest.model_validate(obj)
     except ValidationError as exc:
@@ -131,7 +168,11 @@ def create_job(
     if validated.valid_count == 0:
         n = len(validated.rows)
         raise invalid(validated.all_errors, f"{n} of {n} recipients are invalid; no job was created.")
-    view = service.create_job(state.engines, state.settings, state.clock, validated, canonical_json(obj))
+    view, was_replay = service.create_job(
+        state.engines, state.settings, state.clock, validated, canonical_json(obj), key
+    )
+    if was_replay:  # lost the race to a concurrent request with the same key
+        return replayed(state, view)
     response.headers["Location"] = f"{JOBS_PATH}/{view.id}"
     return JobCreated(**job_resource(view), errors=[e.as_flat() for e in validated.row_errors])
 

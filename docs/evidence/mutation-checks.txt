@@ -70,3 +70,10 @@ MUTATION 11 (after D3): /retry does not clear lease_token
   Proven by tests/test_retry.py::test_failed_rows_never_hold_a_lease_token (an UPDATE giving a failed row a
   token raises IntegrityError). The fence-out itself is still tested end to end by test_retry_fences_out_stale_worker.
   git checkout -> certgen/service.py restored from the pre-mutation copy (diff identical to branch work).
+
+MUTATION 10 (after D4): dry_run stores the Idempotency-Key
+  file: certgen/api.py (dry run reads the key and calls service.create_job with it); tests: test_dry_run_ignores_idempotency_key
+  pytest: 1 failed — "assert (1, 1) == (0, 0)" (a job and an item were stored by the dry run)
+  verdict: KILLED; certgen/api.py restored from the pre-mutation copy (cmp identical)
+
+MUTATION 11 re-run after D4: 1 passed — still an EQUIVALENT MUTANT for the reason given above; certgen/service.py restored (cmp identical)

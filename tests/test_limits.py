@@ -155,3 +155,14 @@ def test_wrong_media_type_415(client: TestClient, content_type: str | None, stat
     assert resp.status_code == status
     if status == 415:
         assert resp.json()["code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+
+@pytest.mark.req("R11")
+@pytest.mark.parametrize("key", ["k" * 256, "has space", "tab\tkey", "café", ""])
+def test_idempotency_key_too_long_422(client: TestClient, app: FastAPI, key: str) -> None:
+    # 1-255 printable ASCII characters (0x21-0x7E): bounds header abuse and log injection (§12).
+    resp = client.post(JOBS, json=job_payload(n=1), headers={"Idempotency-Key": key.encode("utf-8")})
+    assert resp.status_code == 422
+    assert [(e["field"], e["code"]) for e in resp.json()["errors"]] == [("Idempotency-Key", "INVALID_VALUE")]
+    assert _job_count(app) == 0
+    assert client.post(JOBS, json=job_payload(n=1), headers={"Idempotency-Key": "k" * 255}).status_code == 202

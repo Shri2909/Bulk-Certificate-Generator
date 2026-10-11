@@ -1,14 +1,37 @@
 [project]
 name = "certgen"
-version = "0.0.0"
+version = "1.0.0"
 description = "Bulk certificate generator API"
 requires-python = ">=3.11"  # enum.StrEnum (ADR-010); Phase 6 verifies on 3.11 and 3.14
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 # --strict-markers turns a typo like @pytest.mark.reqs into an error instead of a silent no-op,
 # which would otherwise hide a requirement from the traceability check.
 addopts = ["--strict-markers"]
 markers = [
     "req(*ids): links a test to requirement IDs in docs/REQUIREMENTS.md",
+    "slow: subprocess tests (run by default; deselect with -m 'not slow' for the fast loop)",
 ]
+# A hung subprocess or deadlocked thread fails the test instead of hanging the suite (§16.1).
+timeout = 60
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+# docs/ holds frozen specs whose code blocks are illustrative, not source.
+# test_spec_traceability.py predates this config; it is reformatted when §24.16 extends it at M6.
+extend-exclude = ["docs", "tests/test_spec_traceability.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[[tool.mypy.overrides]]
+# ReportLab ships no type information.
+module = ["reportlab.*"]
+ignore_missing_imports = true

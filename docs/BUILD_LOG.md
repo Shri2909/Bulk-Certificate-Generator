@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M0 | STATUS: gate | NEXT ACTION: Freeze docs/BLUEPRINT.md (sha256 + HEAD into docs/BLUEPRINT.sha256), commit, tag blueprint-locked, then start M1 pin resolution in a clean venv.
+CURRENT MILESTONE: M2 | STATUS: red | NEXT ACTION: Write M2 RED tests (test_validation, test_errors, test_limits body/media cases, test_layout), then fonts.py, layout.py, full validation.py, strict body parsing and BodySizeLimitMiddleware.
 
 # Build log (Phase 5)
 
@@ -18,8 +18,8 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 
 | M | Scope | Status | Tag |
 |---|---|---|---|
-| M0 | Freeze | in progress | `blueprint-locked` |
-| M1 | Pins + walking skeleton | pending | `m1-done` |
+| M0 | Freeze | done (sha256 93537bde…, inputs commit cd7d461) | `blueprint-locked` |
+| M1 | Pins + walking skeleton | done — 64 passed; gate PASS (`docs/evidence/gates/M1.txt`) | `m1-done` |
 | M2 | Validation, fonts, fit_text, errors, middleware, limits | pending | `m2-done` |
 | M3 | Real template, print_email snapshot, determinism, visual check | pending | `m3-done` |
 | M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | pending | `m4-done` |
@@ -69,4 +69,15 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | G10 | §6.5 invalid query params → `field` = param name, but §6.1's mapping only defines locs after `body` | Gap. | For `query` locs, `field` = the parameter name, code `INVALID_VALUE` for any non-missing type, `row_index` null. |
 | G11 | §16 M1 skeleton uses a "placeholder renderer" then M3 replaces it | None; noted. | M1 renders a minimal ReportLab PDF via the same `render_certificate` signature; M3 replaces the body. |
 | G12 | §6.10 `/healthz` with embedded workers off | Gap: expected/alive both 0. | Reports `0/0` and `"status": "ok"`. |
+| G14 | §24.10 "regenerates the colliding ID" with a bulk insert of many items | SQLite's IntegrityError does not say which row collided. | Regenerate every certificate ID of the batch and retry the savepoint (≤ 5 times). No ID has been exposed yet, so this is equivalent and needs no per-row lookup. |
 | G13 | §24.8 umask "at startup" in tests that call `create_app` in-process | Process-wide umask affects pytest's tmp dirs. | `lifespan` and `worker.main()` set the umask; `storage.py` additionally creates dirs with mode 0700 and files with `os.open(..., 0o600)` so permissions do not depend on who set the umask. |
+
+## Milestone notes
+
+### M1 (2026-10-11)
+- Pins: all 13 §2 pins resolved together on CPython 3.11.9 (`pip install --dry-run` first, then the real install). No amendment. `requirements.txt` = freeze of the runtime rows (20 lines incl. transitive); `requirements-dev.txt` = `-r requirements.txt` + dev freeze.
+- Tooling: `pythonpath = ["."]` in pytest config so `certgen` imports without installing the package. Ruff excludes `docs/` (frozen specs with illustrative code) and, until M6, `tests/test_spec_traceability.py` (pre-existing file, unformatted; §24.16 changes it at M6).
+- Full suite at M1–M5 gates deselects `tests/test_spec_traceability.py`: §17 says traceability turns green at M6.
+- `test_jobs_api::test_created_items_have_ids_only_when_valid` needs rejected rows, i.e. M2 validation; it is written in M2.
+- Built ahead of its own test milestone because the M1 skeleton needs it: `status.derive_job_status` (full §5.2 table; tested in M4 `test_job_status.py`) and `storage.save_atomic` (tmp + fsync + replace; tested in M4). Their M4 RED runs will therefore be partly green; recorded here so that is not mistaken for a weak test. Mutation proofs at M4 cover both.
+- Sanity mutation (not in the official list): counting active items in a read transaction outside the write lock makes `test_capacity_check_is_atomic_under_concurrent_posts` fail (verified, file restored).

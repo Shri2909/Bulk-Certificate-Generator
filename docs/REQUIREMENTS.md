@@ -64,8 +64,8 @@ Rules:
 | #  | Ambiguity | Interpretation (binding) | Decided in |
 |----|-----------|-------------------------|-----------|
 | A1 | "Validate" + "each **valid** recipient": should one bad row reject the whole request? | **No.** The job is accepted (`202`): invalid rows are stored as items with status `rejected` + error codes, and valid rows are generated. Whole-request `422` **only** when the request is structurally malformed (bad JSON, missing/invalid required top-level fields, empty `recipients`, over `MAX_RECIPIENTS`) or **every** row is invalid (the 422 then lists every row's errors). | ADR-005 · Gate 1 Q1 |
-| A2 | What is "recipient data"? | `name` (required, printed), `email` (required, used for de-duplication and future delivery, **not printed**, to avoid PII on a shareable document). Job-level "certificate information": `title` (course/event), `issued_on` (date), `issuer` (organization). | ADR-005 |
-| A3 | Does "recipient-specific information" require printing the email? | **Explicit interpretation:** name + certificate ID are printed (plus a verification QR once D1 lands, M7); email is stored and returned by the API but **not printed by default** (keeps contact PII off a publicly shared document). A strict reading is satisfied by one setting: `PRINT_EMAIL_ON_CERTIFICATE=true` (default `false`) prints the email too. The setting is snapshotted onto each job at creation, so it never changes already-accepted jobs. Both modes tested (R5). Stated in README. | ADR-007 · Gate 1 A3 |
+| A2 | What is "recipient data"? | `name` (required, printed) and `email` (required, used for de-duplication, **printed by default**; see A3). Job-level "certificate information": `title` (course/event), `issued_on` (date), `issuer` (organization). | ADR-005 · BLUEPRINT §9 |
+| A3 | Does "recipient-specific information" require printing the email? | **Yes, by default** (Gate 3 decision 1, BLUEPRINT §0/§10.2): name and email are printed. `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` is an explicit privacy opt-out. The setting is snapshotted onto each job at creation, so it never changes already-accepted jobs. Both modes tested (R5). *Superseded the Gate 1 default of "not printed".* | BLUEPRINT §0, §10, §15 |
 | A4 | Duplicate recipients in one request. | Same email (`strip()` + case-insensitive) twice **in one job** → the later row is `rejected` with `DUPLICATE_RECIPIENT`; the error message names the first occurrence's row index (and carries `duplicate_of_row_index`). Duplicates **across** jobs are allowed. | ADR-005 · Gate 1 Q2 |
 | A5 | "Retrieve generated certificates": one or all? | Both: `GET /v1/certificates/{certificate_id}` (single PDF) and `GET /v1/certificate-jobs/{id}/archive` (ZIP of all succeeded + `manifest.csv`). | ADR-009 |
 | A6 | "Progress/result": what shape? | Job resource with `status`, `counts` per item status, `progress` (0–1 over valid items), plus a paginated, status-filterable item list. | ADR-009 |
@@ -76,25 +76,27 @@ Rules:
 
 ## 6. Traceability (Requirement → code → test → README)
 
-| ID  | Code (planned) | Test (planned) | README section |
-|-----|----------------|----------------|----------------|
-| R1  | `certgen/api/jobs.py:create_job`, `certgen/schemas.py` | `tests/test_jobs_api.py` | Submit a request |
-| R2  | `certgen/validation.py:validate_recipients` | `tests/test_validation.py` | Submit a request → Validation |
-| R3  | `certgen/worker.py:process_item` | `tests/test_worker.py` | Design decisions |
-| R4  | `certgen/rendering.py:render_certificate` | `tests/test_rendering.py` | Design decisions → Template |
-| R5  | `certgen/rendering.py:render_certificate` | `tests/test_rendering.py` (text extracted from PDF) | Design decisions → Template |
-| R6  | `certgen/models.py:Job, Item` | `tests/test_worker.py` | Design decisions → Data model |
-| R7  | `certgen/api/jobs.py:get_job` | `tests/test_jobs_api.py` | Check progress |
-| R8  | `certgen/api/certificates.py` | `tests/test_retrieval.py` | Retrieve certificates |
-| R9  | `certgen/worker.py:process_item` (per-item try/except, per-item transaction) | `tests/test_failure_isolation.py` | Design decisions → Failure handling |
-| R10 | `certgen/api/jobs.py:list_items` | `tests/test_failure_isolation.py` | Check progress |
-| R11 | `certgen/worker.py:claim_next`, `certgen/config.py` limits | `tests/test_limits.py`, `tests/test_jobs_api.py` | Design decisions → Bulk processing |
-| R12 | `docs/decisions/ADR-003-sync-vs-background.md` | `tests/test_docs.py` | Design decisions |
-| R13 | `certgen/main.py`, `certgen/db.py` | `tests/test_docs.py::test_stack` | Setup |
-| R14 | — | `tests/test_jobs_api.py` | Run tests |
-| R15 | — | `tests/test_validation.py` | Run tests |
-| R16 | — | `tests/test_rendering.py`, `tests/test_worker.py` | Run tests |
-| R17 | — | `tests/test_jobs_api.py` | Run tests |
-| R18 | — | `tests/test_failure_isolation.py` | Run tests |
-| R19 | — | `tests/test_retrieval.py` | Run tests |
-| R20–R25 | `README.md` | `tests/test_docs.py` | each section |
+Updated at every Phase 5 milestone. "Status" is the milestone at which the listed tests were green.
+
+| ID  | Code (BLUEPRINT §3) | Tests | README section | Status |
+|-----|---------------------|-------|----------------|--------|
+| R1  | `api.py:create_job`, `service.py:create_job`, `models.py:CreateJobRequest` | `test_jobs_api.py` | Submit a certificate generation request | M1 |
+| R2  | `validation.py`, `errors.py` | `test_validation.py`, `test_errors.py` | Submit a certificate generation request | planned (M2) |
+| R3  | `worker.py:Worker.process`, `service.py:create_job` | `test_worker.py` | Design decisions | planned (M2/M4) |
+| R4  | `rendering.py:render_certificate` | `test_rendering.py` | Design decisions | planned (M3) |
+| R5  | `rendering.py`, `layout.py` | `test_rendering.py`, `test_layout.py` | Design decisions | planned (M2/M3) |
+| R6  | `tables.py`, `worker.py`, `status.py` | `test_jobs_api.py`, `test_worker.py`, `test_job_status.py` | Design decisions | M1 (partial) |
+| R7  | `api.py:get_job`, `service.py:get_job`, `status.py` | `test_jobs_api.py` | Retrieve generated certificates | M1 |
+| R8  | `api.py:download_certificate`, `api.py:download_archive`, `archive.py`, `storage.py` | `test_retrieval.py` | Retrieve generated certificates | M1 (single download) |
+| R9  | `worker.py:Worker.process` | `test_failure_isolation.py`, `test_crash_recovery.py`, `test_worker.py` | Recovery and guarantees | planned (M4) |
+| R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates | planned (M4/M5) |
+| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M1 (partial) |
+| R12 | `README.md` | `test_docs.py` | Design decisions | planned (M6) |
+| R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py` | Setup | M1 (partial) |
+| R14 | — | `test_jobs_api.py` | Run tests | M1 |
+| R15 | — | `test_validation.py`, `test_limits.py` | Run tests | M1 (partial) |
+| R16 | — | `test_rendering.py`, `test_worker.py` | Run tests | planned (M3/M4) |
+| R17 | — | `test_jobs_api.py`, `test_job_status.py` | Run tests | M1 (partial) |
+| R18 | — | `test_failure_isolation.py` | Run tests | planned (M4) |
+| R19 | — | `test_retrieval.py` | Run tests | M1 (partial) |
+| R20–R25 | `README.md` | `test_docs.py` | each section | planned (M6) |

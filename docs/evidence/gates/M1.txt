@@ -1,0 +1,39 @@
+== RED (before certgen existed) ==
+ImportError while loading conftest '/home/abc/Desktop/bulk certificate generator/tests/conftest.py'.
+tests/conftest.py:14: in <module>
+    from certgen.config import Settings
+E   ModuleNotFoundError: No module named 'certgen'
+
+== GATE ==
+GATE M1  2026-10-11T13:38:43Z  HEAD 3774b1b  python Python 3.11.9
+
+$ .venv/bin/pytest tests/test_config.py tests/test_db.py tests/test_jobs_api.py tests/test_limits.py tests/test_retrieval.py -q -p no:cacheprovider
+................................................................         [100%]
+64 passed in 1.38s
+[exit 0]
+
+$ .venv/bin/pytest tests --deselect tests/test_spec_traceability.py -q -p no:cacheprovider
+................................................................         [100%]
+64 passed, 3 deselected in 1.39s
+[exit 0]
+
+$ .venv/bin/ruff check .
+All checks passed!
+[exit 0]
+
+$ .venv/bin/ruff format --check .
+22 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 16 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (16 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M1 RESULT: PASS

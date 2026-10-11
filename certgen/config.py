@@ -7,6 +7,7 @@ in tests, so an invalid deployment fails at startup with the variable named inst
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
@@ -118,6 +119,10 @@ class Settings:
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:
         env = os.environ if environ is None else environ
+        if environ is None and ENV_NAMES["public_base_url"] not in env:
+            logging.getLogger("certgen.config").warning(
+                "CERTGEN_PUBLIC_BASE_URL is not set; certificate links will use http://localhost:8000"
+            )
         kwargs: dict[str, object] = {}
         for field in fields(cls):
             raw = env.get(ENV_NAMES[field.name])

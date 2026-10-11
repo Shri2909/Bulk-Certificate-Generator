@@ -1,0 +1,72 @@
+== RED ==
+________________ test_crash_loop_ends_failed_after_max_attempts ________________
+    def test_crash_loop_ends_failed_after_max_attempts(
+_____________________ test_server_limits_passed_to_uvicorn _____________________
+    def test_server_limits_passed_to_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
+FAILED tests/test_crash_recovery.py::test_expired_lease_is_reclaimed - assert...
+FAILED tests/test_crash_recovery.py::test_stale_worker_done_write_rejected_by_fencing[distinct-ids]
+FAILED tests/test_crash_recovery.py::test_stale_worker_done_write_rejected_by_fencing[reused-id]
+FAILED tests/test_crash_recovery.py::test_same_worker_reclaim_is_fenced - Ass...
+FAILED tests/test_crash_recovery.py::test_crash_loop_ends_failed_after_max_attempts
+FAILED tests/test_crash_recovery.py::test_kill_mid_job_no_duplicates - Assert...
+FAILED tests/test_crash_recovery.py::test_two_worker_processes_never_double_process
+FAILED tests/test_job_status.py::test_no_regression_to_queued_during_retry_delay
+FAILED tests/test_job_status.py::test_finished_at_only_when_terminal - Runtim...
+FAILED tests/test_jobs_api.py::test_healthz_ok_without_embedded_workers - ass...
+FAILED tests/test_jobs_api.py::test_healthz_degraded - AttributeError: <class...
+FAILED tests/test_jobs_api.py::test_healthz_db_failure_503 - AttributeError: ...
+FAILED tests/test_runtime.py::test_server_limits_passed_to_uvicorn - Attribut...
+FAILED tests/test_runtime.py::test_python_dash_m_certgen_serves_and_stops - a...
+FAILED tests/test_runtime.py::test_standalone_worker_starts_on_empty_data_dir_and_stops_on_sigterm
+FAILED tests/test_smoke.py::test_end_to_end_embedded_worker - AssertionError:...
+ERROR tests/test_db.py - AttributeError: module 'certgen.worker' has no attri...
+ERROR tests/test_failure_isolation.py
+ERROR tests/test_worker.py
+16 failed, 189 passed, 3 deselected, 3 errors in 122.81s (0:02:02)
+
+== GATE ==
+GATE M4  2026-10-11T14:09:14Z  HEAD 73dc9be  python Python 3.11.9
+
+$ .venv/bin/pytest tests/test_worker.py tests/test_failure_isolation.py tests/test_crash_recovery.py tests/test_job_status.py tests/test_db.py tests/test_smoke.py tests/test_runtime.py tests/test_jobs_api.py -q -p no:cacheprovider
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 8.00s
+[exit 0]
+
+$ .venv/bin/pytest tests --deselect tests/test_spec_traceability.py -q -p no:cacheprovider
+........................................................................ [ 28%]
+........................................................................ [ 57%]
+........................................................................ [ 86%]
+..................................                                       [100%]
+250 passed, 3 deselected in 9.93s
+[exit 0]
+
+$ .venv/bin/ruff check .
+All checks passed!
+[exit 0]
+
+$ .venv/bin/ruff format --check .
+35 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 19 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (19 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M4 RESULT: PASS
+
+== FLAKE RULE (slow + concurrency + crash tests, 3 consecutive runs) ==
+flake run 1:
+52 passed in 8.45s
+flake run 2:
+52 passed in 8.35s
+flake run 3:
+52 passed in 8.51s
+(after fixing the WAL first-boot race: test_concurrent_schema_creation_two_processes also passed 15/15 in a dedicated loop; raw race harness 360 concurrent boots, 0 failures vs 39 before)

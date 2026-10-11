@@ -20,6 +20,13 @@ HEX32 = re.compile(r"^[0-9a-f]{32}$")
 O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
 
 
+def prepare_data_dir(data_dir: Path, certificates_dir: Path) -> None:
+    """Private by default (§24.8): the DB and PDFs hold names and emails. Called at process start."""
+    os.umask(0o077)
+    data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    certificates_dir.mkdir(mode=0o700, exist_ok=True)
+
+
 def _check_id(value: str) -> str:
     # fullmatch, not match: "$" would accept a trailing newline.
     if not HEX32.fullmatch(value):
@@ -98,3 +105,19 @@ class Storage:
             return None  # replaced by a symlink or removed after the check
         with os.fdopen(fd, "rb") as fh:
             return fh.read()
+
+    def sweep_orphans(self, older_than_ms: int, now_ms: int) -> int:
+        """Delete temp files left by killed writers. Only old ones: a fresh one may be mid-write."""
+        cutoff_s = (now_ms - older_than_ms) / 1000
+        removed = 0
+        for tmp in self.root.glob("*/*.tmp"):
+            try:
+                info = os.lstat(tmp)
+                if stat.S_ISREG(info.st_mode) and info.st_mtime < cutoff_s:
+                    tmp.unlink()
+                    removed += 1
+            except FileNotFoundError:
+                continue  # another worker's sweep got there first
+        if removed:
+            log.info("orphan_tmp_removed count=%s", removed)
+        return removed

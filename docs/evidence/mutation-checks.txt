@@ -1,0 +1,56 @@
+MUTATION PROOFS — end of M4 (2026-10-11T14:12:56Z, HEAD 3903ee0)
+Procedure per row: apply the mutation in a scratch edit, run the named tests (expect FAIL), git checkout the file, confirm git diff is empty.
+
+MUTATION 1 fence on worker_id instead of lease_token
+  file: certgen/worker.py; tests: test_stale_worker_done_write_rejected_by_fencing, test_same_worker_reclaim_is_fenced
+  pytest: 3 failed in 0.51s
+    FAILED tests/test_crash_recovery.py::test_stale_worker_done_write_rejected_by_fencing[distinct-ids]
+    FAILED tests/test_crash_recovery.py::test_stale_worker_done_write_rejected_by_fencing[reused-id]
+    FAILED tests/test_crash_recovery.py::test_same_worker_reclaim_is_fenced
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 2 reads use BEGIN IMMEDIATE
+  file: certgen/db.py; tests: test_open_read_does_not_block_claim
+  pytest: 1 failed in 5.16s
+    FAILED tests/test_db.py::test_open_read_does_not_block_claim
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 3 clock read before the write lock
+  file: certgen/worker.py; tests: test_clock_read_after_lock
+  pytest: 1 failed in 0.09s
+    FAILED tests/test_worker.py::test_clock_read_after_lock
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 4 hold the DB transaction while rendering
+  file: certgen/worker.py; tests: test_render_runs_outside_write_transaction
+  pytest: 1 failed in 0.10s
+    FAILED tests/test_worker.py::test_render_runs_outside_write_transaction
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 5 claim split into separate select and update transactions
+  file: certgen/worker.py; tests: test_two_concurrent_workers_never_double_process
+  pytest: 1 failed in 0.09s
+    FAILED tests/test_worker.py::test_two_concurrent_workers_never_double_process
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 6 remove the per-item try/except
+  file: certgen/worker.py; tests: test_one_failing_recipient_does_not_block_others
+  pytest: 1 failed in 0.07s
+    FAILED tests/test_failure_isolation.py::test_one_failing_recipient_does_not_block_others
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 7 write the PDF directly to the final path
+  file: certgen/storage.py; tests: test_atomic_write_no_partial_file
+  pytest: 1 failed in 0.09s
+    FAILED tests/test_worker.py::test_atomic_write_no_partial_file
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 8 remove the retire step
+  file: certgen/worker.py; tests: test_crash_loop_ends_failed_after_max_attempts, test_monitor_retires_exhausted_lease_without_claims
+  pytest: 2 failed in 0.11s
+    FAILED tests/test_crash_recovery.py::test_crash_loop_ends_failed_after_max_attempts
+    FAILED tests/test_worker.py::test_monitor_retires_exhausted_lease_without_claims
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 9 worker reads print_email from its own settings
+  file: certgen/worker.py; tests: test_job_snapshot_ignores_worker_settings
+  pytest: 1 failed in 0.10s
+    FAILED tests/test_worker.py::test_job_snapshot_ignores_worker_settings
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+ALL MUTATIONS KILLED
+
+Failure-reason spot checks:
+  5: AssertionError: assert 1 != 1 (both workers claimed item_id=1; second claim attempts=2) — a real double claim.
+  6: RuntimeError: simulated render failure for Bob Broken escaped run_until_idle — the other recipients were never processed.

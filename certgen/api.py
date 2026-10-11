@@ -8,10 +8,19 @@ from typing import Any
 import anyio.from_thread
 from fastapi import APIRouter, Request, Response
 from pydantic import ValidationError
+from sqlalchemy.exc import OperationalError
 
 from certgen import service
 from certgen.errors import ApiError, FieldCode, FieldError, ProblemCode, body_errors_from_pydantic
-from certgen.models import CertificateOut, Counts, CreateJobRequest, JobCreated, JobLinks, JobResource
+from certgen.models import (
+    CertificateOut,
+    Counts,
+    CreateJobRequest,
+    Health,
+    JobCreated,
+    JobLinks,
+    JobResource,
+)
 from certgen.storage import HEX32
 from certgen.validation import JsonBodyError, canonical_json, decode_json_body, validate_request
 
@@ -112,6 +121,13 @@ def download_certificate(request: Request, certificate_id: str) -> Response:
     )
     if record is None:
         raise not_found()
+    if record.status in ("pending", "processing"):
+        raise ApiError(ProblemCode.CERTIFICATE_NOT_READY, "The certificate has not been generated yet.")
+    if record.status == "failed":
+        raise ApiError(
+            ProblemCode.CERTIFICATE_GENERATION_FAILED,
+            "Generating this certificate failed; see the job's items for the reason.",
+        )
     data = state.storage.read(record.job_id, record.certificate_id)
     if data is None:
         raise ApiError(ProblemCode.CERTIFICATE_FILE_MISSING, "The certificate file is missing on the server.")
@@ -119,4 +135,23 @@ def download_certificate(request: Request, certificate_id: str) -> Response:
         data,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="certificate-{record.certificate_id}.pdf"'},
+    )
+
+
+@router.get("/healthz", response_model=Health)
+def healthz(request: Request) -> Health:
+    state = request.app.state
+    try:
+        service.ping(state.engines)
+    except OperationalError:
+        raise ApiError(ProblemCode.DB_UNAVAILABLE, "The database cannot be read.") from None
+    pool = state.workers
+    expected = pool.size if pool is not None else 0
+    alive = pool.alive() if pool is not None else 0
+    # Degraded still answers 200: the API serves reads and accepts jobs; work waits for a worker.
+    return Health(
+        status="ok" if alive >= expected else "degraded",
+        db="ok",
+        embedded_workers_alive=alive,
+        embedded_workers_expected=expected,
     )

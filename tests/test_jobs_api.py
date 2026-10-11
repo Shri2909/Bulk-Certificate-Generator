@@ -8,12 +8,13 @@ from itertools import count
 from typing import Any
 
 import pytest
-from conftest import JOBS, FakeClock, job_payload, post_job, recipient
+from conftest import JOBS, FakeClock, job_payload, post_job, recipient, wait_until
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from certgen import service
+from certgen.main import create_app
 from certgen.rendering import CertificateData, render_certificate
 
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
@@ -138,8 +139,6 @@ def test_original_request_is_stored_canonically(client: TestClient, app: FastAPI
 
 @pytest.mark.req("R11")
 def test_post_does_not_render_synchronously(settings: Any, fake_clock: FakeClock) -> None:
-    from certgen.main import create_app
-
     calls: list[str] = []
 
     def counting(data: CertificateData) -> bytes:
@@ -222,3 +221,56 @@ def test_created_items_have_ids_only_when_valid(client: TestClient, app: FastAPI
     assert len(set(valid_ids)) == 2
     assert [r["certificate_id"] for r in stored if r["status"] == "rejected"] == [None, None]
     assert all(r["attempts"] == 0 for r in stored)
+
+
+@pytest.mark.req("R7")
+def test_healthz_ok_without_embedded_workers(client: TestClient) -> None:
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "status": "ok",
+        "db": "ok",
+        "embedded_workers_alive": 0,
+        "embedded_workers_expected": 0,
+    }
+
+
+@pytest.mark.req("R7")
+# The crashes are deliberate; pytest would otherwise report each dead thread as a warning.
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
+def test_healthz_degraded(settings: Any, fake_clock: FakeClock, monkeypatch: pytest.MonkeyPatch) -> None:
+    from dataclasses import replace
+
+    from certgen.worker import Worker
+
+    def crash(self: Worker, stop: Any) -> None:
+        raise SystemExit("worker thread crashed")  # BaseException: escapes the loop's except Exception
+
+    monkeypatch.setattr(Worker, "run_forever", crash)
+    app = create_app(replace(settings, embedded_worker=True, worker_threads=2), clock=fake_clock)
+    with TestClient(app) as c:
+
+        def degraded() -> bool:
+            body = c.get("/healthz").json()
+            return body["status"] == "degraded" and body["embedded_workers_alive"] < 2
+
+        assert wait_until(degraded, timeout=5)
+        resp = c.get("/healthz")
+        assert resp.status_code == 200  # degraded is still serving
+        assert resp.json()["embedded_workers_expected"] == 2
+
+
+@pytest.mark.req("R7")
+def test_healthz_db_failure_503(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    import sqlite3
+
+    from sqlalchemy.exc import OperationalError
+
+    def broken(*_args: Any) -> None:
+        raise OperationalError("SELECT 1", {}, sqlite3.OperationalError("unable to open database file"))
+
+    monkeypatch.setattr(service, "ping", broken)
+    resp = client.get("/healthz")
+    assert resp.status_code == 503
+    assert resp.json()["code"] == "DB_UNAVAILABLE"
+    assert resp.headers["retry-after"] == "1"

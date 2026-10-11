@@ -57,12 +57,21 @@ class CertificateRecord:
     status: str
 
 
+COUNT_ACTIVE_SQL = "SELECT COUNT(*) FROM items WHERE status IN ('pending', 'processing')"
+JOB_COUNTS_SQL = (
+    "SELECT status, COUNT(*) AS n, SUM(attempts > 0) AS attempted, MAX(completed_at) AS last_done "
+    "FROM items WHERE job_id = :job_id GROUP BY status"
+)
+
+
 def count_active_items(conn: Connection) -> int:
-    return int(
-        conn.execute(
-            text("SELECT COUNT(*) FROM items WHERE status IN ('pending', 'processing')")
-        ).scalar_one()
-    )
+    return int(conn.execute(text(COUNT_ACTIVE_SQL)).scalar_one())
+
+
+def ping(engines: Engines) -> None:
+    """Health probe: raises if the database cannot be read."""
+    with engines.read.connect() as conn:
+        conn.execute(text("SELECT 1")).scalar_one()
 
 
 def create_job(
@@ -159,13 +168,7 @@ def _load_job(conn: Connection, job_id: str) -> JobView | None:
     counts = dict.fromkeys(ITEM_STATUSES, 0)
     attempted = 0
     finished_at: int | None = None
-    groups = conn.execute(
-        text(
-            "SELECT status, COUNT(*) AS n, SUM(attempts > 0) AS attempted, MAX(completed_at) AS last_done "
-            "FROM items WHERE job_id = :job_id GROUP BY status"
-        ),
-        {"job_id": job_id},
-    ).mappings()
+    groups = conn.execute(text(JOB_COUNTS_SQL), {"job_id": job_id}).mappings()
     for group in groups:
         counts[group["status"]] = group["n"]
         attempted += group["attempted"]

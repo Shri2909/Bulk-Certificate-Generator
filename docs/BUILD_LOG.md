@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M4 | STATUS: red | NEXT ACTION: Write M4 RED tests (test_worker rest, test_failure_isolation, test_crash_recovery incl. slow kill tests, test_job_status, test_db rest, test_smoke, test_runtime), then harden worker.py (failures, reclaim, retire, monitor, standalone main), /healthz, __main__.py.
+CURRENT MILESTONE: M5 | STATUS: red | NEXT ACTION: Write M5 RED tests (test_retrieval rest incl. archive/manifest/concurrency, listing cases in test_jobs_api, test_failure_isolation::test_items_listing_identifies_failed_and_succeeded, listing queries in test_query_plans_use_indexes), then service.list_items, archive.py and the two endpoints.
 
 # Build log (Phase 5)
 
@@ -22,7 +22,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M1 | Pins + walking skeleton | done — 64 passed; gate PASS (`docs/evidence/gates/M1.txt`) | `m1-done` |
 | M2 | Validation, fonts, fit_text, errors, middleware, limits | done — 169 passed; gate PASS (`docs/evidence/gates/M2.txt`) | `m2-done` |
 | M3 | Real template, print_email snapshot, determinism, visual check | done — 184 passed; gate PASS (`docs/evidence/gates/M3.txt`); visual check PASS (automated) | `m3-done` |
-| M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | pending | `m4-done` |
+| M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | done — 250 passed; gate PASS; flake rule 3/3; 9/9 mutations killed (`docs/evidence/gates/M4.txt`, `docs/evidence/mutation-checks.txt`) | `m4-done` |
 | M5 | Listing, downloads, archive | pending | `m5-done` |
 | M6 | README, docs tests, traceability, benchmark-1p, audit | pending | `m6-done`, `v1.0-required` |
 | M7 | D1 verify | pending | `m7-done` |
@@ -73,6 +73,9 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | G15 | §6.3 "422 with every request-level and row-level error" vs. Pydantic structural failures | When the envelope itself is malformed (missing/mistyped/unknown top-level field, non-object row) there is no model to validate rows against. | Structural (Pydantic) failure → 422 with the Pydantic errors only. Domain request-level errors (title/issuer/issued_on/recipients count) → 422 with request errors first, then every row error (§24.11). TOO_MANY_RECIPIENTS skips row validation per §9.1. |
 | G16 | §2/§9 "allow_smtputf8=False (ASCII only)" | email-validator 2.3.0 still accepts internationalized **domains** (e.g. `zoe@exämple.com`) with `allow_smtputf8=False`; the blueprint's premise that emails are ASCII is then false. | Explicit `email.isascii()` check before `validate_email` → `INVALID_EMAIL` ("The email address must be ASCII only."). Implements the blueprint's stated rule; no new code or field. |
 | G17 | §10.3 "widest printable ASCII glyph in DejaVu Sans (`W`, ≈ 0.99 em)" | Measured: `@` is widest (1.000 em), `W` 0.989 em. | Conclusion unaffected: 254 × `@` (wider than any valid address, which has one `@`) still fits at 8 pt in 3 lines. `test_worst_case_email_fits` checks both 254 × `W` (blueprint case) and 254 × widest glyph. No amendment needed. |
+| G18 | §3 "worker.py / service.py must NOT import FastAPI" vs. `FieldCode`/`FieldError` living in `errors.py`, which also holds the FastAPI exception handlers | Gap. | Neither module imports FastAPI directly; they import codes from `errors.py`, which pulls FastAPI in transitively. Accepted (no new file); the standalone worker only pays import cost. |
+| G19 | §4 "PRAGMA journal_mode=WAL on every connection" + `busy_timeout` | SQLite returns SQLITE_BUSY for a journal-mode change without calling the busy handler when another connection is mid-switch; concurrent first boots of N processes then fail (`test_concurrent_schema_creation_two_processes` flaked ~1/4; raw sqlite3 harness: 39 failures in 60 rounds × 6 processes). | Root-cause fix in `db._enable_wal`: skip the switch when the file is already WAL (persistent), else retry that one statement within the same 5 s bound busy_timeout gives every other lock. Harness after fix: 0 failures in 360 concurrent boots. Not a test retry. |
+| G20 | §24.2 "at most 3 restarts per slot per rolling 60 s … after the budget is spent the slot stays down" | Ambiguous whether "stays down" is permanent. | Permanent: once a slot needs a 4th restart within 60 s of its previous 3, it is marked exhausted and never restarted (`/healthz` then reports degraded). Conservative; a crash-looping thread cannot spin. |
 | G13 | §24.8 umask "at startup" in tests that call `create_app` in-process | Process-wide umask affects pytest's tmp dirs. | `lifespan` and `worker.main()` set the umask; `storage.py` additionally creates dirs with mode 0700 and files with `os.open(..., 0o600)` so permissions do not depend on who set the umask. |
 
 ## Milestone notes
@@ -110,3 +113,13 @@ Files in `docs/evidence/visual-check/` (PDF from the real renderer + PNG at 80 d
 | 6-title-3-lines.png | PASS — title 16 pt on 3 lines, clear of "has successfully completed" (~17 pt) and "Issued by" (~13 pt). |
 | 7-combined-worst-case.png (extra) | PASS — 28 pt 2-line name + 3-line 254-char email + 3-line 200-char title + 2-line 200-char issuer together: no overlap or touching (300 dpi crop checked). |
 No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the user and approved as legible") is pending human review** (G2).
+
+### M4 (2026-10-11)
+- RED: 16 failed + 3 collection errors (missing `WorkerPool`, `MAX_PDF_BYTES`, SQL constants, `/healthz`, `serve`, standalone `main`).
+- `test_failure_isolation::test_items_listing_identifies_failed_and_succeeded` needs `GET …/items` (M5) and is written in M5.
+- Kill test uses a state trigger: SIGKILL when ≥ 1 item succeeded and one item was claimed < 200 ms ago (its 300 ms render is certainly running), so the killed item is always mid-render.
+- `test_stale_worker_done_write_rejected_by_fencing` is parametrized with distinct and reused worker ids, so fencing on `worker_id` (mutation 1) is caught by it as well as by `test_same_worker_reclaim_is_fenced`.
+- Flake: `test_concurrent_schema_creation_two_processes` failed 1 in ~4 runs → root cause found and fixed (G19), not retried in the test.
+- Mutation proofs 1–9: all killed; spot-checked that 5 and 6 fail for the intended reason.
+- Amendments A-01 (`certgen/__main__.py`) and A-02 (snapshot test) logged in `docs/BLUEPRINT_AMENDMENTS.md` (auto-approved).
+- Kill-test proof **demonstrated** on Linux (POSIX signals available).

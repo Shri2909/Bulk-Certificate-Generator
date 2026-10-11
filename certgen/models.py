@@ -59,3 +59,10 @@ class JobResource(BaseModel):
 class JobCreated(JobResource):
     # Flat row errors of rejected rows; dicts because `duplicate_of_row_index` appears only on duplicates.
     errors: list[dict[str, Any]]
+
+
+class Health(BaseModel):
+    status: str
+    db: str
+    embedded_workers_alive: int
+    embedded_workers_expected: int

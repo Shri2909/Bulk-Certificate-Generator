@@ -9,6 +9,7 @@ a claim and a claim never blocks status polling.
 from __future__ import annotations
 
 import sqlite3
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ from certgen.tables import metadata
 
 MIN_SQLITE_VERSION = (3, 35, 0)  # RETURNING
 SCHEMA_VERSION = 1
+BUSY_TIMEOUT_SECONDS = 5.0  # same as the busy_timeout pragma below
+WAL_SWITCH_POLL_SECONDS = 0.01
 
 
 @dataclass(frozen=True)
@@ -38,6 +41,26 @@ def check_sqlite_version(version: tuple[int, int, int] = sqlite3.sqlite_version_
         raise RuntimeError(f"SQLite {found} is too old; certgen needs SQLite >= {need} (RETURNING support)")
 
 
+def _enable_wal(cursor: sqlite3.Cursor) -> None:
+    """Switch to WAL once per database file; later connections see it is already set.
+
+    SQLite answers a journal-mode change with SQLITE_BUSY *without* calling the busy handler when
+    another connection is mid-switch (deadlock avoidance), so busy_timeout does not cover the first
+    concurrent boot of several processes. This gives that one statement the same bounded wait.
+    """
+    if cursor.execute("PRAGMA journal_mode").fetchone()[0] == "wal":
+        return
+    deadline = time.monotonic() + BUSY_TIMEOUT_SECONDS
+    while True:
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc) or time.monotonic() >= deadline:
+                raise
+            time.sleep(WAL_SWITCH_POLL_SECONDS)
+
+
 def _make_engine(db_path: Path, begin_statement: str) -> Engine:
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
 
@@ -47,8 +70,8 @@ def _make_engine(db_path: Path, begin_statement: str) -> Engine:
         # implicit BEGIN, which would always be deferred.
         dbapi_connection.isolation_level = None
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA busy_timeout=5000")  # first, so the WAL switch below waits instead of failing
-        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        _enable_wal(cursor)
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 

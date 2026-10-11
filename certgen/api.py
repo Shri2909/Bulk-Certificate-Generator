@@ -112,7 +112,9 @@ def download_certificate(request: Request, certificate_id: str) -> Response:
     )
     if record is None:
         raise not_found()
-    data = state.storage.path_for(record.job_id, record.certificate_id).read_bytes()
+    data = state.storage.read(record.job_id, record.certificate_id)
+    if data is None:
+        raise ApiError(ProblemCode.CERTIFICATE_FILE_MISSING, "The certificate file is missing on the server.")
     return Response(
         data,
         media_type="application/pdf",

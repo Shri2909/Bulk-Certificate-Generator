@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M3 | STATUS: red | NEXT ACTION: Write test_rendering.py (RED), then implement the §10 template with §24.8 filesystem hardening in storage.py, then the automated visual check.
+CURRENT MILESTONE: M4 | STATUS: red | NEXT ACTION: Write M4 RED tests (test_worker rest, test_failure_isolation, test_crash_recovery incl. slow kill tests, test_job_status, test_db rest, test_smoke, test_runtime), then harden worker.py (failures, reclaim, retire, monitor, standalone main), /healthz, __main__.py.
 
 # Build log (Phase 5)
 
@@ -21,7 +21,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M0 | Freeze | done (sha256 93537bde…, inputs commit cd7d461) | `blueprint-locked` |
 | M1 | Pins + walking skeleton | done — 64 passed; gate PASS (`docs/evidence/gates/M1.txt`) | `m1-done` |
 | M2 | Validation, fonts, fit_text, errors, middleware, limits | done — 169 passed; gate PASS (`docs/evidence/gates/M2.txt`) | `m2-done` |
-| M3 | Real template, print_email snapshot, determinism, visual check | pending | `m3-done` |
+| M3 | Real template, print_email snapshot, determinism, visual check | done — 184 passed; gate PASS (`docs/evidence/gates/M3.txt`); visual check PASS (automated) | `m3-done` |
 | M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | pending | `m4-done` |
 | M5 | Listing, downloads, archive | pending | `m5-done` |
 | M6 | README, docs tests, traceability, benchmark-1p, audit | pending | `m6-done`, `v1.0-required` |
@@ -92,3 +92,21 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 - `test_errors::test_error_codes_listed_in_readme` needs README `## Error codes`; written in M6 with the README.
 - The Write tool decoded `\uXXXX` escapes in test sources into literal invisible characters; they were converted back to escapes so tests are readable and ruff RUF001 passes.
 - RED: 77 failed + 1 collection error (missing `certgen.fonts`), 32 already passing (Pydantic structural cases inherited from M1).
+
+### M3 (2026-10-11)
+- Template drawn exactly per §10.2 coordinates; every variable block goes through `layout.fit_text`; the renderer raises `ValueError` rather than overflow if a block cannot fit (validation prevents this).
+- §24.8: `os.umask(0o077)` + explicit 0700/0600 modes; `storage.read()`/`exists()` refuse symlinked job dirs/files (lstat + containment + `O_NOFOLLOW`); a refused or missing file → 410 `CERTIFICATE_FILE_MISSING`.
+- RED: 12 failed, 4 passed (determinism and the worker-output-equals-render property already held for the placeholder renderer).
+
+#### Automated visual check (pdftoppm, poppler system package; not in the venv or repo)
+Files in `docs/evidence/visual-check/` (PDF from the real renderer + PNG at 80 dpi; zoomed 300 dpi crops inspected for the tight regions).
+| Image | Verdict |
+|---|---|
+| 1-short-name.png | PASS — balanced; name 40 pt one line; nothing near borders. |
+| 2-name-120.png | PASS — name 16 pt on 2 lines, centered, clear of "This is to certify that" and the email. |
+| 3-greek.png | PASS — "Νίκος Παπαδόπουλος" all glyphs render (incl. accented ί, ό), no boxes. |
+| 4-cyrillic.png | PASS — "Екатерина Иванова" all glyphs render, no boxes. |
+| 5-email-254.png | PASS — email 8 pt on 3 lines; ~5 pt gap above "has successfully completed" (computed descender 337.7 pt vs cap top 332.6 pt; confirmed at 300 dpi); within the inner border. |
+| 6-title-3-lines.png | PASS — title 16 pt on 3 lines, clear of "has successfully completed" (~17 pt) and "Issued by" (~13 pt). |
+| 7-combined-worst-case.png (extra) | PASS — 28 pt 2-line name + 3-line 254-char email + 3-line 200-char title + 2-line 200-char issuer together: no overlap or touching (300 dpi crop checked). |
+No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the user and approved as legible") is pending human review** (G2).

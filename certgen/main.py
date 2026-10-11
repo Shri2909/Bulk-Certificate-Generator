@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -30,6 +31,13 @@ from certgen.storage import Storage
 from certgen.worker import Renderer
 
 
+def prepare_data_dir(settings: Settings) -> None:
+    """Private by default (§24.8): the DB and PDFs hold names and emails."""
+    os.umask(0o077)
+    settings.data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    settings.certificates_dir.mkdir(mode=0o700, exist_ok=True)
+
+
 def create_app(
     settings: Settings, clock: Clock = system_clock, renderer: Renderer = render_certificate
 ) -> FastAPI:
@@ -37,7 +45,7 @@ def create_app(
     def lifespan(app: FastAPI) -> Iterator[None]:
         logging.getLogger("certgen").setLevel(settings.log_level)
         check_sqlite_version()
-        settings.certificates_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        prepare_data_dir(settings)
         engines = create_engines(settings.db_path)
         create_schema(engines)
         app.state.engines = engines

@@ -1,0 +1,50 @@
+== RED ==
+FAILED tests/test_rendering.py::test_output_is_pdf - AssertionError: assert '...
+FAILED tests/test_rendering.py::test_pdf_text_contains_all_fields - Assertion...
+FAILED tests/test_rendering.py::test_email_printed_by_default_and_opt_out - A...
+FAILED tests/test_rendering.py::test_single_template_only_recipient_fields_differ
+FAILED tests/test_rendering.py::test_unicode_name_round_trips[\u0395\u03bb\u03ad\u03bd\u03b7 \u03a0\u03b1\u03c0\u03b1\u03b4\u03bf\u03c0\u03bf\u03cd\u03bb\u03bf\
+FAILED tests/test_rendering.py::test_unicode_name_round_trips[\u0414\u043c\u0438\u0442\u0440\u0438\u0439 \u0418\u0432\u0430\u043d\u043e\u0432]
+FAILED tests/test_rendering.py::test_unicode_name_round_trips[Zo\xeb \u0141ukasz Ng\u1ecdc]
+FAILED tests/test_rendering.py::test_long_name_renders - AssertionError: asse...
+FAILED tests/test_rendering.py::test_unfittable_text_raises_instead_of_overflowing
+FAILED tests/test_retrieval.py::test_symlinked_certificate_refused[file] - as...
+FAILED tests/test_retrieval.py::test_symlinked_certificate_refused[job_dir]
+FAILED tests/test_worker.py::test_created_files_are_private - AssertionError:...
+12 failed, 4 passed in 0.35s
+
+== GATE ==
+GATE M3  2026-10-11T13:53:17Z  HEAD bf1f263  python Python 3.11.9
+
+$ .venv/bin/pytest tests/test_rendering.py tests/test_retrieval.py tests/test_worker.py -q -p no:cacheprovider
+................                                                         [100%]
+16 passed in 0.52s
+[exit 0]
+
+$ .venv/bin/pytest tests --deselect tests/test_spec_traceability.py -q -p no:cacheprovider
+........................................................................ [ 39%]
+........................................................................ [ 78%]
+........................................                                 [100%]
+184 passed, 3 deselected in 2.39s
+[exit 0]
+
+$ .venv/bin/ruff check .
+All checks passed!
+[exit 0]
+
+$ .venv/bin/ruff format --check .
+29 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 18 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (18 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M3 RESULT: PASS

@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M9 | STATUS: red | NEXT ACTION: Branch d3-fix-retry: write test_dry_run.py and test_retry.py (RED, incl. §24.1 retry capacity and fence-out), implement ?dry_run and POST /retry, README section.
+CURRENT MILESTONE: M10 | STATUS: red | NEXT ACTION: Branch d4-idempotency: write test_idempotency.py + test_limits::test_idempotency_key_too_long_422 (RED), implement Idempotency-Key in api.py/service.py (+ A-03 code), README section; then mutation proof 10.
 
 # Build log (Phase 5)
 
@@ -27,7 +27,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M6 | README, docs tests, traceability, benchmark-1p, audit | done — 296 passed; gate PASS; flake 3/3; §24.17 PASS; audit fixes applied (`docs/evidence/gates/M6.txt`, `docs/evidence/audit/M6-audit.md`) | `m6-done`, `v1.0-required` |
 | M7 | D1 verify | **DROPPED** — kill criterion tripped (required test regressed); branch `dropped/d1-verify` | `m7-done` |
 | M8 | D2 proof | done — merged; slow tests 5/5; benchmarks 1p/2p/4p; kill demo (`docs/evidence/kill-demo.txt`, `docs/evidence/gates/M8.txt`) | `m8-done` |
-| M9 | D3 dry-run + retry | pending | `m9-done` |
+| M9 | D3 dry-run + retry | done — merged; 310 passed; gate PASS (`docs/evidence/gates/M9.txt`) | `m9-done` |
 | M10 | D4 Idempotency-Key | pending | `m10-done` |
 | M11 | Final verification, audit, walkthrough | pending | `v1.0-rc` |
 
@@ -152,3 +152,9 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Benchmarks (`scripts/benchmark.py`, 1000 recipients, work dir on ext4): 1p 83.7/s, 2p 139.3/s, 4p 167.6/s (from the JSON files; README rows generated from them). Sublinear scaling explained in README (single SQLite writer, fsync per commit). All acceptance checks true; max per-item ≪ 10% of the lease (no §7.3 amendment needed).
 - Kill demo: real `python -m certgen` + curl + `kill -9` on a worker mid-render + second worker; raw transcript in `docs/evidence/kill-demo.txt` (killed item attempts 2, 6/6 succeeded, 6 PDFs, 0 tmp).
 - Files touched: README, docs/evidence only (scripts/benchmark.py unchanged).
+
+### M9 — D3 (2026-10-11): MERGED
+- RED: 12 failed. GREEN: `?dry_run=true` (200 report, never writes, bypasses capacity, request-level errors still 422) and `POST …/retry` (T9 in one write txn, §24.1 capacity, empty body or `{}`, 415/422 body rules).
+- Kill check: `test_retry_fences_out_stale_worker` green; dry run stores nothing (`test_dry_run_creates_nothing`); no schema change; no required test regressed; 1 fix cycle (a test filtered rows across jobs).
+- Files: api.py, service.py, models.py, README, tests + `errors.py` for `NOTHING_TO_RETRY` (amendment A-03, auto-approved).
+- Mutation 11 is an equivalent mutant (see `docs/evidence/mutation-checks.txt`); the invariant making it equivalent is now tested (`test_failed_rows_never_hold_a_lease_token`). Mutation 10 runs after D4.

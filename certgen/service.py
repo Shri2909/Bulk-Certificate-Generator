@@ -273,3 +273,38 @@ def archive_rows(engines: Engines, job_id: str) -> list[ArchiveRow] | None:
         if not _job_exists(conn, job_id):
             return None
         return [ArchiveRow(**r) for r in conn.execute(text(ARCHIVE_ROWS_SQL), {"job_id": job_id}).mappings()]
+
+
+# T9 (D3): every failed item of the job back to pending, with a clean slate. A stale worker that still
+# holds an old claim is fenced out: failed rows carry no token, and the next claim issues a new one.
+RETRY_FAILED_SQL = (
+    "UPDATE items SET status = 'pending', attempts = 0, errors = NULL, available_at = NULL, "
+    "lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, completed_at = NULL "
+    "WHERE job_id = :job_id AND status = 'failed'"
+)
+
+
+def retry_failed(engines: Engines, settings: Settings, clock: Clock, job_id: str) -> JobView | None:
+    """D3: re-queue the job's failed items in one write transaction; None if the job does not exist."""
+    with engines.write.begin() as conn:
+        if not _job_exists(conn, job_id):
+            return None
+        failed = int(
+            conn.execute(
+                text("SELECT COUNT(*) FROM items WHERE job_id = :job_id AND status = 'failed'"),
+                {"job_id": job_id},
+            ).scalar_one()
+        )
+        if failed == 0:
+            raise ApiError(ProblemCode.NOTHING_TO_RETRY, "The job has no failed certificates to retry.")
+        active = count_active_items(conn)
+        if active + failed > settings.max_active_items:  # same admission rule as a new job (§24.1)
+            raise ApiError(
+                ProblemCode.CAPACITY_EXCEEDED,
+                f"The queue holds {active} unfinished certificates; re-queuing {failed} more "
+                f"would exceed the limit of {settings.max_active_items}. Retry later.",
+            )
+        conn.execute(text(RETRY_FAILED_SQL), {"job_id": job_id})
+        view = _load_job(conn, job_id)
+    assert view is not None
+    return view

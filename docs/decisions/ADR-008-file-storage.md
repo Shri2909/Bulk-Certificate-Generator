@@ -10,7 +10,7 @@ Status: Accepted · Requirements: R8, R9 · Evidence: RESEARCH §5 (OWASP File U
 ## Decision
 **Option 2**, behind a tiny `storage.py` interface (`save(job_id, cert_id, bytes)`, `open(job_id, cert_id)`, `path_for(...)`). That's the seam for swapping in S3.
 - Layout: `STORAGE_DIR/{job_id}/{certificate_id}.pdf`, default `./data/certificates`. Both IDs are server-generated hex. **No user input reaches a path.** Download endpoints look up the item by ID in the DB, then build the path (OWASP: ID→file handler).
-- Writes: `tmp = path.with_suffix(".pdf.tmp")`, write, `fsync`, `os.replace(tmp, path)`. Readers never see a half-written PDF, and re-processing is idempotent (ADR-004).
+- Writes: `tmp = dir / f"{certificate_id}.{uuid4().hex}.tmp"` (**unique per write**, so a stale and a current worker never share a tmp file; audit #6), write, `fsync`, `os.replace(tmp, path)`. On start, each worker deletes `*.tmp` files older than `2 × LEASE_SECONDS` (orphans of killed workers). Readers never see a half-written PDF, and re-processing is idempotent (ADR-004).
 - The DB stores no path, because it's derivable. That avoids drift between DB and disk.
 
 ## Consequences

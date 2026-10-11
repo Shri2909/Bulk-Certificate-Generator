@@ -40,7 +40,7 @@ Rules:
 
 ## 3. Mandatory README content (PDF "Documentation")
 
-The tests check these by asserting that the README section exists and that its commands are real (Phase 6).
+`tests/test_docs.py` checks that each section exists and that linked ADRs exist. That the commands actually work is verified by running them verbatim in a clean venv in Phase 6 (transcript kept), not by pytest.
 
 | ID  | README must explain |
 |-----|---------------------|
@@ -65,14 +65,14 @@ The tests check these by asserting that the README section exists and that its c
 |----|-----------|-------------------------|-----------|
 | A1 | "Validate" + "each **valid** recipient": should one bad row reject the whole request? | **No.** The job is accepted (`202`): invalid rows are stored as items with status `rejected` + error codes, and valid rows are generated. Whole-request `422` **only** when the request is structurally malformed (bad JSON, missing/invalid required top-level fields, empty `recipients`, over `MAX_RECIPIENTS`) or **every** row is invalid (the 422 then lists every row's errors). | ADR-005 · Gate 1 Q1 |
 | A2 | What is "recipient data"? | `name` (required, printed), `email` (required, used for de-duplication and future delivery, **not printed**, to avoid PII on a shareable document). Job-level "certificate information": `title` (course/event), `issued_on` (date), `issuer` (organization). | ADR-005 |
-| A3 | Does "recipient-specific information" require printing the email? | **Explicit interpretation:** name + certificate ID + verification QR are printed; email is stored and returned by the API but **not printed by default** (keeps contact PII off a publicly shared document). A strict reading is satisfied by one setting: `PRINT_EMAIL_ON_CERTIFICATE=true` (default `false`) prints the email too. Both modes tested (R5). Stated in README. | ADR-007 · Gate 1 A3 |
+| A3 | Does "recipient-specific information" require printing the email? | **Explicit interpretation:** name + certificate ID are printed (plus a verification QR once D1 lands, M7); email is stored and returned by the API but **not printed by default** (keeps contact PII off a publicly shared document). A strict reading is satisfied by one setting: `PRINT_EMAIL_ON_CERTIFICATE=true` (default `false`) prints the email too. The setting is snapshotted onto each job at creation, so it never changes already-accepted jobs. Both modes tested (R5). Stated in README. | ADR-007 · Gate 1 A3 |
 | A4 | Duplicate recipients in one request. | Same email (`strip()` + case-insensitive) twice **in one job** → the later row is `rejected` with `DUPLICATE_RECIPIENT`; the error message names the first occurrence's row index (and carries `duplicate_of_row_index`). Duplicates **across** jobs are allowed. | ADR-005 · Gate 1 Q2 |
 | A5 | "Retrieve generated certificates": one or all? | Both: `GET /v1/certificates/{certificate_id}` (single PDF) and `GET /v1/certificate-jobs/{id}/archive` (ZIP of all succeeded + `manifest.csv`). | ADR-009 |
 | A6 | "Progress/result": what shape? | Job resource with `status`, `counts` per item status, `progress` (0–1 over valid items), plus a paginated, status-filterable item list. | ADR-009 |
 | A7 | "Failure while generating" vs "invalid data". | Two distinct failure classes: `rejected` (input invalid, never attempted) and `failed` (attempted, generation error). Both are visible in job status (R10). | ADR-010 |
-| A8 | "Unnecessarily prevent": is retry expected? | Transient generation errors retry up to `MAX_ATTEMPTS` (3). Deterministic errors (e.g. a name the font cannot render) are caught at validation, so they are never retried. | ADR-004 |
+| A8 | "Unnecessarily prevent": is retry expected? | Any renderer exception is retried up to `MAX_ATTEMPTS` (3) after a fixed `RETRY_DELAY_SECONDS`. No transient/permanent classification at runtime, because inputs that are deterministically unrenderable (missing glyphs, RTL) are rejected at validation (A9) and never reach the renderer. Exhausted → `failed` with `GENERATION_FAILED`; a crash-looping item → `failed` with `WORKER_LOST`. | ADR-004 |
 | A9 | Unicode names. | Allowed when every character is renderable by the bundled font (Latin/Greek/Cyrillic). Characters the font lacks (e.g. CJK) or right-to-left scripts that ReportLab cannot shape → `rejected` with `UNSUPPORTED_CHARACTERS`. A certificate never silently renders blank boxes (verified: Helvetica draws CJK without raising). | ADR-007 |
-| A10 | "Efficiently". | Background processing + batched DB claims. Measured target: 1,000 recipients complete in under 60 s on a laptop with one worker (measured ~20 ms/PDF in Phase 1). | ADR-003, PLAN |
+| A10 | "Efficiently". | Background processing with single-item atomic claims (~1 ms each vs ~20 ms render). Measured target: 1,000 recipients complete in under 60 s on a laptop with one worker (measured ~20 ms/PDF in Phase 1). | ADR-003, PLAN |
 
 ## 6. Traceability (Requirement → code → test → README)
 
@@ -88,7 +88,7 @@ The tests check these by asserting that the README section exists and that its c
 | R8  | `certgen/api/certificates.py` | `tests/test_retrieval.py` | Retrieve certificates |
 | R9  | `certgen/worker.py:process_item` (per-item try/except, per-item transaction) | `tests/test_failure_isolation.py` | Design decisions → Failure handling |
 | R10 | `certgen/api/jobs.py:list_items` | `tests/test_failure_isolation.py` | Check progress |
-| R11 | `certgen/worker.py:claim_batch`, `certgen/config.py` limits | `tests/test_limits.py`, `tests/test_jobs_api.py` | Design decisions → Bulk processing |
+| R11 | `certgen/worker.py:claim_next`, `certgen/config.py` limits | `tests/test_limits.py`, `tests/test_jobs_api.py` | Design decisions → Bulk processing |
 | R12 | `docs/decisions/ADR-003-sync-vs-background.md` | `tests/test_docs.py` | Design decisions |
 | R13 | `certgen/main.py`, `certgen/db.py` | `tests/test_docs.py::test_stack` | Setup |
 | R14 | — | `tests/test_jobs_api.py` | Run tests |

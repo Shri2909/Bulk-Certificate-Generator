@@ -16,7 +16,8 @@ A bulk POST is the request most likely to time out on the client while succeedin
 - Same key + same hash → `200 OK`, the existing job, header `Idempotent-Replayed: true`. It returns **current** job state, not a frozen snapshot. That's a stated deviation from Stripe's "saved response", and it's more useful for polling clients.
 - Same key + different hash → `409 IDEMPOTENCY_KEY_REUSED` (Stripe: "errors if they're not the same").
 - Request-level `422`s are **not** recorded, so the client fixes the body and retries with the same key (Stripe: validation failures are not saved).
-- Concurrent duplicates: the loser of the `UNIQUE` insert race catches `IntegrityError`, re-reads, and applies the rules above (brandur).
+- Concurrent duplicates: creation runs in one `write_engine` transaction (`BEGIN IMMEDIATE`, ADR-002), so look-up-key-then-insert is already serialized and two same-key requests can't interleave. The `UNIQUE` index is a **backstop** (brandur): if it ever fires, the handler re-reads and applies the rules above. That branch is not reachable under the current transaction mode, and we say so rather than claim a test exercises it (audit #27). The concurrent test still asserts exactly one job.
+- `?dry_run=true` ignores the header entirely: it neither reads nor stores a key (ADR-009, audit #8).
 - Key: 1–255 chars (Stripe's limit), printable ASCII.
 
 ## Consequences

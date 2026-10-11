@@ -19,7 +19,8 @@ Real verification value, explainability, operational cost (secrets to manage).
 ## Decision
 **Option 2.**
 - `certificate_id = secrets.token_hex(16)` (128 bits from the OS CSPRNG), assigned at item insert for valid rows only. Column is `UNIQUE`.
-- Printed on the certificate as text and as a QR code (ReportLab built-in widget) encoding `{PUBLIC_BASE_URL}/v1/verify/{certificate_id}`. `PUBLIC_BASE_URL` defaults to `http://localhost:8000`.
+- Printed on the certificate as text (required scope) and, from milestone M7, as a QR code (ReportLab built-in widget) encoding `{verify_base_url}/v1/verify/{certificate_id}`.
+- `verify_base_url` is snapshotted onto the job at creation from `PUBLIC_BASE_URL` (ADR-002), so every certificate in a job encodes the same URL whichever worker renders it. Default `http://localhost:8000`, so the QR works in the reviewer's local run; at startup the app logs a warning if `PUBLIC_BASE_URL` is unset, and the README says to set it in any real deployment. (The auditor suggested printing no QR unless it's set. We keep the default because a local demo whose QR resolves is the point of D1; see the PLAN audit log.)
 - `GET /v1/verify/{certificate_id}` is public:
   - known **and** `succeeded` → `200 {"valid": true, "certificate_id", "recipient_name", "title", "issuer", "issued_on"}`
   - anything else (unknown, malformed, pending, failed, rejected) → `200 {"valid": false}`. One uniform shape, so the endpoint doesn't reveal *why*. A lookup of a malformed ID never touches the filesystem.

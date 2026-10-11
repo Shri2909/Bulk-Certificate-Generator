@@ -15,9 +15,11 @@ One fixed design (R4) showing recipient data (R5). Must `pip install` with no sy
 P3 compliance, Unicode correctness, speed, explainability.
 
 ## Decision
-**ReportLab canvas**, template defined in `certgen/rendering.py` as one function with named layout constants. Landscape A4: border, title "Certificate of Completion", recipient name (auto-shrunk from 40 pt down to 18 pt via `stringWidth` to fit the width), course `title`, `issuer`, `issued_on`, certificate ID, verification QR (ADR-013).
+**ReportLab canvas**, template defined in `certgen/rendering.py` as one function with named layout constants. Landscape A4: border, title "Certificate of Completion", recipient name (auto-shrunk from 40 pt down to 18 pt via `stringWidth` to fit the width), course `title`, `issuer`, `issued_on`, certificate ID. The verification QR is added by D1 in milestone M7 (ADR-013); the required-scope template (`v1.0-required`) prints the certificate ID only (audit #16).
 
-**Email on the certificate (Gate 1 A3):** stored and returned by the API, **not printed by default**. Certificates are shared publicly (LinkedIn, portfolios), and printing an email there leaks contact PII for no verification benefit. The name + certificate ID + QR identify the recipient. One setting, `PRINT_EMAIL_ON_CERTIFICATE` (env, default `false`), adds an email line under the name. It exists so a strict reading of "recipient-specific information provided in the request" can be satisfied by one config change. Both modes are tested.
+**Render inputs come only from the DB** (item + job row), never from process env: `print_email` and `verify_base_url` are snapshotted onto the job at creation. A standalone worker with different env renders the same bytes (ADR-004, audit #7).
+
+**Email on the certificate (Gate 1 A3):** stored and returned by the API, **not printed by default**. Certificates are shared publicly (LinkedIn, portfolios), and printing an email there leaks contact PII for no verification benefit. The name + certificate ID + QR identify the recipient. One setting, `PRINT_EMAIL_ON_CERTIFICATE` (env, default `false`), adds an email line under the name. It is read **at job creation** and stored on the job (`jobs.print_email`), so changing it never alters already-accepted jobs. It exists so a strict reading of "recipient-specific information provided in the request" can be satisfied by one config change. Both modes are tested.
 
 **Determinism:** canvases are created with `invariant=1`, so the same inputs produce byte-identical PDFs (needed by ADR-004's idempotent rewrite; [measured] in RESEARCH §6).
 

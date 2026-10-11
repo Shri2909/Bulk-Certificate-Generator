@@ -2,7 +2,7 @@
 name = "certgen"
 version = "0.0.0"
 description = "Bulk certificate generator API"
-requires-python = ">=3.10"
+requires-python = ">=3.11"  # enum.StrEnum (ADR-010); Phase 6 verifies on 3.11 and 3.14
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

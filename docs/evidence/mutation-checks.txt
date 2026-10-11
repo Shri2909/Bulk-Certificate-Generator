@@ -54,3 +54,9 @@ ALL MUTATIONS KILLED
 Failure-reason spot checks:
   5: AssertionError: assert 1 != 1 (both workers claimed item_id=1; second claim attempts=2) — a real double claim.
   6: RuntimeError: simulated render failure for Bob Broken escaped run_until_idle — the other recipients were never processed.
+
+MUTATION 5b (added after the M6 fresh-context audit, finding 4)
+  file: certgen/worker.py; tests: test_many_threads_claim_each_item_exactly_once
+  mutation: claim SELECT committed in one BEGIN IMMEDIATE transaction, claim UPDATE in a second one
+  5 consecutive runs: 5/5 FAILED (KILLED); failure: item claimed twice, e.g. 'At index 89 diff: 2 != 1' (attempts 2, no failures)
+  git checkout -> certgen/worker.py restored (git diff --quiet certgen/worker.py)

@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "timestamp_utc": "2026-10-11T14:21:55Z",
-  "git_commit": "43892a501b298c41966760a7b589f89a7fcab077",
-  "git_dirty": true,
+  "timestamp_utc": "2026-10-11T14:42:48Z",
+  "git_commit": "6dd3010ac4dd91da7b016278324491542583b376",
+  "git_dirty": false,
   "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
   "python": "3.11.9",
   "versions": {
@@ -17,9 +17,9 @@
   },
   "processes": 1,
   "recipients": 1000,
-  "post_latency_ms": 112.658,
-  "wall_ms": 16215.732,
-  "throughput_per_s": 61.669,
+  "post_latency_ms": 114.338,
+  "wall_ms": 11949.752,
+  "throughput_per_s": 83.684,
   "attempts_histogram": {
     "1": 1000
   },
@@ -31,22 +31,22 @@
     "count": 1000
   },
   "per_item_ms": {
-    "p50": 9.383,
-    "p95": 17.814,
-    "max": 30.119
+    "p50": 10.827,
+    "p95": 13.644,
+    "max": 38.229
   },
   "render_ms": {
-    "p50": 4.101,
-    "p95": 4.979,
-    "max": 10.404
+    "p50": 4.213,
+    "p95": 4.998,
+    "max": 9.081
   },
   "storage_ms": {
-    "p50": 3.144,
-    "p95": 8.102,
-    "max": 20.402
+    "p50": 3.978,
+    "p95": 5.334,
+    "max": 8.875
   },
-  "serial_estimate_ms": 9383.0,
-  "peak_rss_bytes": 88154112,
+  "serial_estimate_ms": 10827.0,
+  "peak_rss_bytes": 88563712,
   "lease_ms": 30000,
   "work_dir": "data",
   "acceptance": {

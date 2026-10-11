@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M6 | STATUS: red | NEXT ACTION: Write test_docs.py + test_errors::test_error_codes_listed_in_readme + §24.16 traceability strengthening (RED), then scripts/benchmark.py, benchmark-1p.json, README.md, REQUIREMENTS.md R-headings; then M6 audit and tag v1.0-required.
+CURRENT MILESTONE: M7 | STATUS: red | NEXT ACTION: Create branch d1-verify from v1.0-required; write test_verify.py (RED) incl. §24.7 scope field; implement QR + footer URL + GET /v1/verify; README Verification section; visual check of cases 1, 2, 5 with QR.
 
 # Build log (Phase 5)
 
@@ -24,7 +24,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M3 | Real template, print_email snapshot, determinism, visual check | done — 184 passed; gate PASS (`docs/evidence/gates/M3.txt`); visual check PASS (automated) | `m3-done` |
 | M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | done — 250 passed; gate PASS; flake rule 3/3; 9/9 mutations killed (`docs/evidence/gates/M4.txt`, `docs/evidence/mutation-checks.txt`) | `m4-done` |
 | M5 | Listing, downloads, archive | done — 279 passed; gate PASS; flake 3/3 (`docs/evidence/gates/M5.txt`) | `m5-done` |
-| M6 | README, docs tests, traceability, benchmark-1p, audit | pending | `m6-done`, `v1.0-required` |
+| M6 | README, docs tests, traceability, benchmark-1p, audit | done — 296 passed; gate PASS; flake 3/3; §24.17 PASS; audit fixes applied (`docs/evidence/gates/M6.txt`, `docs/evidence/audit/M6-audit.md`) | `m6-done`, `v1.0-required` |
 | M7 | D1 verify | pending | `m7-done` |
 | M8 | D2 proof | pending | `m8-done` |
 | M9 | D3 dry-run + retry | pending | `m9-done` |
@@ -129,3 +129,13 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Archive concurrency slot is held while rows are loaded and the ZIP is built, then released before streaming; the spooled file is closed by the streaming generator (§6.7 limits *builds*).
 - The CSV guard also applies to rejected rows (their stored name/email reach the manifest); test uses a full-width "＝" name, which the font lacks, so it is a rejected row.
 - `test_query_plans_use_indexes` now covers both listing queries (unfiltered → `sqlite_autoindex_items_1` on (job_id,row_index); filtered → `ix_items_job_status`).
+
+### M6 (2026-10-11)
+- RED: 7 failed (no README, no evidence, no R headings).
+- `tests/test_spec_traceability.py` strengthened per §24.16 (empty/non-literal markers; `### R<n> —` headings); existing three checks unchanged in behavior; ruff exclusion removed.
+- §24.17: D-only `ProblemCode` values (`IDEMPOTENCY_KEY_REUSED`, `NOTHING_TO_RETRY`) removed before the tag; they return with D4/D3. Check script output in `docs/evidence/gates/M6.txt`: PASS.
+- Benchmark: `/tmp` is tmpfs here, so the script defaults its work dir to `./data` (ext4) so fsync is real. Re-run on clean commit 6dd3010 after the audit fixes (`git_dirty: false`). Acceptance all true.
+- ADR-005 and ADR-007 carry a "superseded in part" note pointing at BLUEPRINT §0 decision 1.
+- Clean-venv verification of README commands verbatim: PASS (fresh clone, python3.11 venv). Note: the first `pkill` pattern missed the server; it was then stopped with SIGINT and shut down gracefully.
+- Fresh-context audit (subagent): scores spec 9, failure correctness 7, simplicity 8, tests 8, docs 8, explainability 8, differentiators 5. Findings 3, 4, 5, 6, 7, 8, 9, 10 fixed; 1, 2, 11, 12 documented (fixing 1/2 would need non-pre-approved changes to frozen §7.3/§23 or D3 scope). Details: `docs/evidence/audit/M6-audit.md`.
+- Mutation 5b added (audit finding 4), killed 5/5.

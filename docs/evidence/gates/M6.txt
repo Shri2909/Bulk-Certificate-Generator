@@ -8,8 +8,8 @@ FAILED tests/test_spec_traceability.py::test_every_requirement_has_a_heading
 FAILED tests/test_errors.py::test_error_codes_listed_in_readme - FileNotFound...
 7 failed, 11 passed in 0.35s
 
-== GATE ==
-GATE M6  2026-10-11T14:24:51Z  HEAD 43892a5  python Python 3.11.9
+== GATE (after audit fixes) ==
+GATE M6  2026-10-11T14:43:33Z  HEAD 6dd3010  python Python 3.11.9
 
 $ .venv/bin/pytest tests/test_docs.py tests/test_spec_traceability.py tests/test_errors.py -q -p no:cacheprovider
 ..................                                                       [100%]
@@ -18,11 +18,11 @@ $ .venv/bin/pytest tests/test_docs.py tests/test_spec_traceability.py tests/test
 
 $ .venv/bin/pytest tests -q -p no:cacheprovider
 ........................................................................ [ 24%]
-........................................................................ [ 49%]
-........................................................................ [ 74%]
-........................................................................ [ 98%]
-...                                                                      [100%]
-291 passed in 10.78s
+........................................................................ [ 48%]
+........................................................................ [ 72%]
+........................................................................ [ 97%]
+........                                                                 [100%]
+296 passed in 11.32s
 [exit 0]
 
 $ .venv/bin/ruff check .
@@ -45,3 +45,58 @@ INVARIANTS: OK (20 files scanned, blueprint sha256 93537bded6bb… matches)
 [exit 0]
 
 GATE M6 RESULT: PASS
+
+== FLAKE RULE (3 consecutive runs) ==
+flake run 1:
+56 passed in 8.94s
+flake run 2:
+56 passed in 8.89s
+flake run 3:
+56 passed in 8.91s
+
+== CLEAN VENV (fresh git clone, python3.11 -m venv, README commands verbatim) ==
+pip install -r requirements.txt: OK; python -m certgen: /healthz {"status":"ok","db":"ok","embedded_workers_alive":2,"embedded_workers_expected":2}
+README curl: 202, rows 0 and 2 generated, row 1 INVALID_EMAIL; poll -> completed_with_errors; items?status=failed -> []; PDF download: 'PDF document, version 1.4, 1 page(s)'; archive: 2 PDFs + manifest.csv (3 rows)
+SIGINT: uvicorn 'Shutting down … Application shutdown complete'
+pytest: 291 passed in 10.89s; pytest -m 'not slow': 286 passed, 5 deselected in 5.33s; ruff check: All checks passed!; ruff format --check: 40 files already formatted; mypy --strict certgen: Success
+(clean-venv run was on commit 1c6b5a5, before the audit fixes; the fixes changed README wording, db.py, validation.py, main.py and tests; the full gate above covers them)
+
+== §24.17 REQUIRED-BEFORE-OPTIONAL CHECK ==
+$ git ls-tree -r --name-only HEAD | grep D-file list
+  absent: tests/test_verify.py
+  absent: tests/test_dry_run.py
+  absent: tests/test_retry.py
+  absent: tests/test_idempotency.py
+  absent: docs/evidence/kill-demo.txt
+  absent: docs/evidence/benchmark-2p.json
+  absent: docs/evidence/benchmark-4p.json
+$ git grep D endpoints/features in certgen/ at HEAD
+  not found: /v1/verify
+  not found: /retry
+  not found: Idempotency-Key
+  not found: dry_run
+  not found: QrCodeWidget
+  not found: verification_scope
+  not found: IDEMPOTENCY_KEY_REUSED
+  not found: NOTHING_TO_RETRY
+$ README headings at HEAD
+  ## Setup
+  ## Run
+  ## Run tests
+  ## Submit a certificate generation request
+  ## Retrieve generated certificates
+  ## Design decisions
+  ## Recovery and guarantees
+  ## Supported names
+  ## Configuration
+  ## Error codes
+  ## Benchmarks
+  ## Operations
+  ## Limitations
+  ## Blueprint conformance
+$ dependency diff vs m1-done
+  requirements unchanged since M1
+RESULT §24.17 at HEAD: PASS
+
+== FRESH-CONTEXT AUDIT ==
+See docs/evidence/audit/M6-audit.md (scores, findings, dispositions).

@@ -91,15 +91,15 @@ Updated at every Phase 5 milestone. "Status" is the milestone at which the liste
 | R9  | `worker.py:Worker.process` | `test_failure_isolation.py`, `test_crash_recovery.py`, `test_worker.py` | Recovery and guarantees | M4 |
 | R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates | M5 |
 | R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M5 |
-| R12 | `README.md` | `test_docs.py` | Design decisions | planned (M6) |
-| R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py`, `test_runtime.py` | Setup | M4 (test_docs planned M6) |
+| R12 | `README.md` | `test_docs.py` | Design decisions | M6 |
+| R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py`, `test_runtime.py` | Setup | M6 |
 | R14 | — | `test_jobs_api.py` | Run tests | M1 |
 | R15 | — | `test_validation.py`, `test_limits.py` | Run tests | M2 |
 | R16 | — | `test_rendering.py`, `test_worker.py` | Run tests | M4 |
 | R17 | — | `test_jobs_api.py`, `test_job_status.py` | Run tests | M4 |
 | R18 | — | `test_failure_isolation.py` | Run tests | M4 |
 | R19 | — | `test_retrieval.py` | Run tests | M5 |
-| R20–R25 | `README.md` | `test_docs.py` | each section | planned (M6) |
+| R20–R25 | `README.md` | `test_docs.py` | each section | M6 |
 
 ## 7. Obligations (one heading per requirement, BLUEPRINT §24.16)
 

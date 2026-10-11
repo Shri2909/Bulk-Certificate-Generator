@@ -364,7 +364,7 @@ The data directory was on the local disk (ext4), so every commit and PDF write p
 
 | Processes | Recipients | Wall (s) | Throughput (certs/s) | Render p50 (ms) | Per item p50 (ms) | Per item max (ms) | POST latency (ms) | Evidence |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 1000 | 16.22 | 61.7 | 4.1 | 9.4 | 30.1 | 113 | [benchmark-1p.json](docs/evidence/benchmark-1p.json) |
+| 1 | 1000 | 11.95 | 83.7 | 4.2 | 10.8 | 38.2 | 114 | [benchmark-1p.json](docs/evidence/benchmark-1p.json) |
 
 `serial_estimate_ms` in each file (recipients × median per-item time) is what a synchronous POST would
 have to take at minimum; it is an estimate, not a measured synchronous latency. Rendering is CPU-bound
@@ -420,7 +420,7 @@ only the single-process run is measured in this version.
 Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
 [docs/BLUEPRINT.sha256](docs/BLUEPRINT.sha256), tag `blueprint-locked`).
 
-- **Build status:** required scope (R1–R25) complete. Last full test run (M6 gate, raw pytest summary): `291 passed in 10.78s` — transcript in [docs/evidence/gates/M6.txt](docs/evidence/gates/M6.txt).
+- **Build status:** required scope (R1–R25) complete. Last full test run (M6 gate, raw pytest summary): `296 passed in 11.32s` — transcript in [docs/evidence/gates/M6.txt](docs/evidence/gates/M6.txt).
 - **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)):
   A-01 `certgen/__main__.py` for `python -m certgen` (auto-approved); A-02 test for the per-job email
   snapshot (auto-approved).

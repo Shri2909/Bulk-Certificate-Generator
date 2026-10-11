@@ -1,6 +1,6 @@
 # ADR-002: Database and schema — SQLite (WAL) via SQLAlchemy 2.0, two tables
 
-Status: Proposed · Requirements: R6, R10, R13, P3 · Evidence: RESEARCH §3, §5
+Status: Accepted · Requirements: R6, R10, R13, P3 · Evidence: RESEARCH §3, §5
 
 ## Context
 We need a relational DB that persists job/item status (R6) and runs with zero external services (P3). The same DB is also the work queue (ADR-004).
@@ -14,7 +14,7 @@ We need a relational DB that persists job/item status (R6) and runs with zero ex
 Correctness under concurrent poll+write, ease to run, explainability, path to scale.
 
 ## Decision
-**Option 2.** WAL means "readers do not block writers and a writer does not block readers" ([sqlite.org/wal](https://www.sqlite.org/wal.html)), so clients polling status never stall the worker. SQLite's single-writer rule makes our claim `UPDATE` atomic without row locks. Every connection sets `journal_mode=WAL`, `foreign_keys=ON` (default is OFF), `busy_timeout=5000` through a SQLAlchemy `connect` listener. Postgres is **not shipped in v1**. ADR-004 documents the exact change.
+**Option 2.** WAL means "readers do not block writers and a writer does not block readers" ([sqlite.org/wal](https://www.sqlite.org/wal.html)), so clients polling status never stall the worker. SQLite's single-writer rule makes our claim `UPDATE` atomic without row locks. Every connection sets `journal_mode=WAL`, `foreign_keys=ON` (default is OFF), `busy_timeout=5000` through a SQLAlchemy `connect` listener. The listener also disables pysqlite's legacy implicit transactions (`isolation_level=None`), and a `begin` listener emits `BEGIN IMMEDIATE`. This is the pattern in the SQLAlchemy SQLite docs. Every write transaction then takes the write lock up front, which makes the read-then-update claim atomic across threads **and processes** (ADR-004; verified in RESEARCH §6 [measured]). Read-only requests use the same engine; in WAL mode a reader is never blocked, and our transactions last a few ms. Postgres is **not shipped in v1**. ADR-004 documents the exact change.
 
 Tables are created with `metadata.create_all()` at startup. There is no Alembic in v1 because the schema has no history yet. That's a stated limitation, and it's the first thing to add on a second schema version.
 

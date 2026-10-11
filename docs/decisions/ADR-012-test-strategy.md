@@ -1,6 +1,6 @@
 # ADR-012: Test strategy — deterministic, no sleeps, requirement-tagged
 
-Status: Proposed · Requirements: R14–R19 (and every R via traceability) · Evidence: RESEARCH §4, §7
+Status: Accepted · Requirements: R14–R19 (and every R via traceability) · Evidence: RESEARCH §4, §7
 
 ## Options
 1. **API tests only, real background thread, poll with sleep** (simplest to write). Flaky under CI load, and slow.

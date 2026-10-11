@@ -1,6 +1,6 @@
 # ADR-010: Error model — RFC 9457 problem+json with stable machine codes
 
-Status: Proposed · Requirements: R2, R10 · Evidence: RESEARCH §4
+Status: Accepted · Requirements: R2, R10 · Evidence: RESEARCH §4
 
 ## Options
 1. **FastAPI defaults** (simplest). `{"detail": ...}` and Pydantic's 422 list. Inconsistent between our errors and framework errors, and no stable codes.

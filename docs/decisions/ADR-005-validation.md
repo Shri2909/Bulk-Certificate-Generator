@@ -1,6 +1,6 @@
 # ADR-005: Validation — structural errors reject the request; recipient errors are per-row
 
-Status: Proposed (→ Gate Q1, Q2) · Requirements: R2, R3, R10, R15 · Evidence: RESEARCH §5
+Status: Accepted (Gate 1 Q1, Q2) · Requirements: R2, R3, R10, R15 · Evidence: RESEARCH §5
 
 ## Context
 "Validate the provided recipient data" + "Generate a certificate for **each valid** recipient" implies some recipients may be invalid while others proceed.
@@ -27,7 +27,8 @@ Two layers:
    | `INVALID_CHARACTERS` | contains control / format characters (Unicode category `C*`) |
    | `UNSUPPORTED_CHARACTERS` | a char missing from the bundled font, or a strong-RTL char (ADR-007) |
    | `INVALID_EMAIL` | fails `email-validator` syntax check (no DNS lookup; deterministic tests) |
-   | `DUPLICATE_RECIPIENT` | normalized email (casefold) already seen **earlier** in this request |
+| `UNSUPPORTED_CHARACTERS` on `email` | only when `PRINT_EMAIL_ON_CERTIFICATE=true` (ADR-007), because the email is then rendered (internationalized addresses may contain non-ASCII) |
+   | `DUPLICATE_RECIPIENT` | `email.strip().casefold()` already seen **earlier in this request**. Message names the first occurrence: `"duplicate of row 3"`, and the error also carries `"duplicate_of_row_index": 3` for machines. Only valid rows register as first occurrences: if row 3's email is malformed, row 7 with the same string is reported for its own malformed email, not as a duplicate. **Duplicates across different jobs are allowed** (re-issuing next year's course to the same person is normal). |
 
    Row-level checks are done by hand, not by Pydantic per row, so one bad row can't fail the request model. The row index is the original array position.
 
@@ -35,7 +36,8 @@ Names are an allowlist of **printable Unicode the font can draw**, not a regex o
 
 ## Consequences
 - `202` responses carry `counts.rejected`, so a client that ignores row errors still sees them in job status.
-- Duplicate policy (first wins, later rows rejected) is an interpretation → Gate Q2.
+- Duplicate policy (first occurrence wins, later rows rejected, scoped to one job) is the Gate 1 Q2 decision.
+- `422` for the whole request applies only to: malformed JSON, missing/invalid top-level fields (`certificate.*`, `recipients`), empty or over-limit `recipients`, oversized body, or **every** row invalid (Gate 1 Q1). The all-invalid 422 still returns every row's errors.
 
 ## At 100× scale
 For 100k+ recipients, accept CSV upload streamed to disk and validate in the worker (the job enters `validating`). JSON bodies of 100k rows (~10 MB) are too large to validate in-request.

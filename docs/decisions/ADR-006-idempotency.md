@@ -1,6 +1,6 @@
 # ADR-006: Idempotent job creation — optional `Idempotency-Key` header (differentiator D4)
 
-Status: Proposed · Requirements: R1, R11 (bulk POST retried after timeout must not double-generate) · Evidence: RESEARCH §1
+Status: Accepted · Requirements: R1, R11 (bulk POST retried after timeout must not double-generate) · Evidence: RESEARCH §1
 
 ## Context
 A bulk POST is the request most likely to time out on the client while succeeding on the server. A naive retry creates a second job and a second set of certificate IDs. That's a real defect for certificates, which are meant to be unique per recipient.

@@ -1,6 +1,6 @@
 # ADR-001: Web framework — FastAPI
 
-Status: Proposed · Requirements: R1, R2, R13 · Evidence: RESEARCH §4, §3
+Status: Accepted · Requirements: R1, R2, R13 · Evidence: RESEARCH §4, §3
 
 ## Context
 The PDF allows FastAPI, Django+DRF, or Flask. The API is small: about 7 endpoints and JSON in/out. The hard part is bulk validation and background processing, not CRUD.

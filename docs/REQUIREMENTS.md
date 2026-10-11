@@ -17,7 +17,7 @@ Rules:
 | R2  | Recipient data is validated server-side. Invalid recipients are reported individually: row index, field, and machine-readable code. | "Validate the provided recipient data"; "handle invalid recipient data appropriately" |
 | R3  | Exactly one certificate is generated for each **valid** recipient. | "Generate a certificate for each valid recipient" |
 | R4  | All certificates use one predefined template. There is no template editor and no multiple designs. | "Use a single predefined certificate template" |
-| R5  | Each generated certificate contains the recipient-specific information from the request. | "should contain the recipient-specific information provided in the request" |
+| R5  | Each generated certificate contains the recipient-specific information from the request (see interpretation A3: name always; email when `PRINT_EMAIL_ON_CERTIFICATE=true`). | "should contain the recipient-specific information provided in the request" |
 | R6  | Generation status is persisted per job and per recipient (item). | "Track the generation status" |
 | R7  | The client can query a job's progress (counts/percentage) and its result. | "check the progress/result of the request" |
 | R8  | The client can retrieve generated certificates (single certificate and whole job). | "Allow generated certificates to be retrieved" |
@@ -59,14 +59,14 @@ The tests check these by asserting that the README section exists and that its c
 | P2 | Author can explain and modify every line. | `docs/WALKTHROUGH.md` + quiz (Phase 7). No code without an R#/ADR reference. |
 | P3 | Default setup is `pip install` + one run command, with no Docker/Redis/broker. | Phase 6 clean-venv run of README commands verbatim. |
 
-## 5. Ambiguities and proposed interpretations
+## 5. Ambiguities and interpretations (decided at Gate 1, 2026-10-11)
 
-| #  | Ambiguity | Proposed interpretation | Decided in |
+| #  | Ambiguity | Interpretation (binding) | Decided in |
 |----|-----------|-------------------------|-----------|
-| A1 | "Validate" + "each **valid** recipient": should one bad row reject the whole request? | **No.** Structural errors (body not JSON, empty list, too many recipients, missing certificate info) → `422` for the whole request. Per-recipient errors → the job is accepted (`202`), invalid rows are stored as items with status `rejected` + error codes, and valid rows are generated. If **zero** rows are valid → `422` with all row errors (a job with nothing to do is noise). | ADR-005 (Gate Q1) |
+| A1 | "Validate" + "each **valid** recipient": should one bad row reject the whole request? | **No.** The job is accepted (`202`): invalid rows are stored as items with status `rejected` + error codes, and valid rows are generated. Whole-request `422` **only** when the request is structurally malformed (bad JSON, missing/invalid required top-level fields, empty `recipients`, over `MAX_RECIPIENTS`) or **every** row is invalid (the 422 then lists every row's errors). | ADR-005 · Gate 1 Q1 |
 | A2 | What is "recipient data"? | `name` (required, printed), `email` (required, used for de-duplication and future delivery, **not printed**, to avoid PII on a shareable document). Job-level "certificate information": `title` (course/event), `issued_on` (date), `issuer` (organization). | ADR-005 |
-| A3 | Does "recipient-specific information" require printing the email? | No. Name + certificate ID + verification QR are printed. Email is stored and returned in the API. Documented in README. | ADR-007 |
-| A4 | Duplicate recipients in one request. | Same normalized email twice in one job → the later row is `rejected` with `DUPLICATE_RECIPIENT`. | ADR-005 (Gate Q2) |
+| A3 | Does "recipient-specific information" require printing the email? | **Explicit interpretation:** name + certificate ID + verification QR are printed; email is stored and returned by the API but **not printed by default** (keeps contact PII off a publicly shared document). A strict reading is satisfied by one setting: `PRINT_EMAIL_ON_CERTIFICATE=true` (default `false`) prints the email too. Both modes tested (R5). Stated in README. | ADR-007 · Gate 1 A3 |
+| A4 | Duplicate recipients in one request. | Same email (`strip()` + case-insensitive) twice **in one job** → the later row is `rejected` with `DUPLICATE_RECIPIENT`; the error message names the first occurrence's row index (and carries `duplicate_of_row_index`). Duplicates **across** jobs are allowed. | ADR-005 · Gate 1 Q2 |
 | A5 | "Retrieve generated certificates": one or all? | Both: `GET /v1/certificates/{certificate_id}` (single PDF) and `GET /v1/certificate-jobs/{id}/archive` (ZIP of all succeeded + `manifest.csv`). | ADR-009 |
 | A6 | "Progress/result": what shape? | Job resource with `status`, `counts` per item status, `progress` (0–1 over valid items), plus a paginated, status-filterable item list. | ADR-009 |
 | A7 | "Failure while generating" vs "invalid data". | Two distinct failure classes: `rejected` (input invalid, never attempted) and `failed` (attempted, generation error). Both are visible in job status (R10). | ADR-010 |

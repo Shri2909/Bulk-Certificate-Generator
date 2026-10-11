@@ -1,6 +1,6 @@
 # ADR-011: Limits
 
-Status: Proposed · Requirements: R11 · Evidence: RESEARCH §4 (AlgoMaster rate limiting: "limit the resource that can actually run out"), §5 (OWASP size limits)
+Status: Accepted · Requirements: R11 · Evidence: RESEARCH §4 (AlgoMaster rate limiting: "limit the resource that can actually run out"), §5 (OWASP size limits)
 
 ## Options
 1. **No limits** (simplest). One 1M-row POST exhausts memory and fills the disk.

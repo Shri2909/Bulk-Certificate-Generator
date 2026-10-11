@@ -1,6 +1,6 @@
 # ADR-008: File storage layout — local directory, server-generated names, atomic writes
 
-Status: Proposed · Requirements: R8, R9 · Evidence: RESEARCH §5 (OWASP File Upload), §2
+Status: Accepted · Requirements: R8, R9 · Evidence: RESEARCH §5 (OWASP File Upload), §2
 
 ## Options
 1. **PDF bytes as BLOBs in SQLite** (simplest: one artifact to back up). 1,000 × 24 KB = 24 MB of writes through the single SQLite writer, which contends with status updates.

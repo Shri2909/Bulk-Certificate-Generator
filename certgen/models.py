@@ -19,7 +19,8 @@ class CreateJobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     certificate: CertificateIn
-    # Rows stay plain dicts so one malformed row becomes a rejected item, not a whole-request 422.
+    # Rows stay plain dicts so a row with bad field values becomes a rejected item, not a whole-request
+    # 422. A row that is not a JSON object at all is still a structural 422 (§6.3).
     recipients: list[dict[str, Any]]
 
 

@@ -27,6 +27,17 @@ def prepare_data_dir(data_dir: Path, certificates_dir: Path) -> None:
     certificates_dir.mkdir(mode=0o700, exist_ok=True)
 
 
+def _fsync_dir(path: Path) -> None:
+    """Flush a directory's entries to disk (POSIX; Windows has no directory fsync)."""
+    if os.name != "posix":
+        return
+    dir_fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(dir_fd)
+    finally:
+        os.close(dir_fd)
+
+
 def _check_id(value: str) -> str:
     # fullmatch, not match: "$" would accept a trailing newline.
     if not HEX32.fullmatch(value):
@@ -55,7 +66,9 @@ class Storage:
     def save_atomic(self, job_id: str, certificate_id: str, data: bytes) -> None:
         """Write to a unique temp file, fsync, then rename: readers see the old file or the whole new one."""
         final = self.path_for(job_id, certificate_id)
-        final.parent.mkdir(mode=0o700, exist_ok=True)
+        if not final.parent.exists():
+            final.parent.mkdir(mode=0o700, exist_ok=True)
+            _fsync_dir(self.root)  # persist the new job directory's entry, not only the file's
         if not self._job_dir_is_safe(final.parent):
             raise OSError("refusing to write into an unsafe job directory")
         # A unique name per attempt, so a stale worker and the current one never share a temp file.
@@ -70,13 +83,7 @@ class Storage:
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
-        if os.name == "posix":
-            # Persist the rename itself; without this a power loss can forget the directory entry.
-            dir_fd = os.open(final.parent, os.O_RDONLY)
-            try:
-                os.fsync(dir_fd)
-            finally:
-                os.close(dir_fd)
+        _fsync_dir(final.parent)  # persist the rename; without it a power loss can forget the entry
 
     def _safe_file(self, job_id: str, certificate_id: str) -> Path | None:
         path = self.path_for(job_id, certificate_id)

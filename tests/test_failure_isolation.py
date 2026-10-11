@@ -154,3 +154,19 @@ def test_items_listing_identifies_failed_and_succeeded(
     assert [e["code"] for e in listing[3]["errors"]] == ["INVALID_EMAIL"]
     failed = client.get(f"{JOBS}/{job_id}/items", params={"status": "failed"}).json()["items"]
     assert [(i["row_index"], i["name"]) for i in failed] == [(1, "Broken Row")]
+
+
+@pytest.mark.req("R10")
+def test_failure_log_has_no_exception_text(
+    client: TestClient, drain: Any, fake_clock: FakeClock, caplog: pytest.LogCaptureFixture
+) -> None:
+    # Exception messages may quote recipient data; the log keeps the type and stack frames only.
+    post_job(client, job_payload(recipients=[recipient(0, name="Zoë Secret", email="secret@example.com")]))
+
+    def leaky(data: CertificateData) -> bytes:
+        raise ValueError(f"cannot render {data.name} <{data.email}>")
+
+    with caplog.at_level("ERROR", logger="certgen"):
+        drain(leaky)
+    assert "generation_failed" in caplog.text and "error=ValueError" in caplog.text
+    assert "Zoë Secret" not in caplog.text and "secret@example.com" not in caplog.text

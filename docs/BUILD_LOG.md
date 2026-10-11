@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M11 | STATUS: red | NEXT ACTION: Final verification: clean venvs on 3.11 and 3.14, README verbatim, full suite 3x, lint/type; fresh-context audit #2; README conformance; WALKTHROUGH.md; tag v1.0-rc.
+CURRENT MILESTONE: M11 | STATUS: green | NEXT ACTION: None — v1.0-rc tagged; user performs the live modification and tags v1.0.
 
 # Build log (Phase 5)
 
@@ -29,7 +29,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M8 | D2 proof | done — merged; slow tests 5/5; benchmarks 1p/2p/4p; kill demo (`docs/evidence/kill-demo.txt`, `docs/evidence/gates/M8.txt`) | `m8-done` |
 | M9 | D3 dry-run + retry | done — merged; 310 passed; gate PASS (`docs/evidence/gates/M9.txt`) | `m9-done` |
 | M10 | D4 Idempotency-Key | done — merged; 323 passed; concurrent test 5/5; mutation 10 killed (`docs/evidence/gates/M10.txt`) | `m10-done` |
-| M11 | Final verification, audit, walkthrough | pending | `v1.0-rc` |
+| M11 | Final verification, audit, walkthrough | done — 324 passed; gate PASS; clean clones 3.11/3.14 3× each; audit #2 fixes applied (`docs/evidence/gates/M11.txt`) | `v1.0-rc` |
 
 ## Effective rules: where §24 supersedes earlier text
 
@@ -165,3 +165,10 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Files: api.py, service.py, README, tests (`test_idempotency.py`, added §16 case in `test_limits.py`), `errors.py` (A-03).
 - Mutation 10 killed; mutation 11 equivalent (re-run).
 - Process slip: the first M10 gate run failed `ruff check` (F401, unused import in a new test), but the shell chain continued and the branch was merged and tagged. Fixed on main in a follow-up commit, gate re-run PASS, tag `m10-done` moved to the fixed commit. The gate runner's result line is now checked explicitly before any commit.
+
+### M11 (2026-10-11)
+- Clean clones on CPython 3.11.9 and 3.14.4: `pip install -r requirements-dev.txt` OK with the original pins (K3 did not materialize); full suite 3× each: 323 passed every run; ruff/format/mypy clean; README server commands verbatim (quick start, retrieval, dry run, retry, Idempotency-Key, graceful SIGINT) on both.
+- Fresh-context audit #2: scores spec 9, failure 9, simplicity 7, tests 9, docs 7, explainability 7, differentiators 8; 11 findings, 8 fixed, 3 documented (`docs/evidence/audit/M11-audit.md`).
+- Mutation proofs 1–9 and 5b re-run on final code: all killed.
+- README `## Blueprint conformance` filled; `docs/WALKTHROUGH.md` written.
+- Not tagged `v1.0` (per instructions). Pending human review: M3 visual legibility sign-off (G2), live modification (G3).

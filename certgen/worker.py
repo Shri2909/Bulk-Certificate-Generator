@@ -13,6 +13,7 @@ import secrets
 import signal
 import threading
 import time
+import traceback
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -223,12 +224,14 @@ class Worker:
 
     def record_failure(self, claim: Claim, exc: Exception) -> None:
         """T6 (retry after a delay) or T7 (attempts exhausted). Details go to the log, never the API."""
+        # Exception text may quote recipient data, so the log gets the type and the stack frames only.
         log.error(
-            "generation_failed item_id=%s attempt=%s worker_id=%s",
+            "generation_failed item_id=%s attempt=%s worker_id=%s error=%s\n%s",
             claim.item_id,
             claim.attempts,
             self.worker_id,
-            exc_info=exc,
+            type(exc).__name__,
+            "".join(traceback.format_tb(exc.__traceback__)),
         )
         message = f"{type(exc).__name__}: Certificate generation failed."[:MAX_ERROR_MESSAGE]
         errors = dump_errors([FieldError(None, FieldCode.GENERATION_FAILED, message).as_item_error()])

@@ -103,8 +103,10 @@ Windows.
   template), `issued_on` (`YYYY-MM-DD`, at most one day after today in UTC).
 - Each recipient has `name` (≤ 120 characters, must fit) and `email`. Both are printed on the certificate
   (set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to leave the email off; the choice is stored per job).
-- Up to 10,000 recipients per request (`CERTGEN_MAX_RECIPIENTS`). The body limit is derived from it, so
-  a request within the field limits is never rejected for size.
+- Up to 10,000 recipients per request (`CERTGEN_MAX_RECIPIENTS`). The body limit is derived from it
+  (2,600 bytes per recipient + 64 KiB), sized so that normally encoded JSON within the field limits, even
+  with every character `\uXXXX`-escaped, fits. Field limits apply after whitespace normalization, so a
+  body padded with thousands of spaces can still be `413`.
 
 **Partial acceptance.** Invalid rows do not reject the request: valid rows become `pending` items,
 invalid rows are stored as `rejected` with their errors, and the response lists every row error.
@@ -145,7 +147,8 @@ curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs -H 'Content-Type: appl
   -H 'Idempotency-Key: 6f1c2a9e-order-42' --data @job.json
 ```
 
-- Same key and the same JSON body (key order and whitespace do not matter): `200` with the job's
+- Same key and the same JSON value (key order and whitespace between tokens do not matter; the
+  fingerprint is taken before name normalization, so `Zoë` composed vs. decomposed counts as different): `200` with the job's
   **current** state, `Location` and `Idempotent-Replayed: true`; no second job is created and the body is
   not validated again.
 - Same key, different body: `409 IDEMPOTENCY_KEY_REUSED`.
@@ -431,6 +434,8 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
   full cleanup: stop all processes, back up, delete any `*.tmp` and any PDF not referenced by a
   `succeeded` item, then restart.
 - **Retention:** none. Jobs, items and files are kept until the operator removes the data directory.
+- **Temp space for archives:** ZIPs are built in the system temp directory (`TMPDIR`), up to two at once;
+  a 10,000-certificate archive is several hundred MB.
 - **Health:** `GET /healthz` (`503` if the database cannot be read; `"degraded"` if embedded workers died).
 - **Logs** carry ids and codes; SQL parameters (names, emails) are never included in database error
   messages (`tests/test_db.py` `test_sql_errors_do_not_carry_parameters`).
@@ -462,6 +467,10 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 - **Archives are built before the first byte is sent** (spilling to a temp file above 8 MiB), which holds
   one request thread per build; at most two builds run at once. Request bodies are buffered up to the
   body limit before parsing.
+- **`issued_on` has no lower bound:** any real date up to tomorrow is accepted (e.g. `0001-01-01`
+  prints as "1 January 1").
+- **Leases use the wall clock:** a large forward clock step can expire live leases early (extra attempts,
+  possibly `WORKER_LOST` after 3); the token fence still keeps one current owner and the same output.
 - **Over 64 concurrent connections** uvicorn answers with its own plain-text `503`, outside the problem+json contract.
 - Emails are printed on certificates by default, which puts contact details on a document that may be
   shared; set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to opt out.
@@ -471,21 +480,32 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
 [docs/BLUEPRINT.sha256](docs/BLUEPRINT.sha256), tag `blueprint-locked`).
 
-- **Build status:** required scope (R1–R25) complete. Last full test run (M6 gate, raw pytest summary): `296 passed in 11.32s` — transcript in [docs/evidence/gates/M6.txt](docs/evidence/gates/M6.txt).
-- **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)):
-  A-01 `certgen/__main__.py` for `python -m certgen` (auto-approved); A-02 test for the per-job email
-  snapshot (auto-approved).
-- **Interpretations** where the blueprint was silent or a library behaved differently than it assumed
-  (no behavior added): email-validator accepts internationalized domains even with SMTPUTF8 off, so emails
-  are checked to be ASCII explicitly; the widest ASCII glyph is `@`, not `W`, and still fits; the first
-  concurrent boot of several processes needed a bounded wait for SQLite's WAL switch.
-- **Optional features (differentiators, BLUEPRINT §18):** required functionality was completed and tagged
-  `v1.0-required` before any of them.
-  - D1 verifiable certificates (QR code + public verify endpoint): **omitted.** Its kill criterion
-    ("any required test regresses") tripped: embedding the job's verify URL changes every worker-rendered
-    PDF, which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
+- **Build status:** complete (milestones M1–M11). Last full test run (M11 gate, raw pytest summary):
+  `324 passed in 12.11s` — transcript in [docs/evidence/gates/M11.txt](docs/evidence/gates/M11.txt); also
+  verified from clean clones on Python 3.11.9 and 3.14.4 (3 runs each) with every README command run verbatim.
+- **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)), all auto-approved under the
+  pre-approved rules:
+  - A-01: `certgen/__main__.py`, so `python -m certgen` works.
+  - A-02: a test for the per-job email snapshot.
+  - A-03: the D3/D4 error codes live in `errors.py`.
+- **Interpretations** where the blueprint was silent or a library behaved differently than it assumed (no
+  behavior added):
+  - email-validator accepts internationalized domains even with SMTPUTF8 off, so emails are checked to be
+    ASCII explicitly;
+  - the widest ASCII glyph is `@`, not `W`, and it still fits;
+  - the first concurrent boot of several processes needed a bounded wait for SQLite's WAL switch.
+- **Required before optional:** required scope was tagged `v1.0-required` before any differentiator; every
+  later tag contains it.
+- **Differentiators (BLUEPRINT §18):**
+  - D1 verifiable certificates (QR code + public verify endpoint): **omitted (dropped).** Its kill criterion,
+    "any required test regresses", tripped: embedding the job's verify URL changes every worker-rendered PDF,
+    which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
     The implementation is kept, unmerged, on branch `dropped/d1-verify`.
+  - D2 crash-safety proof: **included.** 2- and 4-process benchmarks and the kill-demo transcript; the slow
+    crash tests passed 5 consecutive runs.
   - D3 fix-and-retry (`?dry_run=true`, `POST …/retry`): **included** (`tests/test_dry_run.py`, `tests/test_retry.py`).
   - D4 Idempotency-Key: **included** (`tests/test_idempotency.py`).
-  - D2 crash-safety proof: **included** — 2- and 4-process benchmarks and the kill-demo transcript
-    (kill check: the slow crash tests passed 5 consecutive runs).
+- **Not demonstrated / pending human review:** the visual check of the certificate layout was automated
+  (rasterized and inspected, `docs/evidence/visual-check/`); a human sign-off on legibility is still
+  pending. One mutation proof (/retry not clearing the lease token) is an equivalent mutant that no test
+  can detect; [docs/evidence/mutation-checks.txt](docs/evidence/mutation-checks.txt) explains why.

@@ -271,7 +271,7 @@ def download_archive(request: Request, job_id: str) -> StreamingResponse:
     state = request.app.state
     if not HEX32.fullmatch(job_id):
         raise not_found()
-    # Non-blocking: a third concurrent build is refused instead of queueing behind 240 MB ZIPs.
+    # Non-blocking: a third concurrent build is refused instead of queueing (a 10,000-PDF ZIP is ~440 MB).
     if not state.archive_slots.acquire(blocking=False):
         raise ApiError(ProblemCode.ARCHIVE_BUSY, "Too many archives are being built; retry shortly.")
     try:

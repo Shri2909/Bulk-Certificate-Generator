@@ -1,0 +1,116 @@
+== M11 FINAL GATE ==
+GATE M11  2026-10-11T15:17:58Z  HEAD 47ac44c  python Python 3.11.9
+
+$ .venv/bin/pytest tests -q -p no:cacheprovider
+........................................................................ [ 22%]
+........................................................................ [ 44%]
+........................................................................ [ 66%]
+........................................................................ [ 88%]
+....................................                                     [100%]
+324 passed in 12.11s
+[exit 0]
+
+$ .venv/bin/pytest tests -q -p no:cacheprovider
+........................................................................ [ 22%]
+........................................................................ [ 44%]
+........................................................................ [ 66%]
+........................................................................ [ 88%]
+....................................                                     [100%]
+324 passed in 12.11s
+[exit 0]
+
+$ .venv/bin/ruff check .
+All checks passed!
+[exit 0]
+
+$ .venv/bin/ruff format --check .
+43 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 20 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (20 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M11 RESULT: PASS
+
+== FLAKE RULE (3 consecutive runs) ==
+flake run 1:
+57 passed in 8.94s
+flake run 2:
+57 passed in 9.05s
+flake run 3:
+57 passed in 9.02s
+
+== CLEAN CLONES: full suite 3x + lint/type (commit 22bfdbd, before the final audit fixes; the gate above covers the fixes) ==
+== Python 3.11.9 (clean clone 22bfdbd)
+pytest run 1: 323 passed in 12.35s
+pytest run 2: 323 passed in 12.00s
+pytest run 3: 323 passed in 12.06s
+ruff check: All checks passed!
+ruff format: 43 files already formatted
+mypy: Success: no issues found in 20 source files
+== Python 3.14.4 (clean clone 22bfdbd)
+pytest run 1: 323 passed in 12.07s
+pytest run 2: 323 passed in 11.72s
+pytest run 3: 323 passed in 11.71s
+ruff check: All checks passed!
+ruff format: 43 files already formatted
+mypy: Success: no issues found in 20 source files
+
+== CLEAN CLONES: README commands verbatim (server, curl, retrieval, dry run, retry, Idempotency-Key, SIGINT) ==
+== Python 3.11.9 in final-3.11
+healthz: {"status":"ok","db":"ok","embedded_workers_alive":2,"embedded_workers_expected":2}
+quick-start POST -> queued {'total': 3, 'rejected': 1, 'pending': 2, 'processing': 0, 'succeeded': 0, 'failed': 0} ['INVALID_EMAIL']
+poll -> completed_with_errors
+items?status=failed -> {"job_id":"05f5ecbd38cb41cc9ea7c45e27ae865b","limit":100,"next_after":null,"items":[]}
+download -> PDF document, version 1.4, 1 page(s)
+archive -> ['certificates/00000_a5572f763cff01fbbe397a0d0ea6042d.pdf', 'certificates/00002_caf1c5266c8d8489a40fadf4c26b3648.pdf', 'manifest.csv']
+dry run -> {"dry_run":true,"would_create_job":true,"counts":{"total":3,"valid":2,"rejected":1},"errors":[{"row_index":1,"field":"email","code":"INVALID_EMAIL","message":"An email address must have an @-sign."}]}
+retry (nothing failed) -> 409 NOTHING_TO_RETRY
+idempotency: first 202, repeat: HTTP/1.1 200 OK idempotent-replayed: true 
+server exit: 0 ; 1 clean shutdown
+== Python 3.14.4 in final-3.14
+healthz: {"status":"ok","db":"ok","embedded_workers_alive":2,"embedded_workers_expected":2}
+quick-start POST -> queued {'total': 3, 'rejected': 1, 'pending': 2, 'processing': 0, 'succeeded': 0, 'failed': 0} ['INVALID_EMAIL']
+poll -> completed_with_errors
+items?status=failed -> {"job_id":"128ae1453e114203861f932b81fb9ccc","limit":100,"next_after":null,"items":[]}
+download -> PDF document, version 1.4, 1 page(s)
+archive -> ['certificates/00000_fb36972efe3f2054b4fee5ebb66d42a5.pdf', 'certificates/00002_0144a3ade43a32b4de5565af8db16cf2.pdf', 'manifest.csv']
+dry run -> {"dry_run":true,"would_create_job":true,"counts":{"total":3,"valid":2,"rejected":1},"errors":[{"row_index":1,"field":"email","code":"INVALID_EMAIL","message":"An email address must have an @-sign."}]}
+retry (nothing failed) -> 409 NOTHING_TO_RETRY
+idempotency: first 202, repeat: HTTP/1.1 200 OK idempotent-replayed: true 
+server exit: 0 ; 1 clean shutdown
+
+== MUTATION PROOFS re-run on final code ==
+MUTATION 1 fence on worker_id instead of lease_token
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 2 reads use BEGIN IMMEDIATE
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 3 clock read before the write lock
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 4 hold the DB transaction while rendering
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 5 claim split into separate select and update transactions
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 5b claim select and update in two separate write transactions
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 6 remove the per-item try/except
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 7 write the PDF directly to the final path
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 8 remove the retire step
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+MUTATION 9 worker reads print_email from its own settings
+  verdict: KILLED (tests fail as required); git checkout -> diff empty
+ALL MUTATIONS KILLED
+
+== §24.17 ==
+RESULT §24.17 at v1.0-required: PASS
+v1.0-required is an ancestor of HEAD

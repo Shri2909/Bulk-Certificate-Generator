@@ -56,7 +56,7 @@ Rules:
 | ID | Constraint | How it is enforced |
 |----|-----------|--------------------|
 | P1 | Optional features must not cost required functionality. | `v1.0-required` git tag before any differentiator branch, with the full suite green at that tag. |
-| P2 | Author can explain and modify every line. | `docs/WALKTHROUGH.md` + quiz (Phase 7). No code without an R#/ADR reference. |
+| P2 | Author can explain and modify every line. | `docs/WALKTHROUGH.md` (written at M11) + human walkthrough and one live modification before tagging `v1.0`. |
 | P3 | Default setup is `pip install` + one run command, with no Docker/Redis/broker. | Phase 6 clean-venv run of README commands verbatim. |
 
 ## 5. Ambiguities and interpretations (decided at Gate 1, 2026-10-11)

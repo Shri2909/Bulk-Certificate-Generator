@@ -133,3 +133,24 @@ def test_oversized_pdf_is_item_failure(
     assert [r["status"] for r in stored] == ["failed", "succeeded"]
     assert [e["code"] for e in json.loads(stored[0]["errors"])] == ["GENERATION_FAILED"]
     assert not any(big in p.name for p in settings.certificates_dir.rglob("*"))
+
+
+@pytest.mark.req("R10", "R18")
+def test_items_listing_identifies_failed_and_succeeded(
+    client: TestClient, drain: Any, fake_clock: FakeClock
+) -> None:
+    rows = [recipient(0), recipient(1, name="Broken Row"), recipient(2), recipient(3, email="nope")]
+    job_id = post_job(client, job_payload(recipients=rows)).json()["id"]
+    drain_through_retries(drain, fake_clock, failing_for({"Broken Row"}))
+    listing = {i["row_index"]: i for i in client.get(f"{JOBS}/{job_id}/items").json()["items"]}
+    assert {k: v["status"] for k, v in listing.items()} == {
+        0: "succeeded",
+        1: "failed",
+        2: "succeeded",
+        3: "rejected",
+    }
+    assert [e["code"] for e in listing[1]["errors"]] == ["GENERATION_FAILED"]
+    assert listing[1]["attempts"] == 3 and listing[1]["download_url"] is None
+    assert [e["code"] for e in listing[3]["errors"]] == ["INVALID_EMAIL"]
+    failed = client.get(f"{JOBS}/{job_id}/items", params={"status": "failed"}).json()["items"]
+    assert [(i["row_index"], i["name"]) for i in failed] == [(1, "Broken Row")]

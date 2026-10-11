@@ -3,20 +3,23 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import anyio.from_thread
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
-from certgen import service
+from certgen import archive, service
 from certgen.errors import ApiError, FieldCode, FieldError, ProblemCode, body_errors_from_pydantic
 from certgen.models import (
     CertificateOut,
     Counts,
     CreateJobRequest,
     Health,
+    ItemResource,
+    ItemsPage,
     JobCreated,
     JobLinks,
     JobResource,
@@ -27,6 +30,7 @@ from certgen.validation import JsonBodyError, canonical_json, decode_json_body, 
 router = APIRouter()
 
 JOBS_PATH = "/v1/certificate-jobs"
+ItemStatus = Literal["rejected", "pending", "processing", "succeeded", "failed"]
 
 
 def iso_ms(epoch_ms: int) -> str:
@@ -154,4 +158,63 @@ def healthz(request: Request) -> Health:
         db="ok",
         embedded_workers_alive=alive,
         embedded_workers_expected=expected,
+    )
+
+
+@router.get(JOBS_PATH + "/{job_id}/items", response_model=ItemsPage)
+def list_items(
+    request: Request,
+    job_id: str,
+    status: Annotated[ItemStatus | None, Query()] = None,
+    after: Annotated[int, Query(ge=-1)] = -1,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+) -> ItemsPage:
+    page = (
+        service.list_items(request.app.state.engines, job_id, status, after, limit)
+        if HEX32.fullmatch(job_id)
+        else None
+    )
+    if page is None:
+        raise not_found()
+    return ItemsPage(
+        job_id=job_id,
+        limit=limit,
+        next_after=page.next_after,
+        items=[
+            ItemResource(
+                row_index=item.row_index,
+                name=item.name,
+                email=item.email,
+                status=item.status,
+                attempts=item.attempts,
+                errors=item.errors,
+                certificate_id=item.certificate_id,
+                download_url=f"/v1/certificates/{item.certificate_id}"
+                if item.status == "succeeded"
+                else None,
+            )
+            for item in page.items
+        ],
+    )
+
+
+@router.get(JOBS_PATH + "/{job_id}/archive", response_class=StreamingResponse)
+def download_archive(request: Request, job_id: str) -> StreamingResponse:
+    state = request.app.state
+    if not HEX32.fullmatch(job_id):
+        raise not_found()
+    # Non-blocking: a third concurrent build is refused instead of queueing behind 240 MB ZIPs.
+    if not state.archive_slots.acquire(blocking=False):
+        raise ApiError(ProblemCode.ARCHIVE_BUSY, "Too many archives are being built; retry shortly.")
+    try:
+        rows = service.archive_rows(state.engines, job_id)
+        if rows is None:
+            raise not_found()
+        zip_file = archive.build_archive(rows, state.storage)
+    finally:
+        state.archive_slots.release()
+    return StreamingResponse(
+        archive.stream(zip_file),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="certificates-{job_id}.zip"'},
     )

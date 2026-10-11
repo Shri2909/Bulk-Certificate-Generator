@@ -26,6 +26,8 @@ QUERIES = {
     "claim": worker.CLAIM_PENDING_SQL,
     "capacity": service.COUNT_ACTIVE_SQL,
     "job_counts": service.JOB_COUNTS_SQL,
+    "list_items": service.LIST_ITEMS_SQL,
+    "list_items_by_status": service.LIST_ITEMS_BY_STATUS_SQL,
 }
 
 
@@ -226,7 +228,15 @@ def test_sqlite_version_check() -> None:
 @pytest.mark.req("R11")
 def test_query_plans_use_indexes(tmp_path: Path) -> None:
     engines = create_engines(tmp_path / "db.sqlite3")
-    params = {"now": 0, "max_attempts": 3, "job_id": "a" * 32, "worker_lost": "[]"}
+    params = {
+        "now": 0,
+        "max_attempts": 3,
+        "job_id": "a" * 32,
+        "worker_lost": "[]",
+        "status": "failed",
+        "after": -1,
+        "limit": 101,
+    }
     try:
         create_schema(engines)
         with engines.read.connect() as conn:

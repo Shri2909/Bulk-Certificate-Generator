@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M5 | STATUS: red | NEXT ACTION: Write M5 RED tests (test_retrieval rest incl. archive/manifest/concurrency, listing cases in test_jobs_api, test_failure_isolation::test_items_listing_identifies_failed_and_succeeded, listing queries in test_query_plans_use_indexes), then service.list_items, archive.py and the two endpoints.
+CURRENT MILESTONE: M6 | STATUS: red | NEXT ACTION: Write test_docs.py + test_errors::test_error_codes_listed_in_readme + §24.16 traceability strengthening (RED), then scripts/benchmark.py, benchmark-1p.json, README.md, REQUIREMENTS.md R-headings; then M6 audit and tag v1.0-required.
 
 # Build log (Phase 5)
 
@@ -23,7 +23,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M2 | Validation, fonts, fit_text, errors, middleware, limits | done — 169 passed; gate PASS (`docs/evidence/gates/M2.txt`) | `m2-done` |
 | M3 | Real template, print_email snapshot, determinism, visual check | done — 184 passed; gate PASS (`docs/evidence/gates/M3.txt`); visual check PASS (automated) | `m3-done` |
 | M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | done — 250 passed; gate PASS; flake rule 3/3; 9/9 mutations killed (`docs/evidence/gates/M4.txt`, `docs/evidence/mutation-checks.txt`) | `m4-done` |
-| M5 | Listing, downloads, archive | pending | `m5-done` |
+| M5 | Listing, downloads, archive | done — 279 passed; gate PASS; flake 3/3 (`docs/evidence/gates/M5.txt`) | `m5-done` |
 | M6 | README, docs tests, traceability, benchmark-1p, audit | pending | `m6-done`, `v1.0-required` |
 | M7 | D1 verify | pending | `m7-done` |
 | M8 | D2 proof | pending | `m8-done` |
@@ -123,3 +123,9 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Mutation proofs 1–9: all killed; spot-checked that 5 and 6 fail for the intended reason.
 - Amendments A-01 (`certgen/__main__.py`) and A-02 (snapshot test) logged in `docs/BLUEPRINT_AMENDMENTS.md` (auto-approved).
 - Kill-test proof **demonstrated** on Linux (POSIX signals available).
+
+### M5 (2026-10-11)
+- RED: 9 failed + 2 collection errors (no listing endpoint, no `certgen.archive`, no listing SQL constants).
+- Archive concurrency slot is held while rows are loaded and the ZIP is built, then released before streaming; the spooled file is closed by the streaming generator (§6.7 limits *builds*).
+- The CSV guard also applies to rejected rows (their stored name/email reach the manifest); test uses a full-width "＝" name, which the font lacks, so it is a rejected row.
+- `test_query_plans_use_indexes` now covers both listing queries (unfiltered → `sqlite_autoindex_items_1` on (job_id,row_index); filtered → `ix_items_job_status`).

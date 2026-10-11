@@ -87,10 +87,10 @@ Updated at every Phase 5 milestone. "Status" is the milestone at which the liste
 | R5  | `rendering.py`, `layout.py` | `test_rendering.py`, `test_layout.py` | Design decisions | M3 |
 | R6  | `tables.py`, `worker.py`, `status.py` | `test_jobs_api.py`, `test_worker.py`, `test_job_status.py` | Design decisions | M4 |
 | R7  | `api.py:get_job`, `service.py:get_job`, `status.py` | `test_jobs_api.py` | Retrieve generated certificates | M1 |
-| R8  | `api.py:download_certificate`, `api.py:download_archive`, `archive.py`, `storage.py` | `test_retrieval.py` | Retrieve generated certificates | M1 (single download) |
+| R8  | `api.py:download_certificate`, `api.py:download_archive`, `archive.py`, `storage.py` | `test_retrieval.py` | Retrieve generated certificates | M5 |
 | R9  | `worker.py:Worker.process` | `test_failure_isolation.py`, `test_crash_recovery.py`, `test_worker.py` | Recovery and guarantees | M4 |
-| R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates | planned (M4/M5) |
-| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M2 (partial) |
+| R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates | M5 |
+| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M5 |
 | R12 | `README.md` | `test_docs.py` | Design decisions | planned (M6) |
 | R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py`, `test_runtime.py` | Setup | M4 (test_docs planned M6) |
 | R14 | — | `test_jobs_api.py` | Run tests | M1 |
@@ -98,5 +98,5 @@ Updated at every Phase 5 milestone. "Status" is the milestone at which the liste
 | R16 | — | `test_rendering.py`, `test_worker.py` | Run tests | M4 |
 | R17 | — | `test_jobs_api.py`, `test_job_status.py` | Run tests | M4 |
 | R18 | — | `test_failure_isolation.py` | Run tests | M4 |
-| R19 | — | `test_retrieval.py` | Run tests | M1 (partial) |
+| R19 | — | `test_retrieval.py` | Run tests | M5 |
 | R20–R25 | `README.md` | `test_docs.py` | each section | planned (M6) |

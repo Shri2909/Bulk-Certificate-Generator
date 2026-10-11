@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 # 2,600 per row plus 64 KiB of envelope means a request within field limits is never 413'd (§12).
 BODY_BYTES_PER_RECIPIENT = 2_600
 BODY_BYTES_ENVELOPE = 65_536
+ARCHIVE_CONCURRENCY = 2  # archive builds per process (§6.7); fixed, not an env var
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 MAX_BASE_URL_LENGTH = 100

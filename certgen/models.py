@@ -66,3 +66,21 @@ class Health(BaseModel):
     db: str
     embedded_workers_alive: int
     embedded_workers_expected: int
+
+
+class ItemResource(BaseModel):
+    row_index: int
+    name: str | None
+    email: str | None
+    status: str
+    attempts: int
+    errors: list[dict[str, Any]]
+    certificate_id: str | None
+    download_url: str | None
+
+
+class ItemsPage(BaseModel):
+    job_id: str
+    limit: int
+    next_after: int | None
+    items: list[ItemResource]

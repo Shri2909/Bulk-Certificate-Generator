@@ -274,3 +274,79 @@ def test_healthz_db_failure_503(client: TestClient, app: FastAPI, monkeypatch: p
     assert resp.status_code == 503
     assert resp.json()["code"] == "DB_UNAVAILABLE"
     assert resp.headers["retry-after"] == "1"
+
+
+def _items_page(client: TestClient, job_id: str, **params: Any) -> Any:
+    return client.get(f"{JOBS}/{job_id}/items", params=params)
+
+
+@pytest.mark.req("R10", "R11")
+def test_items_keyset_pagination(client: TestClient) -> None:
+    job_id = post_job(client, job_payload(n=5)).json()["id"]
+    seen: list[int] = []
+    cursors: list[int | None] = []
+    after = -1
+    while True:
+        page = _items_page(client, job_id, limit=2, after=after).json()
+        assert page["job_id"] == job_id and page["limit"] == 2
+        seen += [item["row_index"] for item in page["items"]]
+        cursors.append(page["next_after"])
+        if page["next_after"] is None:
+            break
+        after = page["next_after"]
+    assert cursors == [1, 3, None]
+    assert seen == [0, 1, 2, 3, 4]
+    default = _items_page(client, job_id).json()
+    assert default["limit"] == 100 and default["next_after"] is None and len(default["items"]) == 5
+
+
+@pytest.mark.req("R10")
+def test_items_status_filter(client: TestClient, drain: Any, make_worker: Any) -> None:
+    rows = [recipient(0), recipient(1, email="bad"), recipient(2), recipient(3, name="")]
+    job_id = post_job(client, job_payload(recipients=rows)).json()["id"]
+    make_worker().run_once()  # row 0 succeeds, row 2 stays pending
+    rejected = _items_page(client, job_id, status="rejected").json()
+    assert [i["row_index"] for i in rejected["items"]] == [1, 3]
+    assert all(i["certificate_id"] is None and i["download_url"] is None for i in rejected["items"])
+    assert rejected["items"][0]["errors"] == [
+        {"field": "email", "code": "INVALID_EMAIL", "message": rejected["items"][0]["errors"][0]["message"]}
+    ]
+    succeeded = _items_page(client, job_id, status="succeeded").json()["items"]
+    assert [i["row_index"] for i in succeeded] == [0]
+    assert succeeded[0]["download_url"] == f"/v1/certificates/{succeeded[0]['certificate_id']}"
+    assert succeeded[0]["errors"] == [] and succeeded[0]["attempts"] == 1
+    pending = _items_page(client, job_id, status="pending", limit=1).json()
+    assert [i["row_index"] for i in pending["items"]] == [2] and pending["next_after"] is None
+    assert pending["items"][0]["download_url"] is None
+    assert _items_page(client, job_id, status="failed").json()["items"] == []
+    assert _items_page(client, job_id, status="pending", after=2).json()["items"] == []
+
+
+@pytest.mark.req("R11")
+@pytest.mark.parametrize(
+    ("params", "field"),
+    [
+        ({"limit": 0}, "limit"),
+        ({"limit": 1001}, "limit"),
+        ({"limit": "x"}, "limit"),
+        ({"after": -2}, "after"),
+        ({"after": "1.5"}, "after"),
+        ({"status": "done"}, "status"),
+    ],
+)
+def test_items_invalid_params_422(client: TestClient, params: dict[str, Any], field: str) -> None:
+    job_id = post_job(client, job_payload(n=1)).json()["id"]
+    resp = _items_page(client, job_id, **params)
+    assert resp.status_code == 422
+    assert resp.headers["content-type"] == "application/problem+json"
+    assert [(e["row_index"], e["field"], e["code"]) for e in resp.json()["errors"]] == [
+        (None, field, "INVALID_VALUE")
+    ]
+    assert _items_page(client, job_id, unknown="ignored").status_code == 200  # unknown params are ignored
+
+
+@pytest.mark.req("R10")
+@pytest.mark.parametrize("job_id", ["0" * 32, "not-a-job"])
+def test_items_unknown_job_404(client: TestClient, job_id: str) -> None:
+    resp = _items_page(client, job_id)
+    assert resp.status_code == 404 and resp.json()["code"] == "NOT_FOUND"

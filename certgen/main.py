@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -15,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from certgen import __version__
 from certgen.api import router
 from certgen.clock import Clock, system_clock
-from certgen.config import Settings
+from certgen.config import ARCHIVE_CONCURRENCY, Settings
 from certgen.db import check_sqlite_version, create_engines, create_schema
 from certgen.errors import (
     ApiError,
@@ -67,6 +68,7 @@ def create_app(
     app.state.settings = settings
     app.state.clock = clock
     app.state.renderer = renderer
+    app.state.archive_slots = threading.BoundedSemaphore(ARCHIVE_CONCURRENCY)
     app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_bytes)
     app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 413 responses
     app.add_exception_handler(ApiError, api_error_handler)

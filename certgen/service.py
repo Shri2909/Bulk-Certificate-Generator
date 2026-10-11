@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
+from certgen.archive import ArchiveRow
 from certgen.clock import Clock
 from certgen.config import Settings
 from certgen.db import Engines
@@ -203,3 +204,72 @@ def find_certificate(engines: Engines, certificate_id: str) -> CertificateRecord
             .first()
         )
     return CertificateRecord(**row) if row is not None else None
+
+
+# Keyset pagination: "row_index > :after" walks an index instead of skipping rows like OFFSET does.
+LIST_ITEMS_SQL = (
+    "SELECT row_index, name, email, status, attempts, errors, certificate_id "
+    "FROM items WHERE job_id = :job_id AND row_index > :after ORDER BY row_index LIMIT :limit"
+)
+LIST_ITEMS_BY_STATUS_SQL = (
+    "SELECT row_index, name, email, status, attempts, errors, certificate_id "
+    "FROM items WHERE job_id = :job_id AND status = :status AND row_index > :after "
+    "ORDER BY row_index LIMIT :limit"
+)
+ARCHIVE_ROWS_SQL = (
+    "SELECT job_id, row_index, name, email, status, certificate_id, errors "
+    "FROM items WHERE job_id = :job_id ORDER BY row_index"
+)
+
+
+@dataclass(frozen=True)
+class ItemView:
+    row_index: int
+    name: str | None
+    email: str | None
+    status: str
+    attempts: int
+    errors: list[dict[str, Any]]
+    certificate_id: str | None
+
+
+@dataclass(frozen=True)
+class ItemsPage:
+    items: list[ItemView]
+    next_after: int | None
+
+
+def _job_exists(conn: Connection, job_id: str) -> bool:
+    return conn.execute(text("SELECT 1 FROM jobs WHERE id = :job_id"), {"job_id": job_id}).first() is not None
+
+
+def list_items(engines: Engines, job_id: str, status: str | None, after: int, limit: int) -> ItemsPage | None:
+    """One page in row order; None if the job does not exist. Each page reflects the current state."""
+    with engines.read.begin() as conn:
+        if not _job_exists(conn, job_id):
+            return None
+        params = {"job_id": job_id, "status": status, "after": after, "limit": limit + 1}
+        query = text(LIST_ITEMS_SQL) if status is None else text(LIST_ITEMS_BY_STATUS_SQL)
+        rows = conn.execute(query, params).mappings().all()
+    has_more = len(rows) > limit  # fetched one extra row only to learn whether another page exists
+    page = [
+        ItemView(
+            row_index=r["row_index"],
+            name=r["name"],
+            email=r["email"],
+            status=r["status"],
+            attempts=r["attempts"],
+            errors=json.loads(r["errors"]) if r["errors"] else [],
+            certificate_id=r["certificate_id"],
+        )
+        for r in rows[:limit]
+    ]
+    return ItemsPage(items=page, next_after=page[-1].row_index if has_more else None)
+
+
+def archive_rows(engines: Engines, job_id: str) -> list[ArchiveRow] | None:
+    """Every row of the job, read in one snapshot; the connection is closed before any file is read."""
+    with engines.read.begin() as conn:
+        if not _job_exists(conn, job_id):
+            return None
+        return [ArchiveRow(**r) for r in conn.execute(text(ARCHIVE_ROWS_SQL), {"job_id": job_id}).mappings()]

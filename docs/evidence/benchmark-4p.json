@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "timestamp_utc": "2026-10-11T14:48:51Z",
+  "git_commit": "53148023f8c5fd34fd82689dbe96277896057358",
+  "git_dirty": false,
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.11.9",
+  "versions": {
+    "fastapi": "0.143.0",
+    "starlette": "1.7.0",
+    "uvicorn": "0.54.0",
+    "pydantic": "2.14.0",
+    "email-validator": "2.3.0",
+    "sqlalchemy": "2.1.4",
+    "reportlab": "5.0.1",
+    "sqlite": "3.46.1"
+  },
+  "processes": 4,
+  "recipients": 1000,
+  "post_latency_ms": 113.071,
+  "wall_ms": 5966.7,
+  "throughput_per_s": 167.597,
+  "attempts_histogram": {
+    "1": 1000
+  },
+  "counts": {
+    "succeeded": 1000
+  },
+  "pdf_bytes": {
+    "max": 45168,
+    "count": 1000
+  },
+  "per_item_ms": {
+    "p50": 11.26,
+    "p95": 13.678,
+    "max": 33.358
+  },
+  "render_ms": {
+    "p50": 4.058,
+    "p95": 4.619,
+    "max": 8.232
+  },
+  "storage_ms": {
+    "p50": 4.396,
+    "p95": 5.517,
+    "max": 10.418
+  },
+  "serial_estimate_ms": 11260.0,
+  "peak_rss_bytes": 88170496,
+  "lease_ms": 30000,
+  "work_dir": "data",
+  "acceptance": {
+    "all_succeeded": true,
+    "max_pdf_within_limit": true,
+    "max_item_under_10pct_of_lease": true
+  }
+}

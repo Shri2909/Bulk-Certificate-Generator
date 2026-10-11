@@ -1,0 +1,45 @@
+# 2026-10-11T14:49:13Z  commit 5314802  Linux 7.0.0-38-generic  Python 3.11.9
+# Settings: lease 2 s, each render slowed by 300 ms (CERTGEN_TEST_SLOW_RENDER_MS, test-only) so the kill lands mid-item.
+$ CERTGEN_EMBEDDED_WORKER=false .venv/bin/python -m certgen > data/kill-demo.api.log 2>&1 &
+$ curl -s localhost:8766/healthz
+{"status":"ok","db":"ok","embedded_workers_alive":0,"embedded_workers_expected":0}
+$ curl -s -X POST localhost:8766/v1/certificate-jobs -H 'Content-Type: application/json' -d '<6 recipients>'
+  -> queued {'total': 6, 'rejected': 0, 'pending': 6, 'processing': 0, 'succeeded': 0, 'failed': 0}
+$ .venv/bin/python -m certgen.worker 2> data/kill-demo.workerA.log &
+# waiting until >= 1 item succeeded and one was claimed < 200 ms ago (render still running)
+$ q "SELECT row_index, status, attempts FROM items ORDER BY row_index"
+0 | succeeded | 1
+1 | processing | 1
+2 | pending | 0
+3 | pending | 0
+4 | pending | 0
+5 | pending | 0
+$ kill -9 32216   # SIGKILL worker A mid-render
+  worker A exit status: 137 (137 = killed by SIGKILL)
+$ q "SELECT row_index, status, attempts, lease_owner IS NOT NULL AS leased FROM items WHERE status='processing'"
+1 | processing | 1 | 1
+$ .venv/bin/python -m certgen.worker 2> data/kill-demo.workerB.log &
+$ kill -TERM 32283   # graceful stop
+  worker B exit status: 0
+$ q "SELECT row_index, status, attempts FROM items ORDER BY row_index"
+0 | succeeded | 1
+1 | succeeded | 2
+2 | succeeded | 1
+3 | succeeded | 1
+4 | succeeded | 1
+5 | succeeded | 1
+$ curl -s localhost:8766/v1/certificate-jobs/ddf1e77b4cbe44e7a5bbf81009725cba | .venv/bin/python -c 'import sys,json; d=json.load(sys.stdin); print(d["status"], d["counts"])'
+completed {'total': 6, 'rejected': 0, 'pending': 0, 'processing': 0, 'succeeded': 6, 'failed': 0}
+$ find data/kill-demo/certificates -name '*.pdf' | wc -l   # one file per item
+6
+$ find data/kill-demo/certificates -name '*.tmp' | wc -l   # no temp leftovers
+0
+$ grep -c lease_lost data/kill-demo.workerB.log || true    # B never lost a lease
+0
+
+# D2 kill criterion: the M4 slow tests (pytest -m slow: kill mid-job, two worker processes, concurrent schema creation, python -m certgen, standalone worker) 5 consecutive runs
+slow run 1: 5 passed, 291 deselected in 5.60s
+slow run 2: 5 passed, 291 deselected in 5.55s
+slow run 3: 5 passed, 291 deselected in 5.53s
+slow run 4: 5 passed, 291 deselected in 5.53s
+slow run 5: 5 passed, 291 deselected in 5.62s

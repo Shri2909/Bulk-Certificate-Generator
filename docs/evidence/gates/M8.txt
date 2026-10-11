@@ -1,0 +1,36 @@
+GATE M8  2026-10-11T14:49:52Z  HEAD 5314802  python Python 3.11.9
+
+$ .venv/bin/pytest tests/test_docs.py -q -p no:cacheprovider
+......                                                                   [100%]
+6 passed in 0.04s
+[exit 0]
+
+$ .venv/bin/pytest tests -q -p no:cacheprovider
+........................................................................ [ 24%]
+........................................................................ [ 48%]
+........................................................................ [ 72%]
+........................................................................ [ 97%]
+........                                                                 [100%]
+296 passed in 11.12s
+[exit 0]
+
+$ .venv/bin/ruff check .
+All checks passed!
+[exit 0]
+
+$ .venv/bin/ruff format --check .
+40 files already formatted
+[exit 0]
+
+$ .venv/bin/mypy --strict certgen
+Success: no issues found in 20 source files
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ .venv/bin/python /tmp/claude-1000/-home-abc-Desktop-bulk-certificate-generator/a6d99e4f-fa79-4d6f-adeb-7c708831ff15/scratchpad/invariants.py
+INVARIANTS: OK (20 files scanned, blueprint sha256 93537bded6bb… matches)
+[exit 0]
+
+GATE M8 RESULT: PASS

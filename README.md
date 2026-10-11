@@ -428,4 +428,9 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
   (no behavior added): email-validator accepts internationalized domains even with SMTPUTF8 off, so emails
   are checked to be ASCII explicitly; the widest ASCII glyph is `@`, not `W`, and still fits; the first
   concurrent boot of several processes needed a bounded wait for SQLite's WAL switch.
-- **Optional features:** none in this version; required functionality is complete without them.
+- **Optional features (differentiators, BLUEPRINT §18):** required functionality was completed and tagged
+  `v1.0-required` before any of them.
+  - D1 verifiable certificates (QR code + public verify endpoint): **omitted.** Its kill criterion
+    ("any required test regresses") tripped: embedding the job's verify URL changes every worker-rendered
+    PDF, which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
+    The implementation is kept, unmerged, on branch `dropped/d1-verify`.

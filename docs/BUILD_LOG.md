@@ -1,4 +1,4 @@
-CURRENT MILESTONE: M7 | STATUS: red | NEXT ACTION: Create branch d1-verify from v1.0-required; write test_verify.py (RED) incl. §24.7 scope field; implement QR + footer URL + GET /v1/verify; README Verification section; visual check of cases 1, 2, 5 with QR.
+CURRENT MILESTONE: M8 | STATUS: red | NEXT ACTION: Branch d2-proof: run benchmarks at 2 and 4 processes, record the kill-demo transcript, run the M4 slow tests 5 consecutive times (D2 kill check), update README Benchmarks/Recovery.
 
 # Build log (Phase 5)
 
@@ -25,7 +25,7 @@ Build state for the autonomous build of `docs/BLUEPRINT.md`. Authority: PDF > BL
 | M4 | Worker hardening, status, healthz, monitor, standalone worker, mutation proofs | done — 250 passed; gate PASS; flake rule 3/3; 9/9 mutations killed (`docs/evidence/gates/M4.txt`, `docs/evidence/mutation-checks.txt`) | `m4-done` |
 | M5 | Listing, downloads, archive | done — 279 passed; gate PASS; flake 3/3 (`docs/evidence/gates/M5.txt`) | `m5-done` |
 | M6 | README, docs tests, traceability, benchmark-1p, audit | done — 296 passed; gate PASS; flake 3/3; §24.17 PASS; audit fixes applied (`docs/evidence/gates/M6.txt`, `docs/evidence/audit/M6-audit.md`) | `m6-done`, `v1.0-required` |
-| M7 | D1 verify | pending | `m7-done` |
+| M7 | D1 verify | **DROPPED** — kill criterion tripped (required test regressed); branch `dropped/d1-verify` | `m7-done` |
 | M8 | D2 proof | pending | `m8-done` |
 | M9 | D3 dry-run + retry | pending | `m9-done` |
 | M10 | D4 Idempotency-Key | pending | `m10-done` |
@@ -139,3 +139,10 @@ No layout amendment needed. **Human approval of the M3 DoD (§17 "shown to the u
 - Clean-venv verification of README commands verbatim: PASS (fresh clone, python3.11 venv). Note: the first `pkill` pattern missed the server; it was then stopped with SIGINT and shut down gracefully.
 - Fresh-context audit (subagent): scores spec 9, failure correctness 7, simplicity 8, tests 8, docs 8, explainability 8, differentiators 5. Findings 3, 4, 5, 6, 7, 8, 9, 10 fixed; 1, 2, 11, 12 documented (fixing 1/2 would need non-pre-approved changes to frozen §7.3/§23 or D3 scope). Details: `docs/evidence/audit/M6-audit.md`.
 - Mutation 5b added (audit finding 4), killed 5/5.
+
+### M7 — D1 (2026-10-11): DROPPED
+- Branch `d1-verify` built: QR (80×80 pt at 701.89, 50; error correction M), footer "Verify: {url}" (7 pt at 60, 76), `GET /v1/verify/{id}` with `verification_scope` (§24.7), service lookup that never returns email. `tests/test_verify.py`: 12 passed (RED was 11 failed).
+- Needed one plumbing line in `worker.py` (build `verify_url` from the job's `verify_base_url`), which §10.4/§10.5 require but §18's D1 file list omits; would have been logged as amendment A-03 (contradiction between sections). Moot because D1 is not merged.
+- §18 binary kill check: determinism ✓, required layout unchanged (content-stream prefix test) ✓, no email leak ✓, **required test regression ✗**: `tests/test_rendering.py::test_generated_file_matches_direct_render` asserts worker output == render of the stored row without a verify URL; with D1 the worker embeds the URL (`At index 88 diff: b'8' != b'7'`). Required tests may not be edited → criterion trips.
+- Action per instructions: branch renamed `dropped/d1-verify`, not merged; README marks D1 omitted; D1 visual check not run (it is only required after a merge).
+- Interpretation note for the reviewer: the regression is caused by a pre-existing required test encoding pre-D1 semantics, not by a defect in D1. Merging D1 would require updating that one test to include the snapshotted verify URL (a non-pre-approved change, so not done).

@@ -28,13 +28,13 @@ from certgen.db import Engines, check_sqlite_version, create_engines, create_sch
 from certgen.errors import FieldCode, FieldError
 from certgen.rendering import CertificateData, render_certificate
 from certgen.service import dump_errors
+from certgen.storage import MAX_PDF_BYTES as MAX_PDF_BYTES  # re-exported: tests and benchmark use it
 from certgen.storage import Storage, prepare_data_dir
 
 log = logging.getLogger("certgen.worker")
 
 Renderer = Callable[[CertificateData], bytes]
 
-MAX_PDF_BYTES = 2_097_152  # §24.3: bounds worker memory, disk use and download size
 MAX_ERROR_MESSAGE = 500
 WORKER_LOST_JSON = dump_errors(
     [

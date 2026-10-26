@@ -264,16 +264,16 @@ def test_symlinked_job_dir_is_refused_on_write(
     assert list(outside.iterdir()) == []
 
 
-def test_truncated_file_on_disk_is_served_as_is(client: TestClient, app: FastAPI, drain: Any) -> None:
-    """Observation (fault injection): there is no integrity check on read; a PDF damaged on disk is
-    served with 200. Recorded as INFO, not a contract."""
+def test_truncated_file_on_disk_is_refused(client: TestClient, app: FastAPI, drain: Any) -> None:
+    """Fault injection: a PDF damaged on disk. Stage 1 observed it served with 200 (F-15); since the
+    approved fix it is reported like a missing file."""
     job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
     drain()
     item = items(client, job_id)[0]
     path = app.state.storage.path_for(job_id, item["certificate_id"])
     path.write_bytes(path.read_bytes()[:100])
     resp = client.get(item["download_url"])
-    assert resp.status_code == 200 and len(resp.content) == 100
+    assert resp.status_code == 410 and resp.json()["code"] == "CERTIFICATE_FILE_MISSING"
 
 
 def test_startup_on_corrupt_database_fails_loudly(tmp_path: Path) -> None:

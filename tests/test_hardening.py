@@ -61,3 +61,58 @@ def test_slow_render_below_the_lease_is_accepted(lease: int, slow_ms: int) -> No
     from certgen.config import Settings
 
     assert Settings(lease_seconds=lease, test_slow_render_ms=slow_ms).test_slow_render_ms == slow_ms
+
+
+# --- F-15: a damaged certificate file is treated like a missing one ------------------------------
+
+
+def _one_certificate(client: Any, app: Any, drain: Any) -> tuple[str, Path]:
+    from conftest import job_payload, post_job
+
+    job_id = post_job(client, job_payload(n=1)).json()["id"]
+    drain()
+    item = client.get(f"/v1/certificate-jobs/{job_id}/items").json()["items"][0]
+    return item["certificate_id"], app.state.storage.path_for(job_id, item["certificate_id"])
+
+
+@pytest.mark.req("R8", "R19")
+@pytest.mark.parametrize(
+    "damage",
+    ["truncated", "no-header", "no-trailer", "empty", "oversized"],
+)
+def test_damaged_certificate_file_is_410(client: Any, app: Any, drain: Any, damage: str) -> None:
+    cert, path = _one_certificate(client, app, drain)
+    good = path.read_bytes()
+    damaged = {
+        "truncated": good[: len(good) // 2],
+        "no-header": b"garbage" + good[7:],
+        "no-trailer": good.replace(b"%%EOF", b"%%XXX"),
+        "empty": b"",
+        "oversized": good[:-7] + b" " * (2_097_152 + 1) + b"%%EOF\n",
+    }[damage]
+    path.write_bytes(damaged)
+    resp = client.get(f"/v1/certificates/{cert}")
+    assert resp.status_code == 410
+    assert resp.json()["code"] == "CERTIFICATE_FILE_MISSING"
+
+
+@pytest.mark.req("R8", "R19")
+def test_archive_marks_a_damaged_file_and_leaves_it_out(client: Any, app: Any, drain: Any) -> None:
+    import csv
+    import io
+    import zipfile
+
+    cert, path = _one_certificate(client, app, drain)
+    path.write_bytes(path.read_bytes()[:100])
+    job_id = path.parent.name
+    archive = zipfile.ZipFile(io.BytesIO(client.get(f"/v1/certificate-jobs/{job_id}/archive").content))
+    assert [n for n in archive.namelist() if n.endswith(".pdf")] == []
+    row = next(csv.DictReader(io.StringIO(archive.read("manifest.csv").decode())))
+    assert row["error_codes"] == "CERTIFICATE_FILE_MISSING"
+
+
+@pytest.mark.req("R8", "R19")
+def test_intact_certificate_is_still_served(client: Any, app: Any, drain: Any) -> None:
+    cert, path = _one_certificate(client, app, drain)
+    resp = client.get(f"/v1/certificates/{cert}")
+    assert resp.status_code == 200 and resp.content == path.read_bytes()

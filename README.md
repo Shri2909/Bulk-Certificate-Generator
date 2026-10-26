@@ -195,7 +195,8 @@ curl -s -o certificate.pdf http://127.0.0.1:8000/v1/certificates/{certificate_id
 
 `200 application/pdf` when ready; `409 CERTIFICATE_NOT_READY` while pending or processing;
 `409 CERTIFICATE_GENERATION_FAILED` after it failed; `410 CERTIFICATE_FILE_MISSING` if the file was
-removed from disk; `404` for unknown or malformed ids.
+removed from disk or is damaged (not framed by `%PDF-` … `%%EOF`, or larger than 2 MiB); `404` for
+unknown or malformed ids.
 
 Everything at once:
 
@@ -392,7 +393,7 @@ Every non-2xx response is `application/problem+json`:
 | `CERTIFICATE_GENERATION_FAILED` | 409 | certificate failed after all attempts |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | the `Idempotency-Key` was already used with a different body |
 | `NOTHING_TO_RETRY` | 409 | `POST …/retry` on a job with no failed certificates |
-| `CERTIFICATE_FILE_MISSING` | 410 | item succeeded but its file is gone from disk |
+| `CERTIFICATE_FILE_MISSING` | 410 | item succeeded but its file is gone from disk or damaged |
 | `INTERNAL_ERROR` | 500 | unexpected error (details only in the server log) |
 | `DB_UNAVAILABLE` | 503 | database lock wait over 5 s, or the database cannot be read (`Retry-After: 1`) |
 | `ARCHIVE_BUSY` | 503 | two archives already being built in this process (`Retry-After: 1`) |

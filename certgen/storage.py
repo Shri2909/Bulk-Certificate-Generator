@@ -18,6 +18,9 @@ log = logging.getLogger("certgen.storage")
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
 # O_NOFOLLOW makes open() itself refuse a symlink, closing the gap between the lstat check and open.
 O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+MAX_PDF_BYTES = 2_097_152  # §24.3: bounds worker memory, disk use and download size
+PDF_HEADER = b"%PDF-"
+PDF_TRAILER = b"%%EOF"
 
 
 def prepare_data_dir(data_dir: Path, certificates_dir: Path) -> None:
@@ -36,6 +39,10 @@ def _fsync_dir(path: Path) -> None:
         os.fsync(dir_fd)
     finally:
         os.close(dir_fd)
+
+
+def _looks_like_pdf(data: bytes) -> bool:
+    return data.startswith(PDF_HEADER) and data.rstrip().endswith(PDF_TRAILER)
 
 
 def _check_id(value: str) -> str:
@@ -98,11 +105,12 @@ class Storage:
             return None
         return path
 
-    def exists(self, job_id: str, certificate_id: str) -> bool:
-        return self._safe_file(job_id, certificate_id) is not None
-
     def read(self, job_id: str, certificate_id: str) -> bytes | None:
-        """The PDF bytes, or None if the file is missing or not a plain file inside the root."""
+        """The PDF bytes, or None if the file is missing, not a plain file inside the root, or damaged.
+
+        Damaged = larger than any certificate the worker writes, or not framed by the PDF header and
+        end-of-file marker; such a file is reported like a missing one instead of served (audit F-15).
+        """
         path = self._safe_file(job_id, certificate_id)
         if path is None:
             return None
@@ -111,7 +119,12 @@ class Storage:
         except OSError:
             return None  # replaced by a symlink or removed after the check
         with os.fdopen(fd, "rb") as fh:
-            return fh.read()
+            # The size is checked before anything is read into memory.
+            data = None if os.fstat(fh.fileno()).st_size > MAX_PDF_BYTES else fh.read(MAX_PDF_BYTES + 1)
+        if data is None or len(data) > MAX_PDF_BYTES or not _looks_like_pdf(data):
+            log.warning("damaged_certificate_file certificate_id=%s", certificate_id)
+            return None
+        return data
 
     def sweep_orphans(self, older_than_ms: int, now_ms: int) -> int:
         """Delete temp files left by killed writers. Only old ones: a fresh one may be mid-write."""

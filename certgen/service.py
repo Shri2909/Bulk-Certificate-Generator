@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+import shutil
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -68,6 +69,16 @@ JOB_COUNTS_SQL = (
 
 def count_active_items(conn: Connection) -> int:
     return int(conn.execute(text(COUNT_ACTIVE_SQL)).scalar_one())
+
+
+def check_free_disk(settings: Settings) -> None:
+    """Refuse new work when the data dir's disk is nearly full (audit P8-N1); 0 MB disables the check."""
+    minimum = settings.min_free_disk_mb * 1024 * 1024
+    if minimum and shutil.disk_usage(settings.data_dir).free < minimum:
+        raise ApiError(
+            ProblemCode.STORAGE_FULL,
+            f"Less than {settings.min_free_disk_mb} MB of disk is free for certificate data. Retry later.",
+        )
 
 
 def ping(engines: Engines) -> None:
@@ -168,6 +179,7 @@ def _create_job(
             existing = _job_for_key(conn, idempotency_key, fingerprint)
             if existing is not None:  # replays skip the capacity check: no new work is admitted
                 return _load_existing_job(conn, existing), True
+        check_free_disk(settings)
         now = clock()  # read after BEGIN IMMEDIATE holds the lock, so timestamps follow commit order
         active = count_active_items(conn)
         if active + validated.valid_count > settings.max_active_items:
@@ -400,6 +412,7 @@ def retry_failed(engines: Engines, settings: Settings, clock: Clock, job_id: str
         )
         if failed == 0:
             raise ApiError(ProblemCode.NOTHING_TO_RETRY, "The job has no failed certificates to retry.")
+        check_free_disk(settings)
         active = count_active_items(conn)
         if active + failed > settings.max_active_items:  # same admission rule as a new job (§24.1)
             raise ApiError(

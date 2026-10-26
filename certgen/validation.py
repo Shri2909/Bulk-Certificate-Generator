@@ -18,6 +18,7 @@ from typing import Any
 
 from email_validator import EmailNotValidError, validate_email
 
+from certgen.config import BODY_BYTES_PER_RECIPIENT
 from certgen.errors import FieldCode, FieldError
 from certgen.fonts import SUPPORTED_CHARS
 from certgen.layout import EMAIL, ISSUER, NAME, TITLE, Block, fit_text
@@ -228,7 +229,8 @@ def validate_request(
             )
         )
     else:
-        rows = _validate_rows(body.recipients, print_email)
+        rows, oversized = _validate_rows(body.recipients, print_email)
+        request_errors += oversized
     return ValidatedRequest(
         title=title,
         issuer=issuer,
@@ -253,10 +255,26 @@ def _check_issued_on(value: str, today: date) -> FieldError | None:
     return None
 
 
-def _validate_rows(raw_rows: list[dict[str, Any]], print_email: bool) -> tuple[ValidatedRow, ...]:
+def _validate_rows(
+    raw_rows: list[dict[str, Any]], print_email: bool
+) -> tuple[tuple[ValidatedRow, ...], list[FieldError]]:
+    """Validated rows, plus a request-level error for each row larger than any legal row could be.
+
+    A recipient whose canonical JSON exceeds BODY_BYTES_PER_RECIPIENT cannot be a valid row; storing it
+    would let one request persist several times its size (audit P8-N1), so the whole request fails.
+    """
     rows = []
+    oversized: list[FieldError] = []
     seen_emails: dict[str, int] = {}
     for index, raw in enumerate(raw_rows):
+        input_json = canonical_json(raw)
+        size = len(input_json.encode("utf-8"))
+        if size > BODY_BYTES_PER_RECIPIENT:
+            message = (
+                f"Recipient {index} is {size} bytes as JSON; at most {BODY_BYTES_PER_RECIPIENT} are allowed."
+            )
+            oversized.append(FieldError("recipients", FieldCode.TOO_LONG, message, row_index=index))
+            continue
         name, name_error = _check_name(raw)
         email, email_error = _check_email(raw, print_email)
         errors = [e for e in (name_error, email_error) if e is not None]
@@ -282,10 +300,10 @@ def _validate_rows(raw_rows: list[dict[str, Any]], print_email: bool) -> tuple[V
                 errors=tuple(
                     FieldError(e.field, e.code, e.message, index, e.duplicate_of_row_index) for e in errors
                 ),
-                input_json=canonical_json(raw),
+                input_json=input_json,
             )
         )
-    return tuple(rows)
+    return tuple(rows), oversized
 
 
 def _unknown_field_errors(raw: dict[str, Any]) -> list[FieldError]:

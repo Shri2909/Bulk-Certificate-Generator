@@ -17,7 +17,7 @@ def _row_errors(resp: Any, row: int) -> list[dict[str, Any]]:
 
 
 @pytest.mark.parametrize(
-    ("n", "listed", "summary"), [(1, 1, None), (10, 10, None), (11, 10, 1), (5000, 10, 4990)]
+    ("n", "listed", "summary"), [(1, 1, None), (10, 10, None), (11, 10, 1), (300, 10, 290)]
 )
 def test_unknown_fields_capped_at_ten_plus_summary(
     client: TestClient, n: int, listed: int, summary: int | None
@@ -40,7 +40,7 @@ def test_unknown_fields_capped_at_ten_plus_summary(
 
 
 def test_unknown_field_cap_applies_to_all_invalid_422_and_dry_run(client: TestClient) -> None:
-    junk = {f"k{i:05d}": 0 for i in range(3000)}
+    junk = {f"k{i:05d}": 0 for i in range(300)}  # within the 4,500 B row budget
     body = payload([{"name": "A", "email": "a@example.com", **junk}])
     for path in (JOBS, JOBS + "?dry_run=true"):
         resp = client.post(path, json=body)
@@ -48,7 +48,7 @@ def test_unknown_field_cap_applies_to_all_invalid_422_and_dry_run(client: TestCl
 
 
 def test_huge_unknown_key_is_not_repeated_in_the_message(client: TestClient) -> None:
-    key = "x" * 1_000_000
+    key = "x" * 4_000  # as long as the 4,500 B row budget allows
     resp = client.post(
         JOBS,
         json=payload(
@@ -58,7 +58,7 @@ def test_huge_unknown_key_is_not_repeated_in_the_message(client: TestClient) -> 
     err = _row_errors(resp, 1)[0]
     assert err["field"] == key  # the field still names the key exactly
     assert len(err["message"]) < 100
-    assert len(resp.content) < 1.2 * 1_000_000
+    assert len(resp.content) < 1.2 * 4_000 + 1_000
 
 
 def test_unknown_field_order_name_email_then_keys(client: TestClient) -> None:

@@ -39,8 +39,9 @@ def test_overlong_email_is_rejected_in_bounded_time(client: TestClient) -> None:
     started = time.perf_counter()
     resp = post_raw(client, body)
     elapsed = time.perf_counter() - started
-    assert resp.status_code == 202
-    assert [(e["row_index"], e["code"]) for e in resp.json()["errors"]] == [(1, "INVALID_EMAIL")]
+    # Round 2 (P8-N1) refuses such a row even earlier, as a 422 oversized row; either rejection is correct.
+    outcome = (resp.status_code, [(e["row_index"], e["code"]) for e in resp.json()["errors"]])
+    assert outcome in ((202, [(1, "INVALID_EMAIL")]), (422, [(1, "TOO_LONG")])), outcome
     assert elapsed < 2.0, f"validating one over-long email took {elapsed:.1f} s"
 
 
@@ -57,9 +58,13 @@ def test_unknown_field_errors_are_bounded(client: TestClient, app: FastAPI) -> N
         payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": "b@example.com", **junk}])
     ).encode()
     resp = post_raw(client, body)
-    assert resp.status_code == 202
+    # Round 2 (P8-N1) refuses a row this large outright (422, nothing stored); within the row budget the
+    # per-row cap applies. Either way the response and the stored errors stay small.
+    assert resp.status_code in (202, 422)
     with app.state.engines.read.connect() as conn:
-        stored = conn.execute(text("SELECT length(errors) FROM items WHERE row_index = 1")).scalar_one()
+        stored = conn.execute(
+            text("SELECT COALESCE(SUM(length(errors)), 0) FROM items WHERE row_index = 1")
+        ).scalar_one()
     row_errors = [e for e in resp.json()["errors"] if e["row_index"] == 1]
     assert len(row_errors) <= 11, f"{len(row_errors)} errors returned for one row"
     assert len(resp.content) <= 64 * 1024, (

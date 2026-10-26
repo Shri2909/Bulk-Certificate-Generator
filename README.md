@@ -141,7 +141,9 @@ marks and right-to-left scripts are rejected (`UNSUPPORTED_CHARACTERS`); text th
 `DOES_NOT_FIT`. Emails must be valid ASCII addresses of at most 254 characters (`email-validator`, no
 deliverability check; the length is checked first); a repeated email within one request (trimmed,
 case-insensitive) is `DUPLICATE_RECIPIENT` on the later row. Duplicates across jobs are allowed. A row
-lists at most 10 unknown fields (sorted); any further ones are counted in one extra `UNKNOWN_FIELD`
+may be at most 4,500 bytes as JSON (the largest a valid row can be); a larger one makes the whole request
+`422` (`TOO_LONG`, `field: recipients`) and nothing is stored. A row lists at most 10 unknown fields
+(sorted); any further ones are counted in one extra `UNKNOWN_FIELD`
 error with `field: null`, so a row reports at most 13 errors. A request's error list is therefore
 bounded by 13 × `CERTGEN_MAX_RECIPIENTS` (about 11 MB of JSON at the default, measured), although a body
 of many tiny invalid rows can still produce a response several times its own size.
@@ -369,6 +371,7 @@ message naming the variable).
 | `CERTGEN_PUBLIC_BASE_URL` | `http://localhost:8000` | absolute http(s) URL, ≤ 100 chars; `http` only for localhost | stored per job (a snapshot) as the base for links on certificates; no link is printed in this version |
 | `CERTGEN_LOG_LEVEL` | `INFO` | `DEBUG/INFO/WARNING/ERROR` | `certgen` logger level |
 | `CERTGEN_ALLOWED_HOSTS` | empty | comma-separated host names / IPs | `Host` header names served in addition to `localhost`, `127.0.0.1`, `[::1]`; anything else → `400 INVALID_HOST` (DNS-rebinding defence). Add the public name when running behind a proxy |
+| `CERTGEN_MIN_FREE_DISK_MB` | `1024` | 0–1000000 | new jobs and retries get `503 STORAGE_FULL` while less disk than this is free on the data dir; `0` disables the check |
 | `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000, and below `CERTGEN_LEASE_SECONDS` | **test only**: delay each render so crash tests can kill a worker mid-item |
 
 At most 64 requests are in progress per process (counted by the app, whichever way it is served); a
@@ -399,6 +402,7 @@ Every non-2xx response is `application/problem+json`:
 | `ARCHIVE_BUSY` | 503 | two archives already being built in this process (`Retry-After: 1`) |
 | `CAPACITY_EXCEEDED` | 503 | accepting the job would exceed `CERTGEN_MAX_ACTIVE_ITEMS` (`Retry-After: 1`) |
 | `SERVER_BUSY` | 503 | 64 requests are already in progress in this process (`Retry-After: 1`) |
+| `STORAGE_FULL` | 503 | less than `CERTGEN_MIN_FREE_DISK_MB` of disk is free for new jobs or retries (`Retry-After: 1`) |
 
 Field codes (in `errors[].code`, and stored on items):
 

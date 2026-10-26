@@ -210,5 +210,5 @@ def test_overlong_email_over_http_is_fast_and_does_not_starve_others(server: Ser
         f"\nPOST with 600k-char email: status={result.get('status')} seconds={result.get('seconds', 0):.2f}; "
         f"/healthz samples={len(latencies)} max latency={worst * 1000:.0f} ms"
     )
-    assert result["status"] == 202
+    assert result["status"] in (202, 422)  # 422: refused as an oversized row since round 2 (P8-N1)
     assert result["seconds"] < 2.0

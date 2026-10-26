@@ -45,6 +45,7 @@ ENV_NAMES = {
     "log_level": "CERTGEN_LOG_LEVEL",
     "test_slow_render_ms": "CERTGEN_TEST_SLOW_RENDER_MS",
     "allowed_hosts": "CERTGEN_ALLOWED_HOSTS",
+    "min_free_disk_mb": "CERTGEN_MIN_FREE_DISK_MB",
 }
 HOSTNAME = re.compile(
     r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*"
@@ -61,6 +62,7 @@ RANGES: dict[str, tuple[float, float]] = {
     "max_recipients": (1, 100_000),
     "max_active_items": (1, 1_000_000),
     "test_slow_render_ms": (0, 60_000),
+    "min_free_disk_mb": (0, 1_000_000),
 }
 
 
@@ -83,6 +85,8 @@ class Settings:
     test_slow_render_ms: int = 0
     # Host header names accepted in addition to the loopback names (DNS-rebinding defence, audit F-10).
     allowed_hosts: tuple[str, ...] = ()
+    # New jobs and retries are refused below this much free disk on the data dir; 0 disables (audit P8-N1).
+    min_free_disk_mb: int = 1024
 
     def __post_init__(self) -> None:
         for name, (low, high) in RANGES.items():

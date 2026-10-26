@@ -69,7 +69,12 @@ def settings_overrides() -> dict[str, Any]:
 
 @pytest.fixture
 def settings(tmp_path: Path, settings_overrides: dict[str, Any]) -> Settings:
-    values: dict[str, Any] = {"data_dir": tmp_path / "data", "embedded_worker": False}
+    # "testserver" is the Host header Starlette's TestClient sends (the app serves allowed hosts only).
+    values: dict[str, Any] = {
+        "data_dir": tmp_path / "data",
+        "embedded_worker": False,
+        "allowed_hosts": ("testserver",),
+    }
     values.update(settings_overrides)
     return Settings(**values)
 

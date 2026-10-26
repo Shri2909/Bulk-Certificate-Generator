@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import FakeClock, db_rows, job_payload, post_job, spawn_worker, wait_until
+from conftest import (
+    TESTCLIENT_HOSTS,
+    FakeClock,
+    db_rows,
+    job_payload,
+    post_job,
+    spawn_worker,
+    wait_until,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -110,7 +118,7 @@ def test_crash_loop_ends_failed_after_max_attempts(
 
 
 def _create_job(data_dir: Path, n: int) -> str:
-    settings = Settings(data_dir=data_dir, embedded_worker=False)
+    settings = Settings(data_dir=data_dir, embedded_worker=False, allowed_hosts=TESTCLIENT_HOSTS)
     with TestClient(create_app(settings, clock=system_clock)) as c:
         resp = post_job(c, job_payload(n=n))
         assert resp.status_code == 202

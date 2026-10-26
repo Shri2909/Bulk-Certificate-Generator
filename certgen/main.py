@@ -26,7 +26,12 @@ from certgen.errors import (
     request_validation_handler,
     unhandled_exception_handler,
 )
-from certgen.middleware import BodySizeLimitMiddleware, NoStoreMiddleware, async_lifespan
+from certgen.middleware import (
+    BodySizeLimitMiddleware,
+    HostAllowlistMiddleware,
+    NoStoreMiddleware,
+    async_lifespan,
+)
 from certgen.rendering import render_certificate
 from certgen.storage import Storage, prepare_data_dir
 from certgen.worker import Renderer, Worker, WorkerPool, with_slow_render
@@ -70,7 +75,9 @@ def create_app(
     app.state.renderer = renderer
     app.state.archive_slots = threading.BoundedSemaphore(ARCHIVE_CONCURRENCY)
     app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_bytes)
-    app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 413 responses
+    # Host check before any body is read: a rebinding page cannot even get its upload buffered.
+    app.add_middleware(HostAllowlistMiddleware, allowed_hosts=settings.trusted_hosts)
+    app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 400/413 responses
     app.add_exception_handler(ApiError, api_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)

@@ -357,6 +357,7 @@ message naming the variable).
 | `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE` | `true` | `1/0/true/false` | print the email under the name; stored per job |
 | `CERTGEN_PUBLIC_BASE_URL` | `http://localhost:8000` | absolute http(s) URL, ≤ 100 chars; `http` only for localhost | stored per job (a snapshot) as the base for links on certificates; no link is printed in this version |
 | `CERTGEN_LOG_LEVEL` | `INFO` | `DEBUG/INFO/WARNING/ERROR` | `certgen` logger level |
+| `CERTGEN_ALLOWED_HOSTS` | empty | comma-separated host names / IPs | `Host` header names served in addition to `localhost`, `127.0.0.1`, `[::1]`; anything else → `400 INVALID_HOST` (DNS-rebinding defence). Add the public name when running behind a proxy |
 | `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000 | **test only**: delay each render so crash tests can kill a worker mid-item |
 
 `python -m certgen` also limits uvicorn to 64 concurrent connections (`limit_concurrency`) with a 5 s
@@ -370,6 +371,7 @@ Every non-2xx response is `application/problem+json`:
 
 | Code | HTTP | When |
 |---|---|---|
+| `INVALID_HOST` | 400 | the `Host` header is not `localhost`, `127.0.0.1`, `[::1]` or a name in `CERTGEN_ALLOWED_HOSTS` |
 | `VALIDATION_FAILED` | 422 | request-level errors, every row invalid, or invalid query parameters |
 | `PAYLOAD_TOO_LARGE` | 413 | body over the derived limit |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | `Content-Type` is not `application/json` (optionally `; charset=utf-8`) |
@@ -448,7 +450,9 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 
 - **No authentication or rate limiting.** Job and certificate ids are unguessable (128 bits) and act as
   capability URLs, which expose names and emails to anyone holding them. The server binds to `127.0.0.1`
-  by default; authentication is the first change before any wider deployment.
+  by default and only answers requests whose `Host` is a loopback name or listed in
+  `CERTGEN_ALLOWED_HOSTS`, so a web page cannot reach it through DNS rebinding; authentication is the
+  first change before any wider deployment.
 - **Idempotency keys are global and never expire** (no tenants to scope them to); a key used once is
   bound to that body forever.
 - **SQLite is a single writer.** Fine for one machine: every write is a short single-row transaction. Larger scale would

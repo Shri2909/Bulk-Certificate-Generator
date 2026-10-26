@@ -63,7 +63,7 @@ def stats(values: list[float]) -> dict[str, float]:
 def submit(data_dir: Path, recipients: int) -> float:
     """POST the corpus once; returns the request latency in ms."""
     settings = Settings(data_dir=data_dir, embedded_worker=False, max_recipients=max(recipients, 1))
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings), base_url="http://localhost") as client:
         started = time.perf_counter()
         resp = client.post("/v1/certificate-jobs", json=corpus(recipients))
         latency = (time.perf_counter() - started) * 1000

@@ -9,6 +9,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -39,7 +40,11 @@ ENV_NAMES = {
     "public_base_url": "CERTGEN_PUBLIC_BASE_URL",
     "log_level": "CERTGEN_LOG_LEVEL",
     "test_slow_render_ms": "CERTGEN_TEST_SLOW_RENDER_MS",
+    "allowed_hosts": "CERTGEN_ALLOWED_HOSTS",
 }
+HOSTNAME = re.compile(
+    r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*"
+)
 
 # Inclusive numeric ranges from §15 (max_active_items' floor depends on max_recipients; see below).
 RANGES: dict[str, tuple[float, float]] = {
@@ -72,6 +77,8 @@ class Settings:
     public_base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
     test_slow_render_ms: int = 0
+    # Host header names accepted in addition to the loopback names (DNS-rebinding defence, audit F-10).
+    allowed_hosts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name, (low, high) in RANGES.items():
@@ -96,6 +103,12 @@ class Settings:
         object.__setattr__(self, "data_dir", Path(self.data_dir).resolve())
         object.__setattr__(self, "log_level", self.log_level.upper())
         object.__setattr__(self, "public_base_url", _validate_base_url(self.public_base_url))
+        object.__setattr__(self, "allowed_hosts", tuple(_validate_host(h) for h in self.allowed_hosts))
+
+    @property
+    def trusted_hosts(self) -> frozenset[str]:
+        """Every name the Host header may carry: loopback always, plus CERTGEN_ALLOWED_HOSTS."""
+        return LOOPBACK_HOSTS | frozenset(self.allowed_hosts)
 
     @property
     def max_body_bytes(self) -> int:
@@ -148,7 +161,31 @@ def _parse(name: str, type_name: object, raw: str) -> object:
         raise ValueError(f"{var} has an invalid value {raw!r}") from None
     if type_name == "Path":
         return Path(raw)
+    if type_name == "tuple[str, ...]":
+        return tuple(part.strip() for part in raw.split(",") if part.strip())
     return raw
+
+
+def normalize_host(value: str) -> str:
+    """Lowercase a host name; IP literals (IPv6 with or without brackets) in their canonical form."""
+    name = value.strip().lower()
+    if name.startswith("[") and name.endswith("]"):
+        name = name[1:-1]
+    try:
+        return str(ipaddress.ip_address(name))
+    except ValueError:
+        return name
+
+
+def _validate_host(value: str) -> str:
+    host = normalize_host(value)
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if not HOSTNAME.fullmatch(host):
+            var = ENV_NAMES["allowed_hosts"]
+            raise ValueError(f"{var} must list host names or IP addresses, got {value!r}") from None
+    return host
 
 
 def _validate_base_url(value: str) -> str:

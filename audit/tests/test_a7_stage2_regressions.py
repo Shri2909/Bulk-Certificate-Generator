@@ -135,3 +135,109 @@ def test_after_accepts_sqlite_max_and_rejects_one_more(client: TestClient, after
     assert resp.status_code == status
     if status == 200:
         assert resp.json()["items"] == []
+
+
+# --- F-10: Host allowlist ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "localhost",
+        "localhost:8000",
+        "LOCALHOST:1",
+        "127.0.0.1",
+        "127.0.0.1:65535",
+        "[::1]",
+        "[::1]:8000",
+        "testserver",
+    ],
+)
+def test_loopback_and_configured_hosts_are_served(client: TestClient, host: str) -> None:
+    assert client.get("/healthz", headers={"Host": host}).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "attacker.example",
+        "localhost.attacker.example",
+        "127.0.0.1.nip.io",
+        "localhost.",
+        "[::1].evil",
+        "",
+        "127.0.0.2",
+        "[::2]:80",
+        "0.0.0.0",
+    ],
+)
+def test_foreign_hosts_are_refused_with_problem_json(client: TestClient, host: str) -> None:
+    resp = client.get("/healthz", headers={"Host": host})
+    assert resp.status_code == 400
+    assert resp.headers["content-type"] == "application/problem+json"
+    assert resp.json()["code"] == "INVALID_HOST"
+    assert resp.headers["cache-control"] == "no-store"
+
+
+def test_host_is_checked_before_the_body_is_read(client: TestClient) -> None:
+    resp = client.post(
+        JOBS, content=b"x" * 10, headers={"Host": "attacker.example", "Content-Length": str(10**9)}
+    )
+    assert resp.status_code == 400
+
+
+def test_missing_host_header_is_refused() -> None:
+    import asyncio
+
+    from certgen.middleware import HostAllowlistMiddleware
+
+    sent: list[dict[str, Any]] = []
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:  # pragma: no cover - must not be reached
+        raise AssertionError("request without Host reached the app")
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    scope = {"type": "http", "method": "GET", "path": "/healthz", "headers": [], "query_string": b""}
+    asyncio.run(HostAllowlistMiddleware(app, frozenset({"localhost"}))(scope, receive, send))
+    assert sent[0]["status"] == 400
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("certs.example.org", ("certs.example.org",)),
+        (" A.Example.ORG , 10.0.0.5,[2001:db8::1] ", ("a.example.org", "10.0.0.5", "2001:db8::1")),
+        ("", ()),
+    ],
+)
+def test_allowed_hosts_env_is_parsed_and_normalized(raw: str, expected: tuple[str, ...]) -> None:
+    from certgen.config import Settings
+
+    assert Settings.from_env({"CERTGEN_ALLOWED_HOSTS": raw}).allowed_hosts == expected
+
+
+@pytest.mark.parametrize(
+    "raw", ["*.example.com", "exa mple.org", "http://x.org", "x_y.org", "a..b", "-a.org"]
+)
+def test_allowed_hosts_env_rejects_patterns_and_urls(raw: str) -> None:
+    from certgen.config import Settings
+
+    with pytest.raises(ValueError, match="CERTGEN_ALLOWED_HOSTS"):
+        Settings.from_env({"CERTGEN_ALLOWED_HOSTS": raw})
+
+
+def test_configured_host_is_served_and_others_refused(tmp_path: Any) -> None:
+    from certgen.config import Settings
+    from certgen.main import create_app
+
+    app = create_app(
+        Settings(data_dir=tmp_path / "d", embedded_worker=False, allowed_hosts=("certs.example.org",))
+    )
+    with TestClient(app, base_url="http://certs.example.org") as c:
+        assert c.get("/healthz").status_code == 200
+        assert c.get("/healthz", headers={"Host": "testserver"}).status_code == 400

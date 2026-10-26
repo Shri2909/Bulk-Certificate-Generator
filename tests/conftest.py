@@ -25,6 +25,8 @@ from certgen.worker import Worker
 ROOT = Path(__file__).resolve().parent.parent
 START_MS = int(datetime(2026, 10, 11, 8, 0, tzinfo=UTC).timestamp() * 1000)
 JOBS = "/v1/certificate-jobs"
+# Host header sent by Starlette's TestClient; the app only serves allowed hosts (audit F-10).
+TESTCLIENT_HOSTS = ("testserver",)
 
 Renderer = Callable[[CertificateData], bytes]
 
@@ -55,7 +57,11 @@ def settings_overrides() -> dict[str, Any]:
 
 @pytest.fixture
 def settings(tmp_path: Path, settings_overrides: dict[str, Any]) -> Settings:
-    values: dict[str, Any] = {"data_dir": tmp_path / "data", "embedded_worker": False}
+    values: dict[str, Any] = {
+        "data_dir": tmp_path / "data",
+        "embedded_worker": False,
+        "allowed_hosts": TESTCLIENT_HOSTS,
+    }
     values.update(settings_overrides)
     return Settings(**values)
 

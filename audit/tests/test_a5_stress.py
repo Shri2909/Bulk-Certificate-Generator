@@ -57,6 +57,7 @@ def test_embedded_pool_under_concurrent_clients_and_transient_failures(tmp_path:
         poll_interval_seconds=0.05,
         retry_delay_seconds=0.05,
         max_active_items=50_000,
+        allowed_hosts=("testserver",),
     )
     failed_once: set[str] = set()
     lock = threading.Lock()
@@ -109,7 +110,13 @@ def test_embedded_pool_under_concurrent_clients_and_transient_failures(tmp_path:
 @pytest.mark.skipif(os.name != "posix", reason="POSIX signals")
 def test_three_worker_processes_with_random_sigkill(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
-    settings = Settings(data_dir=data_dir, embedded_worker=False, lease_seconds=2, max_recipients=200)
+    settings = Settings(
+        data_dir=data_dir,
+        embedded_worker=False,
+        lease_seconds=2,
+        max_recipients=200,
+        allowed_hosts=("testserver",),
+    )
     with TestClient(create_app(settings)) as client:
         rows = [{"name": f"Proc {i}", "email": f"proc{i}@example.com"} for i in range(150)]
         assert client.post(JOBS, json={"certificate": CERT, "recipients": rows}).status_code == 202

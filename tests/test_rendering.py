@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import FakeClock, job_payload, post_job, recipient
+from conftest import TESTCLIENT_HOSTS, FakeClock, job_payload, post_job, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
@@ -89,7 +89,12 @@ def test_pdf_text_contains_all_fields() -> None:
 def test_email_printed_by_default_and_opt_out(tmp_path: Path, fake_clock: FakeClock) -> None:
     def generated_text(print_email: bool | None) -> str:
         overrides = {} if print_email is None else {"print_email": print_email}
-        settings = Settings(data_dir=tmp_path / f"d{print_email}", embedded_worker=False, **overrides)
+        settings = Settings(
+            data_dir=tmp_path / f"d{print_email}",
+            embedded_worker=False,
+            allowed_hosts=TESTCLIENT_HOSTS,
+            **overrides,
+        )
         app = create_app(settings, clock=fake_clock)
         with TestClient(app) as client:
             job = post_job(client, job_payload(recipients=[recipient(0, email="opt@example.com")])).json()

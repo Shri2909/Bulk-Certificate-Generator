@@ -59,7 +59,7 @@ def f02_amplification(scratch: Path) -> None:
     cert = {"title": "T", "issuer": "I", "issued_on": "2026-10-01"}
     for mode in ("all_invalid", "partial"):
         tmp = Path(tempfile.mkdtemp(dir=scratch))
-        settings = Settings(data_dir=tmp / "d", embedded_worker=False)
+        settings = Settings(data_dir=tmp / "d", embedded_worker=False, allowed_hosts=("testserver",))
         n = (settings.max_body_bytes - 300) // 13
         row = "{" + ",".join(f'"k{i:07d}":0' for i in range(n)) + "}"
         rows = row if mode == "all_invalid" else '{"name":"A","email":"a@example.com"},' + row

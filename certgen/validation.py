@@ -27,6 +27,7 @@ ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 MAX_JSON_DEPTH = 8  # root = 1; the deepest legitimate value (a row field) sits at depth 4
 MAX_NAME_LENGTH = 120
 MAX_CERTIFICATE_TEXT_LENGTH = 200
+MAX_EMAIL_LENGTH = 254  # RFC 5321 path limit; also what email-validator enforces, but only after parsing
 RTL_BIDI_CLASSES = frozenset({"R", "AL", "AN"})
 ROW_FIELDS = ("name", "email")
 
@@ -292,6 +293,10 @@ def _check_email(raw: dict[str, Any], print_email: bool) -> tuple[str | None, Fi
     email = value.strip(" ")
     if not email:
         return email, FieldError("email", FieldCode.REQUIRED, "email is required.")
+    # Checked before email-validator, whose syntax pass is quadratic in the input length (audit F-01).
+    if len(email) > MAX_EMAIL_LENGTH:
+        message = f"The email address must be at most {MAX_EMAIL_LENGTH} characters."
+        return email, FieldError("email", FieldCode.INVALID_EMAIL, message)
     # allow_smtputf8=False still admits internationalized domains; ASCII-only is checked explicitly
     # so every accepted address is renderable and comparable byte-for-byte.
     if not email.isascii():

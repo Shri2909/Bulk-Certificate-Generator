@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+MAX_UNFINISHED_PROGRESS = 0.9999  # highest progress reported while any valid item is unfinished
+
 
 def derive_job_status(counts: Mapping[str, int], attempted: int) -> tuple[str, float]:
     """Return (status, progress). `counts` maps item status -> count; `attempted` = items with attempts > 0.
@@ -21,6 +23,9 @@ def derive_job_status(counts: Mapping[str, int], attempted: int) -> tuple[str, f
     if valid == 0:  # J1: unreachable through the API (a job needs >= 1 valid row); kept as a guard
         return "completed_with_errors", 1.0
     progress = round(done / valid, 4)
+    if done < valid:
+        # Rounding to 4 places reaches 1.0 at 19,999/20,000; 1.0 must mean "finished" (audit F-08).
+        progress = min(progress, MAX_UNFINISHED_PROGRESS)
     if done == valid:
         if failed == 0 and rejected == 0:
             return "completed", progress  # J2

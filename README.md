@@ -172,7 +172,8 @@ Poll the job until it is terminal (`completed`, `completed_with_errors` or `fail
 curl -s http://127.0.0.1:8000/v1/certificate-jobs/{job_id}
 ```
 
-`status` is derived from item counts on every read; `progress` = finished valid items / valid items.
+`status` is derived from item counts on every read; `progress` = finished valid items / valid items,
+rounded to 4 places and never `1.0` until every valid item is finished (at most `0.9999` before).
 Which rows succeeded or failed, and why, is in the paginated item list (filter with `status`, page with
 `after` = the previous page's `next_after`, `limit` 1–1000):
 

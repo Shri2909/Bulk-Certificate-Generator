@@ -374,3 +374,22 @@ def test_readme_cdn_note_matches_the_docs_page(client: TestClient) -> None:
     assert "cdn.jsdelivr.net" in html  # if this changes (e.g. self-hosted assets), update the README note
     assert "cdn.jsdelivr.net" in readme and "/openapi.json" in readme
     assert client.get("/openapi.json").status_code == 200
+
+
+# --- F-07: UNIQUE violations are matched by exact column ------------------------------------------
+
+
+def test_violates_unique_matches_the_exact_column_only() -> None:
+    import sqlite3
+
+    from sqlalchemy.exc import IntegrityError
+
+    from certgen.service import violates_unique
+
+    def err(message: str) -> IntegrityError:
+        return IntegrityError("INSERT", {}, sqlite3.IntegrityError(message))
+
+    assert violates_unique(err("UNIQUE constraint failed: jobs.id"), "jobs.id")
+    assert not violates_unique(err("UNIQUE constraint failed: jobs.idempotency_key"), "jobs.id")
+    assert violates_unique(err("UNIQUE constraint failed: jobs.idempotency_key"), "jobs.idempotency_key")
+    assert not violates_unique(err("UNIQUE constraint failed: items.job_id, items.row_index"), "items.job_id")

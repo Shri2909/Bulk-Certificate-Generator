@@ -88,6 +88,14 @@ def key_reused() -> ApiError:
     )
 
 
+def violates_unique(exc: IntegrityError, column: str) -> bool:
+    """True if `exc` is SQLite's UNIQUE violation on exactly `column` ("table.column").
+
+    Exact, not a substring test: "jobs.id" is a prefix of "jobs.idempotency_key" (audit F-07).
+    """
+    return str(exc.orig) == f"UNIQUE constraint failed: {column}"
+
+
 def _job_for_key(conn: Connection, key: str, fingerprint: str) -> str | None:
     """Job id for a replay (same key, same body); raises 409 if the key belongs to another body."""
     row = conn.execute(
@@ -138,7 +146,7 @@ def create_job(
         return _create_job(engines, settings, clock, validated, request_json, idempotency_key, fingerprint)
     except IntegrityError as exc:
         # Backstop only: BEGIN IMMEDIATE serializes creators, so the re-check below sees every key first.
-        if idempotency_key is None or fingerprint is None or "jobs.idempotency_key" not in str(exc.orig):
+        if idempotency_key is None or fingerprint is None or not violates_unique(exc, "jobs.idempotency_key"):
             raise
         replay = find_replay(engines, idempotency_key, fingerprint)
         if replay is None:
@@ -206,7 +214,7 @@ def _insert_job(
                 )
             return job_id
         except IntegrityError as exc:
-            if "jobs.id" not in str(exc.orig):
+            if not violates_unique(exc, "jobs.id"):
                 raise
     raise RuntimeError(f"no unique job id after {MAX_ID_ATTEMPTS} attempts")
 
@@ -221,7 +229,7 @@ def _insert_items(conn: Connection, job_id: str, rows: tuple[ValidatedRow, ...])
                 conn.execute(items.insert(), values)
             return
         except IntegrityError as exc:
-            if "items.certificate_id" not in str(exc.orig):
+            if not violates_unique(exc, "items.certificate_id"):
                 raise
     raise RuntimeError(f"no unique certificate ids after {MAX_ID_ATTEMPTS} attempts")
 

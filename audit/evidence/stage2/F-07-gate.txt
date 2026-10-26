@@ -1,0 +1,15 @@
+== F-07 2026-10-26T08:49:24Z HEAD f8283e9 python Python 3.11.9
+-- pytest tests
+324 passed in 15.52s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+55 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 20 source files
+-- pytest audit/tests
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[20001]
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[100000]
+FAILED audit/tests/test_a1_red_contract.py::test_body_limit_admits_every_valid_request[settings_overrides0]
+FAILED audit/tests/test_a2_unit_property.py::test_progress_one_only_when_terminal
+4 failed, 220 passed in 33.59s

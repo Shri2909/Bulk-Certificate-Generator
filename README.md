@@ -135,9 +135,11 @@ row is invalid. Nothing is stored in those cases. Errors are ordered: request-le
 Validation rules in brief: names are NFC-normalized and spaces collapsed; control, format and non-space
 whitespace characters are rejected (`INVALID_CHARACTERS`); characters the font cannot draw, combining
 marks and right-to-left scripts are rejected (`UNSUPPORTED_CHARACTERS`); text that cannot fit its box is
-`DOES_NOT_FIT`. Emails must be valid ASCII addresses (`email-validator`, no deliverability check);
-a repeated email within one request (trimmed, case-insensitive) is `DUPLICATE_RECIPIENT` on the later row.
-Duplicates across jobs are allowed.
+`DOES_NOT_FIT`. Emails must be valid ASCII addresses of at most 254 characters (`email-validator`, no
+deliverability check; the length is checked first); a repeated email within one request (trimmed,
+case-insensitive) is `DUPLICATE_RECIPIENT` on the later row. Duplicates across jobs are allowed. A row
+lists at most 10 unknown fields (sorted); any further ones are counted in one extra `UNKNOWN_FIELD`
+error with `field: null`, so error lists never grow larger than the request.
 
 **Lost responses and safe retries (Idempotency-Key).** Send an `Idempotency-Key` header (1–255 printable
 ASCII characters, e.g. a UUID) to make the POST safe to repeat after a timeout:
@@ -390,7 +392,7 @@ Field codes (in `errors[].code`, and stored on items):
 | `INVALID_JSON` | body is not strict JSON (syntax, invalid UTF-8, duplicate keys, `NaN`/`Infinity`, depth > 8) |
 | `REQUIRED` | missing, `null` or blank |
 | `INVALID_TYPE` | wrong JSON type (e.g. a number for `name`, a recipient that is not an object) |
-| `UNKNOWN_FIELD` | a field the API does not accept |
+| `UNKNOWN_FIELD` | a field the API does not accept (per row: the first 10, then one summary error with `field: null`) |
 | `INVALID_VALUE` | any other shape error, including bad query parameters |
 | `INVALID_FORMAT` | `issued_on` is not a real `YYYY-MM-DD` date |
 | `TOO_LONG` | over the length limit |

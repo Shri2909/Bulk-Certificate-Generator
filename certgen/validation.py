@@ -7,6 +7,7 @@ silently changing it.
 
 from __future__ import annotations
 
+import heapq
 import json
 import math
 import re
@@ -30,6 +31,8 @@ MAX_CERTIFICATE_TEXT_LENGTH = 200
 MAX_EMAIL_LENGTH = 254  # RFC 5321 path limit; also what email-validator enforces, but only after parsing
 RTL_BIDI_CLASSES = frozenset({"R", "AL", "AN"})
 ROW_FIELDS = ("name", "email")
+MAX_UNKNOWN_FIELD_ERRORS = 10  # per row; further unknown keys are counted in one summary error
+MAX_QUOTED_KEY = 64  # characters of an unknown key repeated in its error message
 
 
 class JsonBodyError(ValueError):
@@ -242,11 +245,7 @@ def _validate_rows(raw_rows: list[dict[str, Any]], print_email: bool) -> tuple[V
         name, name_error = _check_name(raw)
         email, email_error = _check_email(raw, print_email)
         errors = [e for e in (name_error, email_error) if e is not None]
-        errors += [
-            FieldError(key, FieldCode.UNKNOWN_FIELD, f"Unknown field {key!r}.")
-            for key in sorted(raw)
-            if key not in ROW_FIELDS
-        ]
+        errors += _unknown_field_errors(raw)
         # Duplicates are judged only among otherwise valid rows, so a broken row never "uses up" an email.
         if not errors and email is not None:
             key = email.lower()
@@ -272,6 +271,28 @@ def _validate_rows(raw_rows: list[dict[str, Any]], print_email: bool) -> tuple[V
             )
         )
     return tuple(rows)
+
+
+def _unknown_field_errors(raw: dict[str, Any]) -> list[FieldError]:
+    """The first MAX_UNKNOWN_FIELD_ERRORS unknown keys (sorted), then one summary error for the rest.
+
+    Bounded so that a row with millions of keys cannot turn into a response, a stored error list and
+    a replay many times larger than the request (audit F-02).
+    """
+    unknown = [key for key in raw if key not in ROW_FIELDS]
+    errors = [
+        FieldError(key, FieldCode.UNKNOWN_FIELD, f"Unknown field {_quote(key)}.")
+        for key in heapq.nsmallest(MAX_UNKNOWN_FIELD_ERRORS, unknown)
+    ]
+    hidden = len(unknown) - len(errors)
+    if hidden:
+        errors.append(FieldError(None, FieldCode.UNKNOWN_FIELD, f"{hidden} more unknown fields not listed."))
+    return errors
+
+
+def _quote(key: str) -> str:
+    """repr() of a key for a message, shortened so a huge key is not copied into the message as well."""
+    return repr(key) if len(key) <= MAX_QUOTED_KEY else repr(key[:MAX_QUOTED_KEY]) + "..."
 
 
 def _check_name(raw: dict[str, Any]) -> tuple[str | None, FieldError | None]:

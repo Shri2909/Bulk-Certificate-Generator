@@ -212,9 +212,12 @@ def main() -> int:
     copy, out = Path(sys.argv[1]).resolve(), Path(sys.argv[2])
     if (copy / ".git").exists() and "scratchpad" not in str(copy):
         raise SystemExit("refusing to mutate a path outside the scratchpad")
-    py = sys.executable
+    # --with-audit: a mutant the project suite misses is re-run against audit/tests.
+    # --stage2: also run the STAGE2_MUTANTS, each of which undoes one remediation fix.
+    with_audit = "--with-audit" in sys.argv
+    mutants = MUTANTS + (STAGE2_MUTANTS if "--stage2" in sys.argv else [])
     rows = ["id\tfile\tdescription\tverdict\tseconds\tfirst_failure"]
-    for mid, rel, old, new, desc in MUTANTS:
+    for mid, rel, old, new, desc in mutants:
         path = copy / rel
         original = path.read_bytes()
         source = original.decode()
@@ -225,28 +228,9 @@ def main() -> int:
         path.write_text(source.replace(old, new), encoding="utf-8")
         started = time.monotonic()
         try:
-            proc = subprocess.run(
-                [
-                    py,
-                    "-m",
-                    "pytest",
-                    "tests",
-                    "-m",
-                    "not slow",
-                    "-x",
-                    "-q",
-                    "-p",
-                    "no:cacheprovider",
-                    "--timeout=60",
-                ],
-                cwd=copy,
-                capture_output=True,
-                text=True,
-                timeout=600,
-            )
-            failed = [line for line in proc.stdout.splitlines() if line.startswith("FAILED")]
-            verdict = "KILLED" if proc.returncode != 0 else "SURVIVED"
-            first = failed[0][7:] if failed else ""
+            verdict, first = _run_suite(copy, ["tests", "-m", "not slow"], "KILLED (tests)")
+            if verdict == "SURVIVED" and (with_audit or mid.startswith("S")):
+                verdict, first = _run_suite(copy, ["audit/tests"], "KILLED (audit)")
         finally:
             path.write_bytes(original)
         assert path.read_bytes() == original
@@ -254,6 +238,94 @@ def main() -> int:
         print(rows[-1], flush=True)
     out.write_text("\n".join(rows) + "\n", encoding="utf-8")
     return 0
+
+
+def _run_suite(copy: Path, args: list[str], killed: str) -> tuple[str, str]:
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", *args, "-x", "-q", "-p", "no:cacheprovider", "--timeout=200"],
+        cwd=copy,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    failed = [line for line in proc.stdout.splitlines() if line.startswith("FAILED")]
+    return ("SURVIVED", "") if proc.returncode == 0 else (killed, failed[0][7:] if failed else "")
+
+
+# Each undoes one Stage 2 fix; the regression tests must kill every one of them.
+STAGE2_MUTANTS: list[tuple[str, str, str, str, str]] = [
+    (
+        "S01",
+        "certgen/validation.py",
+        "    if len(email) > MAX_EMAIL_LENGTH:\n",
+        "    if False:\n",
+        "F-01 length pre-check removed",
+    ),
+    (
+        "S02",
+        "certgen/validation.py",
+        "MAX_UNKNOWN_FIELD_ERRORS = 10 ",
+        "MAX_UNKNOWN_FIELD_ERRORS = 10**9 ",
+        "F-02 cap removed",
+    ),
+    (
+        "S03",
+        "certgen/validation.py",
+        "    if _has_lone_surrogate(value):\n",
+        "    if False:\n",
+        "F-03 surrogate check removed",
+    ),
+    (
+        "S04",
+        "certgen/api.py",
+        "Query(ge=-1, le=SQLITE_MAX_INTEGER)",
+        "Query(ge=-1)",
+        "F-04 upper bound removed",
+    ),
+    ("S05", "certgen/fonts.py", " if cp <= BMP_MAX\n", "\n", "F-05 BMP filter removed"),
+    (
+        "S06",
+        "certgen/service.py",
+        'return str(exc.orig) == f"UNIQUE constraint failed: {column}"',
+        "return column in str(exc.orig)",
+        "F-07 substring match back",
+    ),
+    (
+        "S07",
+        "certgen/status.py",
+        "        progress = min(progress, MAX_UNFINISHED_PROGRESS)\n",
+        "        pass\n",
+        "F-08 progress cap removed",
+    ),
+    (
+        "S08",
+        "certgen/config.py",
+        "BODY_BYTES_PER_RECIPIENT = 4_500\n",
+        "BODY_BYTES_PER_RECIPIENT = 2_600\n",
+        "F-09 old budget",
+    ),
+    (
+        "S09",
+        "certgen/middleware.py",
+        "if host is None or normalize_host(_strip_port(host)) not in self.allowed_hosts:",
+        "if False:",
+        "F-10 host check off",
+    ),
+    (
+        "S10",
+        "certgen/middleware.py",
+        "admitted = self.in_flight < self.max_requests",
+        "admitted = True",
+        "F-11 request limit off",
+    ),
+    (
+        "S11",
+        "certgen/middleware.py",
+        "match = BRACKETED_HOST.fullmatch(value)",
+        "match = BRACKETED_HOST.match(value)",
+        "F-10 '[::1].evil' prefix bypass",
+    ),
+]
 
 
 if __name__ == "__main__":

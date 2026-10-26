@@ -1,0 +1,39 @@
+# Phase 7 re-validation (EXECUTED) 2026-10-26T13:45:19Z HEAD 8868a43, Python 3.11.9, worktree audit/remediation
+-- project suite run 1
+324 passed in 17.03s
+-- project suite run 2
+324 passed in 22.37s
+-- project suite run 3
+324 passed in 17.27s
+-- slow run 1
+5 passed, 319 deselected in 7.69s
+-- slow run 2
+5 passed, 319 deselected in 7.72s
+-- slow run 3
+5 passed, 319 deselected in 7.51s
+-- slow run 4
+5 passed, 319 deselected in 7.82s
+-- slow run 5
+5 passed, 319 deselected in 7.20s
+-- audit suite
+231 passed in 52.70s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+55 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 20 source files
+-- bandit -r certgen scripts
+      1 >> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path	 Location: scripts/benchmark.py:214:12
+      1 >> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path	 Location: scripts/benchmark.py:209:22
+      1 >> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.	 Location: scripts/benchmark.py:214:12
+      1 >> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.	 Location: scripts/benchmark.py:209:22
+      1 >> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.	 Location: scripts/benchmark.py:138:8
+      1 >> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.	 Location: scripts/benchmark.py:23:0
+		Low: 0
+		Medium: 0
+		High: 0
+-- pip-audit runtime
+No known vulnerabilities found
+-- pip-audit dev
+No known vulnerabilities found

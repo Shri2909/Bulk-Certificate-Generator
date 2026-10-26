@@ -123,3 +123,15 @@ def test_paired_surrogate_escape_is_still_valid_json(client: TestClient) -> None
     )
     codes = [e["code"] for e in post_raw(client, body.encode()).json()["errors"]]
     assert "INVALID_JSON" not in codes
+
+
+# --- F-04: the keyset bound is exact ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(("after", "status"), [("9223372036854775807", 200), ("9223372036854775808", 422)])
+def test_after_accepts_sqlite_max_and_rejects_one_more(client: TestClient, after: str, status: int) -> None:
+    job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
+    resp = client.get(f"{JOBS}/{job_id}/items", params={"after": after})
+    assert resp.status_code == status
+    if status == 200:
+        assert resp.json()["items"] == []

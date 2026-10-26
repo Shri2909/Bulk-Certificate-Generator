@@ -1,0 +1,19 @@
+== F-04 2026-10-26T08:23:15Z HEAD e6dd6b9 python Python 3.11.9
+-- pytest tests
+324 passed in 12.75s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+54 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 20 source files
+-- pytest audit/tests
+FAILED audit/tests/test_a1_red_contract.py::test_accepted_name_round_trips_through_pdf_text_layer
+FAILED audit/tests/test_a1_red_contract.py::test_key_violation_reaches_replay_backstop
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[20001]
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[100000]
+FAILED audit/tests/test_a1_red_contract.py::test_body_limit_admits_every_valid_request[settings_overrides0]
+FAILED audit/tests/test_a2_unit_property.py::test_progress_one_only_when_terminal
+FAILED audit/tests/test_a4_e2e_server.py::test_foreign_host_header_is_rejected
+FAILED audit/tests/test_a4_e2e_server.py::test_idle_connections_do_not_lock_out_clients
+8 failed, 177 passed in 36.11s

@@ -34,6 +34,7 @@ router = APIRouter()
 
 JOBS_PATH = "/v1/certificate-jobs"
 ItemStatus = Literal["rejected", "pending", "processing", "succeeded", "failed"]
+SQLITE_MAX_INTEGER = 2**63 - 1  # a larger bound parameter raises OverflowError in sqlite3 (audit F-04)
 
 
 def iso_ms(epoch_ms: int) -> str:
@@ -234,7 +235,7 @@ def list_items(
     request: Request,
     job_id: str,
     status: Annotated[ItemStatus | None, Query()] = None,
-    after: Annotated[int, Query(ge=-1)] = -1,
+    after: Annotated[int, Query(ge=-1, le=SQLITE_MAX_INTEGER)] = -1,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> ItemsPage:
     page = (

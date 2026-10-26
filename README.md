@@ -23,7 +23,9 @@ curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs \
 ```
 
 The response is `202 Accepted` with a `Location` header pointing at the job. Row 1 is reported as
-`INVALID_EMAIL`; rows 0 and 2 are generated. Interactive API docs: http://127.0.0.1:8000/docs.
+`INVALID_EMAIL`; rows 0 and 2 are generated. Interactive API docs: http://127.0.0.1:8000/docs (the
+page loads Swagger UI from `cdn.jsdelivr.net`, so it needs internet access; the schema itself is served
+locally at `/openapi.json`).
 
 ## Setup
 

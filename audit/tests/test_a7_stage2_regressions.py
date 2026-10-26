@@ -361,3 +361,16 @@ def test_non_bmp_characters_are_rejected_as_unsupported(client: TestClient, ch: 
         ),
     )
     assert [e["code"] for e in _row_errors(resp, 0)] == ["UNSUPPORTED_CHARACTERS"]
+
+
+# --- F-18: the README's statement about /docs matches what /docs serves ---------------------------
+
+
+def test_readme_cdn_note_matches_the_docs_page(client: TestClient) -> None:
+    from conftest import ROOT
+
+    html = client.get("/docs").text
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "cdn.jsdelivr.net" in html  # if this changes (e.g. self-hosted assets), update the README note
+    assert "cdn.jsdelivr.net" in readme and "/openapi.json" in readme
+    assert client.get("/openapi.json").status_code == 200

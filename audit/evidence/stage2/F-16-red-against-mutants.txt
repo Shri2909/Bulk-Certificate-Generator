@@ -1,0 +1,6 @@
+== mutant M24 applied (1 line changed)
+E   AssertionError: the body was read although Content-Length already exceeds the limit
+1 failed, 61 deselected in 0.08s
+== mutant M11 applied (1 line changed)
+E   AssertionError: assert b'%PDF-secret outside the data dir' is None
+1 failed, 61 deselected in 0.09s

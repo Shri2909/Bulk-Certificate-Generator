@@ -511,3 +511,54 @@ def test_uvicorn_import_string_resolves_the_app() -> None:
         "from uvicorn.importer import import_from_string as f; print(type(f('certgen.main:app')).__name__)"
     )
     assert done.returncode == 0 and done.stdout.strip() == "FastAPI"
+
+
+# --- F-16: tests that kill the Stage 1 surviving mutants M24 and M11 ------------------------------
+
+
+def test_declared_oversize_body_is_refused_without_reading_it() -> None:
+    """Kills M24: with only byte counting, the server would read up to the limit before refusing."""
+    import asyncio
+
+    from certgen.middleware import BodySizeLimitMiddleware
+
+    sent: list[dict[str, Any]] = []
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:  # pragma: no cover - must not be reached
+        raise AssertionError("oversized request reached the app")
+
+    async def receive() -> dict[str, Any]:
+        raise AssertionError("the body was read although Content-Length already exceeds the limit")
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/",
+        "headers": [(b"content-length", b"101")],
+        "query_string": b"",
+    }
+    asyncio.run(BodySizeLimitMiddleware(app, max_body_bytes=100)(scope, receive, send))
+    assert sent[0]["status"] == 413
+
+
+@pytest.mark.skipif(__import__("os").name != "posix", reason="POSIX symlinks")
+def test_symlinked_file_is_refused_even_without_o_nofollow(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kills M11: where the platform has no O_NOFOLLOW (e.g. Windows), the lstat check is the only defence."""
+    from certgen import storage
+
+    monkeypatch.setattr(storage, "O_NOFOLLOW", 0)
+    store = storage.Storage(tmp_path / "certificates")
+    (tmp_path / "certificates").mkdir()
+    job, cert = "a" * 32, "b" * 32
+    store.save_atomic(job, cert, b"%PDF-real")
+    secret = tmp_path / "secret.pdf"
+    secret.write_bytes(b"%PDF-secret outside the data dir")
+    path = store.path_for(job, cert)
+    path.unlink()
+    path.symlink_to(secret)
+    assert store.read(job, cert) is None

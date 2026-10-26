@@ -468,3 +468,46 @@ def test_fully_escaped_nfd_worst_case_request_is_accepted(client: TestClient, se
     resp = post_raw(client, body.encode())
     assert resp.status_code == 202, (resp.status_code, len(body), settings.max_body_bytes)
     assert resp.json()["errors"] == []
+
+
+# --- F-14: importing certgen.main does not read the environment -----------------------------------
+
+
+def _python(code: str, **env: str) -> Any:
+    import os
+    import subprocess
+    import sys
+
+    from conftest import ROOT
+
+    clean = {k: v for k, v in os.environ.items() if not k.startswith("CERTGEN_")}
+    return subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=ROOT,
+        env={**clean, "PYTHONPATH": str(ROOT), **env},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_import_with_invalid_environment_succeeds_and_is_silent() -> None:
+    done = _python("import certgen.main", CERTGEN_PORT="abc")
+    assert done.returncode == 0, done.stderr[-300:]
+    assert done.stderr == ""  # no settings parsed, so no 'PUBLIC_BASE_URL is not set' warning at import
+
+
+def test_app_attribute_still_reads_and_validates_the_environment() -> None:
+    bad = _python("import certgen.main as m; m.app", CERTGEN_PORT="abc")
+    assert bad.returncode != 0 and "CERTGEN_PORT" in bad.stderr
+    ok = _python(
+        "import certgen.main as m; print(m.app.state.settings.port, m.app is m.app)", CERTGEN_PORT="8123"
+    )
+    assert ok.returncode == 0 and ok.stdout.split() == ["8123", "True"]
+
+
+def test_uvicorn_import_string_resolves_the_app() -> None:
+    done = _python(
+        "from uvicorn.importer import import_from_string as f; print(type(f('certgen.main:app')).__name__)"
+    )
+    assert done.returncode == 0 and done.stdout.strip() == "FastAPI"

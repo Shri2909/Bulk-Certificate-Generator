@@ -6,6 +6,7 @@ import logging
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
@@ -92,7 +93,7 @@ def create_app(
 
 def serve() -> None:
     """`python -m certgen`: one command, embedded workers included (§15, §24.12)."""
-    settings: Settings = app.state.settings  # parsed once, at import, by the module-level app below
+    settings: Settings = get_app().state.settings  # the same app uvicorn loads as "certgen.main:app"
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     uvicorn.run(
         "certgen.main:app",
@@ -104,4 +105,19 @@ def serve() -> None:
     )
 
 
-app = create_app(Settings.from_env())
+_app: FastAPI | None = None
+
+
+def get_app() -> FastAPI:
+    """The process's app, built from the environment on first use rather than at import (audit F-14)."""
+    global _app
+    if _app is None:
+        _app = create_app(Settings.from_env())
+    return _app
+
+
+def __getattr__(name: str) -> Any:
+    # Keeps `uvicorn certgen.main:app` and `certgen.main.app` working without import-time settings.
+    if name == "app":
+        return get_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,0 +1,11 @@
+== F-14 2026-10-26T13:40:01Z HEAD 2185309 python Python 3.11.9
+-- pytest tests
+324 passed in 12.84s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+55 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 20 source files
+-- pytest audit/tests
+229 passed in 34.16s

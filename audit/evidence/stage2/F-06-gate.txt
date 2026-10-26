@@ -1,0 +1,19 @@
+== F-06 2026-10-26T08:46:34Z HEAD b8b3562 python Python 3.11.9
+-- pytest tests
+FAILED tests/test_runtime.py::test_standalone_worker_starts_on_empty_data_dir_and_stops_on_sigterm
+1 failed, 323 passed in 19.66s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+55 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 20 source files
+-- pytest audit/tests
+FAILED audit/tests/test_a1_red_contract.py::test_key_violation_reaches_replay_backstop
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[20001]
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[100000]
+FAILED audit/tests/test_a1_red_contract.py::test_body_limit_admits_every_valid_request[settings_overrides0]
+FAILED audit/tests/test_a2_unit_property.py::test_progress_one_only_when_terminal
+5 failed, 217 passed in 57.42s
+      1 1 failed
+      4 1 passed

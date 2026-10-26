@@ -10,7 +10,7 @@ packaging==26.3
 pathspec==1.1.1
 pluggy==1.6.0
 Pygments==2.21.0
-pypdf==6.20.0
+pypdf==6.21.2
 pytest==9.1.1
 pytest-timeout==2.4.0
 ruff==0.17.0

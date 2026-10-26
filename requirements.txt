@@ -9,7 +9,7 @@ fastapi==0.143.0
 h11==0.16.0
 idna==3.20
 opentelemetry-api==1.45.1
-pillow==12.3.0
+pillow==13.0.0
 pydantic==2.14.0
 pydantic_core==2.50.0
 reportlab==5.0.1

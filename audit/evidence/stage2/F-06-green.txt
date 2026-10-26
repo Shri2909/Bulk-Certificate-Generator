@@ -1,0 +1,8 @@
+## GREEN: pip-audit after the bump
+No known vulnerabilities found
+No known vulnerabilities found
+
+## Determinism across the bump (EXECUTED)
+pillow 12.3.0: sha256 2aa574f0c3aa9ef618b63982d645c5c6d8f6514f81f87c850aa08b057bc7046c (44466 bytes)
+pillow 13.0.0: sha256 2aa574f0c3aa9ef618b63982d645c5c6d8f6514f81f87c850aa08b057bc7046c (44466 bytes)
+pip check: No broken requirements found.

@@ -1,0 +1,5 @@
+## RED: pip-audit on the current pins
+      1 Found 37
+      1 Name Version
+     37 pillow 12.3.0
+Found 46 known vulnerabilities in 2 packages

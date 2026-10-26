@@ -506,11 +506,18 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
 - **Build status:** complete (milestones M1–M11). Last full test run (M11 gate, raw pytest summary):
   `324 passed in 12.11s` — transcript in [docs/evidence/gates/M11.txt](docs/evidence/gates/M11.txt); also
   verified from clean clones on Python 3.11.9 and 3.14.4 (3 runs each) with every README command run verbatim.
-- **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)), all auto-approved under the
-  pre-approved rules:
+- **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)). A-01 to A-03 were
+  auto-approved under the pre-approved build rules:
   - A-01: `certgen/__main__.py`, so `python -m certgen` works.
   - A-02: a test for the per-job email snapshot.
   - A-03: the D3/D4 error codes live in `errors.py`.
+
+  A-04 to A-12 come from the forensic audit ([audit/AUDIT_REPORT.md](audit/AUDIT_REPORT.md)) and were
+  approved for its remediation ([audit/REMEDIATION_REPORT.md](audit/REMEDIATION_REPORT.md)): email length
+  pre-check and bounded unknown-field errors (A-04), unpaired surrogates rejected (A-05), bounded `after`
+  (A-06), `Host` allowlist (A-07), in-app request limit (A-08), BMP-only text (A-09), dependency bumps
+  (A-10), progress never 1.0 early (A-11), body budget for decomposed input (A-12). The audit's own
+  tests run with `pytest audit/tests` (separately from `pytest`, which runs `tests/`).
 - **Interpretations** where the blueprint was silent or a library behaved differently than it assumed (no
   behavior added):
   - email-validator accepts internationalized domains even with SMTPUTF8 off, so emails are checked to be

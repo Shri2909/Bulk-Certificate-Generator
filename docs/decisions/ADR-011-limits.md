@@ -2,6 +2,8 @@
 
 Status: Accepted · Requirements: R11 · Evidence: RESEARCH §4 (AlgoMaster rate limiting: "limit the resource that can actually run out"), §5 (OWASP size limits)
 
+> **Superseded in part (Stage 2 audit remediation, 2026-10-26):** the per-row budget is 4,500 B (≈ 45 MB at 10,000 rows), because names are counted after NFC normalization and may arrive decomposed (up to 4 code points per character); see `docs/BLUEPRINT_AMENDMENTS.md` A-12. Where this ADR differs from the blueprint and its amendments, those are authoritative.
+
 ## Options
 1. **No limits** (simplest). One 1M-row POST exhausts memory and fills the disk.
 2. **Static limits on the scarce resources** (chosen): rows per job, field lengths, body size.

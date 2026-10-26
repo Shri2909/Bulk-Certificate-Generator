@@ -393,3 +393,78 @@ def test_violates_unique_matches_the_exact_column_only() -> None:
     assert not violates_unique(err("UNIQUE constraint failed: jobs.idempotency_key"), "jobs.id")
     assert violates_unique(err("UNIQUE constraint failed: jobs.idempotency_key"), "jobs.idempotency_key")
     assert not violates_unique(err("UNIQUE constraint failed: items.job_id, items.row_index"), "items.job_id")
+
+
+# --- F-09: the per-row body budget covers the true worst legal row --------------------------------
+
+
+def _escaped(s: str) -> str:
+    return "".join(f"\\u{ord(c):04x}" for c in s)
+
+
+def _worst_row(i: int) -> str:
+    import unicodedata
+
+    from certgen.fonts import SUPPORTED_CHARS
+    from certgen.layout import NAME, fit_text
+    from certgen.validation import _charset_error, norm
+
+    widest_decomposition = sorted(
+        (
+            c
+            for c in SUPPORTED_CHARS
+            if c.islower() and _charset_error("n", c) is None and len(unicodedata.normalize("NFD", c)) == 4
+        ),
+        key=lambda c: NAME.line_width(c, 1),
+    )[:10]
+    name = " ".join("".join(widest_decomposition[(w + k) % 10] for k in range(9)) for w in range(12))[
+        :120
+    ].strip()
+    assert fit_text(norm(name), NAME) is not None
+    email = f"w{i:05d}" + "a" * 58 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57]) + ".org"
+    assert len(email) == 254
+    return (
+        '{"'
+        + _escaped("name")
+        + '":"'
+        + _escaped(unicodedata.normalize("NFD", name))
+        + '","'
+        + _escaped("email")
+        + '":"'
+        + _escaped(email)
+        + '"}'
+    )
+
+
+def test_budget_covers_the_derived_worst_row() -> None:
+    import unicodedata
+
+    from certgen.config import BODY_BYTES_PER_RECIPIENT
+    from certgen.fonts import SUPPORTED_CHARS
+    from certgen.validation import _charset_error
+
+    decomposition = max(
+        len(unicodedata.normalize("NFD", c)) for c in SUPPORTED_CHARS if _charset_error("n", c) is None
+    )
+    worst = (
+        120 * decomposition * 6 + 254 * 6 + len(_escaped("name") + _escaped("email")) + len('{"":"","":""},')
+    )
+    assert worst <= BODY_BYTES_PER_RECIPIENT, (worst, BODY_BYTES_PER_RECIPIENT)
+    assert len(_worst_row(0)) + 1 <= BODY_BYTES_PER_RECIPIENT
+
+
+@pytest.mark.parametrize("settings_overrides", [{"max_recipients": 1000}])
+def test_fully_escaped_nfd_worst_case_request_is_accepted(client: TestClient, settings: Any) -> None:
+    body = (
+        '{"certificate":'
+        + json.dumps(payload()["certificate"])
+        + ',"recipients":['
+        + ",".join(_worst_row(i) for i in range(1000))
+        + "]}"
+    )
+    # A fitting name needs spaces (1 code point each), so a real worst row is ~4,250 B: far above the old
+    # 2,600 B budget, just under the new 4,500 B one.
+    assert len(body) > 1000 * 4_000
+    resp = post_raw(client, body.encode())
+    assert resp.status_code == 202, (resp.status_code, len(body), settings.max_body_bytes)
+    assert resp.json()["errors"] == []

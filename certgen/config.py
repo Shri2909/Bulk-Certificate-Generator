@@ -15,9 +15,11 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from urllib.parse import urlsplit
 
-# Worst legal row (120 escaped chars of name + 254-char email + JSON structure) is ~2,244 bytes;
-# 2,600 per row plus 64 KiB of envelope means a request within field limits is never 413'd (§12).
-BODY_BYTES_PER_RECIPIENT = 2_600
+# Worst legal row: a 120-character name sent decomposed (NFD; up to 4 code points per accepted
+# character) with every code point \uXXXX-escaped = 2,880 B, a 254-character email fully escaped =
+# 1,524 B, keys and punctuation escaped = 71 B: 4,475 B (amendment A-12, audit F-09). 4,500 per row
+# plus 64 KiB of envelope means a request within field limits is never 413'd (§12).
+BODY_BYTES_PER_RECIPIENT = 4_500
 BODY_BYTES_ENVELOPE = 65_536
 ARCHIVE_CONCURRENCY = 2  # archive builds per process (§6.7); fixed, not an env var
 # Requests in progress per process (§24.12, amended A-08): counted in the app, not as uvicorn connections.

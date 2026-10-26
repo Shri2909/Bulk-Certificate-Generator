@@ -106,8 +106,9 @@ Windows.
 - Each recipient has `name` (≤ 120 characters, must fit) and `email`. Both are printed on the certificate
   (set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to leave the email off; the choice is stored per job).
 - Up to 10,000 recipients per request (`CERTGEN_MAX_RECIPIENTS`). The body limit is derived from it
-  (2,600 bytes per recipient + 64 KiB), sized so that normally encoded JSON within the field limits, even
-  with every character `\uXXXX`-escaped, fits. Field limits apply after whitespace normalization, so a
+  (4,500 bytes per recipient + 64 KiB, about 45 MB at the default), sized so that any JSON within the
+  field limits fits, even sent decomposed (NFD, up to 4 code points per character) with every code point
+  `\uXXXX`-escaped. Field limits apply after whitespace normalization, so a
   body padded with thousands of spaces can still be `413`.
 
 **Partial acceptance.** Invalid rows do not reject the request: valid rows become `pending` items,

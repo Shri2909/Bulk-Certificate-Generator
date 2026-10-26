@@ -30,10 +30,10 @@ def test_defaults_match_blueprint() -> None:
 @pytest.mark.req("R11")
 def test_derived_values() -> None:
     s = Settings.from_env({})
-    assert s.max_body_bytes == 26_065_536
+    assert s.max_body_bytes == 45_065_536  # 10,000 x 4,500 + 64 KiB (amendment A-12, audit F-09)
     assert s.lease_ms == 30_000
     assert s.retry_delay_ms == 2_000
-    assert Settings.from_env({"CERTGEN_MAX_RECIPIENTS": "100"}).max_body_bytes == 100 * 2_600 + 65_536
+    assert Settings.from_env({"CERTGEN_MAX_RECIPIENTS": "100"}).max_body_bytes == 100 * 4_500 + 65_536
 
 
 @pytest.mark.req("R11")

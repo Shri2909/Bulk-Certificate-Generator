@@ -245,7 +245,10 @@ def attacks_real_server(scratch: Path) -> None:
                 + b"\r\n\r\n"
                 + body
             )
-            job = json.loads(sk.recv(65536).split(b"\r\n\r\n", 1)[1])["id"]
+            raw = b""
+            while chunk := sk.recv(65536):  # Connection: close -> read until the server closes
+                raw += chunk
+            job = json.loads(raw.split(b"\r\n\r\n", 1)[1])["id"]
         time.sleep(3)  # embedded workers finish 20 certificates
         readers = []
         for _ in range(64):

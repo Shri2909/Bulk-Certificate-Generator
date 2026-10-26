@@ -1,0 +1,24 @@
+# Phase 8 attacks (EXECUTED) 2026-10-26T14:06:18Z at freeze 72bc2f3 (product code unchanged since the freeze tag; only audit/tools edited)
+[F-14] 'from certgen.main import app' -> FastAPI
+[F-01 bypass] 45 MB name of 'a ' pairs -> 202, 0.98 s, response 630 B
+[F-01 bypass] 45 MB title of 'a ' pairs -> 422, 0.45 s, response 259 B
+[F-01 bypass] 254-char email with 127 labels -> 202, 12.3 ms
+[F-01 bypass] quoted local part -> 202, 2.5 ms
+[F-02 bypass / storage] 45 MB body, one 44 MB key -> 202, response 45.1 MB, 0.8 s, RSS 768->854 MB; persisted request_json 90.1 MB + input_json 90.1 MB + errors 45.1 MB
+[F-03 bypass] percent-encoded surrogate in a query parameter -> 422
+[F-03 bypass] percent-encoded surrogate in a path id -> 404
+[F-10 bypass] Host '127.0.0.1:' -> 400
+[F-10 bypass] Host '127.1' -> 400
+[F-10 bypass] Host 'localhost:8000:80' -> 400
+[F-10 bypass] Host '[::ffff:127.0.0.1]' -> 400
+[F-10 bypass] Host 'LOCALHOST.' -> 400
+[F-10 bypass] Host 'localhost%00' -> 400
+[F-10 bypass] Host 'xn--localhost' -> 400
+[F-05 bypass] BMP characters decomposing to non-BMP code points: 7
+[F-09 consequence] 10,000 maximal valid rows (9.5 MB, ascii-escaped) -> 202 in 7.2 s, RSS 854->854 MB
+[F-10 bypass] two Host headers (foreign first) -> HTTP/1.1 400 Bad Request
+[F-10 bypass] two Host headers (loopback first) -> HTTP/1.1 400 Bad Request
+[F-10 bypass] absolute-form target naming another host, Host loopback -> HTTP/1.1 404 Not Found
+[F-11 residual] 64 stalled uploads -> /healthz 'HTTP/1.1 503 Service Unavailable'; after those clients disconnect -> 'HTTP/1.1 200 OK'
+[F-11 residual] 64 archive downloads that never read -> /healthz 'HTTP/1.1 200 OK'
+[exit 0]

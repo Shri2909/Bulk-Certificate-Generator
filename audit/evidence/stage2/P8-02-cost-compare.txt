@@ -1,0 +1,5 @@
+# compare_cost (EXECUTED) 2026-10-26T14:05:15Z: baseline 261108d vs freeze 72bc2f3, fresh DB per case
+[baseline] storage: body 26.1 MB -> 202; persisted request_json 26.1 MB + input_json 26.1 MB + errors 52.1 MB = 4.00x body; DB files 104 MB
+[baseline] cpu: 10,000 maximal valid rows (9.5 MB) -> 202 in 7.08 s
+[remediated] storage: body 45.1 MB -> 202; persisted request_json 45.1 MB + input_json 45.1 MB + errors 45.1 MB = 3.00x body; DB files 135 MB
+[remediated] cpu: 10,000 maximal valid rows (9.5 MB) -> 202 in 7.64 s

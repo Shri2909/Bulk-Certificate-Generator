@@ -102,7 +102,7 @@ def test_archive_marks_a_damaged_file_and_leaves_it_out(client: Any, app: Any, d
     import io
     import zipfile
 
-    cert, path = _one_certificate(client, app, drain)
+    _cert, path = _one_certificate(client, app, drain)
     path.write_bytes(path.read_bytes()[:100])
     job_id = path.parent.name
     archive = zipfile.ZipFile(io.BytesIO(client.get(f"/v1/certificate-jobs/{job_id}/archive").content))

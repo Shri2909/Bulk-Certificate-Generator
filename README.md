@@ -142,7 +142,9 @@ marks and right-to-left scripts are rejected (`UNSUPPORTED_CHARACTERS`); text th
 deliverability check; the length is checked first); a repeated email within one request (trimmed,
 case-insensitive) is `DUPLICATE_RECIPIENT` on the later row. Duplicates across jobs are allowed. A row
 lists at most 10 unknown fields (sorted); any further ones are counted in one extra `UNKNOWN_FIELD`
-error with `field: null`, so error lists never grow larger than the request.
+error with `field: null`, so a row reports at most 13 errors. A request's error list is therefore
+bounded by 13 × `CERTGEN_MAX_RECIPIENTS` (about 11 MB of JSON at the default, measured), although a body
+of many tiny invalid rows can still produce a response several times its own size.
 
 **Lost responses and safe retries (Idempotency-Key).** Send an `Idempotency-Key` header (1–255 printable
 ASCII characters, e.g. a UUID) to make the POST safe to repeat after a timeout:

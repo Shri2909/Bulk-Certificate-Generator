@@ -367,18 +367,20 @@ class WorkerPool:
 def main() -> None:
     settings = Settings.from_env()
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    check_sqlite_version()
-    prepare_data_dir(settings.data_dir, settings.certificates_dir)
-    engines = create_engines(settings.db_path)
-    create_schema(engines)
     stop = threading.Event()
 
     def request_stop(signum: int, _frame: FrameType | None) -> None:
         log.info("worker_stopping signal=%s", signum)
         stop.set()
 
+    # Before any database work: a SIGTERM during startup must stop the loop, not kill the process
+    # with the default action (audit N-01).
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
+    check_sqlite_version()
+    prepare_data_dir(settings.data_dir, settings.certificates_dir)
+    engines = create_engines(settings.db_path)
+    create_schema(engines)
     renderer = with_slow_render(render_certificate, settings.test_slow_render_ms)
     worker = Worker(engines, Storage(settings.certificates_dir), settings, system_clock, renderer)
     log.info("worker_started worker_id=%s", worker.worker_id)

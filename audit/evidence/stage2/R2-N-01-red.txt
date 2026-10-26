@@ -1,0 +1,2 @@
+E   assert <Handlers.SIG_DFL: 0> not in (<Handlers.SIG_DFL: 0>, <Handlers.SIG_IGN: 1>, None)
+1 failed in 0.08s

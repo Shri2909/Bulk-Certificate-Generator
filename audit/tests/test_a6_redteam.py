@@ -151,9 +151,11 @@ def test_no_secrets_committed() -> None:
     files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split()
     patterns = ("-----BEGIN", "AKIA", "ghp_", "xoxb-", "sk-ant-", "password=", "api_key=")
     hits = []
+    this_file = Path(__file__).resolve()
     for f in files:
         p = Path(ROOT, f)
-        if p.suffix in (".ttf", ".pdf", ".png") or not p.is_file():
+        # This file holds the pattern list itself, so it would always match; every other file is scanned.
+        if p.suffix in (".ttf", ".pdf", ".png") or not p.is_file() or p.resolve() == this_file:
             continue
         content = p.read_text(errors="ignore")
         hits += [f"{f}:{pat}" for pat in patterns if pat in content]

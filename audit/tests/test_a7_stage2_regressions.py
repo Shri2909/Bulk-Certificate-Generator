@@ -313,3 +313,51 @@ def test_slot_is_released_when_the_app_raises() -> None:
         with pytest.raises(RuntimeError):
             asyncio.run(limited({"type": "http", "headers": []}, None, None))  # type: ignore[arg-type]
     assert limited.in_flight == 0
+
+
+# --- F-05: every accepted character has a well-formed text-layer mapping --------------------------
+
+
+def test_every_allowed_character_is_bmp_and_maps_back_in_the_pdf_text_layer() -> None:
+    import io
+    import re
+
+    from pypdf import PdfReader
+
+    from certgen.fonts import SUPPORTED_CHARS
+    from certgen.rendering import CertificateData, render_certificate
+    from certgen.validation import _charset_error
+
+    allowed = sorted(c for c in SUPPORTED_CHARS if c != " " and _charset_error("n", c) is None)
+    assert allowed and max(ord(c) for c in allowed) <= 0xFFFF
+    bad: list[str] = []
+    missing: list[str] = []
+    for start in range(0, len(allowed), 12):
+        chunk = "".join(allowed[start : start + 12])
+        pdf = render_certificate(CertificateData("a" * 32, "b" * 32, chunk, None, "T", "I", "2026-10-01"))
+        mapped: set[str] = set()
+        for font in PdfReader(io.BytesIO(pdf)).pages[0]["/Resources"]["/Font"].values():
+            cmap = font.get_object().get("/ToUnicode")
+            if cmap is None:
+                continue
+            data = cmap.get_object().get_data()
+            for block in re.findall(rb"beginbfchar(.*?)endbfchar", data, re.S):  # the code -> text mappings
+                for src, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", block):
+                    if len(dst) % 4:
+                        bad.append(f"{src!r}->{dst!r}")
+                    else:
+                        mapped.add(bytes.fromhex(dst.decode()).decode("utf-16-be"))
+        missing += [f"U+{ord(c):04X}" for c in chunk if c not in mapped]
+    assert bad == []
+    assert missing == []  # every drawn name character is recoverable from the text layer
+
+
+@pytest.mark.parametrize("ch", ["\U0001f63c", "\U0001d356", "\U0001f0d6", "\U00010300"])
+def test_non_bmp_characters_are_rejected_as_unsupported(client: TestClient, ch: str) -> None:
+    resp = client.post(
+        JOBS,
+        json=payload(
+            [{"name": f"Zoe {ch}", "email": "z@example.com"}, {"name": "B", "email": "b@example.com"}]
+        ),
+    )
+    assert [e["code"] for e in _row_errors(resp, 0)] == ["UNSUPPORTED_CHARACTERS"]

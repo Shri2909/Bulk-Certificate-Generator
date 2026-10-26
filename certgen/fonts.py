@@ -17,9 +17,12 @@ pdfmetrics.registerFont(_regular)
 pdfmetrics.registerFont(_bold)
 
 # A character is allowed only if both weights have a glyph for it; otherwise ReportLab silently
-# draws an empty box, which would be a wrong certificate rather than an error.
+# draws an empty box, which would be a wrong certificate rather than an error. Only the Basic
+# Multilingual Plane: for code points above U+FFFF ReportLab writes an invalid ToUnicode entry
+# (e.g. "<1F63C>"), so the PDF's text layer would carry a different character (audit F-05).
+BMP_MAX = 0xFFFF
 SUPPORTED_CHARS: frozenset[str] = frozenset(
-    chr(cp) for cp in set(_regular.face.charToGlyph) & set(_bold.face.charToGlyph)
+    chr(cp) for cp in set(_regular.face.charToGlyph) & set(_bold.face.charToGlyph) if cp <= BMP_MAX
 )
 
 # Emails are ASCII-only (§9), so they need no charset check as long as this holds.

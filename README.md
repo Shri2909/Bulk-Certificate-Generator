@@ -322,12 +322,16 @@ like a crash, see [Limitations](#limitations)); recovery when no worker runs at 
 
 ## Supported names
 
-Names, titles and issuers may use any character that both vendored DejaVu Sans fonts can draw: Latin
-(including accented and Vietnamese letters), Greek and Cyrillic, plus common punctuation such as
-apostrophes and hyphens (`Seán O'Connor-Smith`, `Ελένη`, `Дмитрий`). Rejected, with a code instead of a
-wrong certificate:
+Names, titles and issuers may use any character of the Unicode Basic Multilingual Plane (U+0000–U+FFFF)
+that both vendored DejaVu Sans fonts can draw: Latin (including accented and Vietnamese letters), Greek
+and Cyrillic, plus common punctuation such as apostrophes and hyphens (`Seán O'Connor-Smith`, `Ελένη`,
+`Дмитрий`). The fonts also cover Armenian, Georgian and a range of symbols, which are accepted too.
+Rejected, with a code instead of a wrong certificate:
 
 - CJK and other scripts the font lacks → `UNSUPPORTED_CHARACTERS` (the message names the first character);
+- characters above U+FFFF (emoji, mathematical alphanumerics, playing cards …) → `UNSUPPORTED_CHARACTERS`,
+  because ReportLab writes an invalid text mapping for them and the PDF's copyable text would show a
+  different character;
 - right-to-left scripts (Hebrew, Arabic) and leftover combining marks → `UNSUPPORTED_CHARACTERS`, because
   ReportLab cannot shape them and would print them wrongly;
 - tabs, zero-width and bidi control characters, non-breaking and other non-ASCII spaces → `INVALID_CHARACTERS`.
@@ -460,7 +464,8 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 - **SQLite is a single writer.** Fine for one machine: every write is a short single-row transaction. Larger scale would
   move to PostgreSQL with `FOR UPDATE SKIP LOCKED` (see BLUEPRINT §22).
 - **FIFO claiming:** a very large job delays smaller jobs submitted after it.
-- **Scripts:** only Latin, Greek and Cyrillic text (see [Supported names](#supported-names)).
+- **Scripts:** Latin, Greek, Cyrillic and the other left-to-right BMP characters the font covers; no CJK,
+  right-to-left scripts or characters above U+FFFF (see [Supported names](#supported-names)).
 - **Embedded threads share the GIL** with request handling; under load run `CERTGEN_EMBEDDED_WORKER=false`
   plus worker processes.
 - **No worker, no recovery:** with zero workers running, an expired item stays `processing` until one starts.

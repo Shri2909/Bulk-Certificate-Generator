@@ -71,6 +71,12 @@ def count_active_items(conn: Connection) -> int:
     return int(conn.execute(text(COUNT_ACTIVE_SQL)).scalar_one())
 
 
+def queue_is_full(engines: Engines, settings: Settings) -> bool:
+    """No job can be admitted (each needs >= 1 valid row): checked before spending CPU on validation."""
+    with engines.read.begin() as conn:
+        return count_active_items(conn) >= settings.max_active_items
+
+
 def check_free_disk(settings: Settings) -> None:
     """Refuse new work when the data dir's disk is nearly full (audit P8-N1); 0 MB disables the check."""
     minimum = settings.min_free_disk_mb * 1024 * 1024

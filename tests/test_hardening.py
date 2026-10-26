@@ -219,3 +219,107 @@ def test_email_validator_never_sees_an_email_longer_than_254(monkeypatch: pytest
     assert calls == []
     validation._check_email({"email": "zoe@example.com"}, print_email=True)
     assert calls == [15]
+
+
+# --- P8-N2: expensive submissions are bounded ------------------------------------------------------
+
+
+@pytest.mark.req("R11")
+def test_at_most_two_submissions_are_processed_at_once(
+    client: Any, app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+
+    from conftest import JOBS, job_payload
+
+    from certgen import api
+
+    entered, release = threading.Semaphore(0), threading.Event()
+    real = api.validate_request
+
+    def held(*args: Any, **kwargs: Any) -> Any:
+        entered.release()
+        assert release.wait(20)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "validate_request", held)
+    statuses: list[int] = []
+    workers = [
+        threading.Thread(
+            target=lambda path=path: statuses.append(client.post(path, json=job_payload(n=1)).status_code)
+        )
+        for path in (JOBS, JOBS + "?dry_run=true")
+    ]
+    for t in workers:
+        t.start()
+    assert entered.acquire(timeout=10) and entered.acquire(timeout=10)  # two submissions are being validated
+    third = client.post(JOBS, json=job_payload(n=1))
+    assert third.status_code == 503 and third.json()["code"] == "SERVER_BUSY"
+    assert client.get("/healthz").status_code == 200  # other routes are not affected
+    release.set()
+    for t in workers:
+        t.join(20)
+    assert sorted(statuses) == [200, 202]
+    assert client.post(JOBS, json=job_payload(n=1)).status_code == 202  # slots are free again
+
+
+@pytest.mark.req("R11")
+def test_body_that_does_not_arrive_in_time_is_408() -> None:
+    import asyncio
+
+    from certgen.middleware import BodySizeLimitMiddleware
+
+    sent: list[dict[str, Any]] = []
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:  # pragma: no cover - must not be reached
+        raise AssertionError("an incomplete body reached the app")
+
+    async def receive() -> dict[str, Any]:
+        await asyncio.sleep(3600)  # the client never sends the rest
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/",
+        "headers": [(b"content-length", b"10")],
+        "query_string": b"",
+    }
+    middleware = BodySizeLimitMiddleware(app, max_body_bytes=100, body_timeout_seconds=0.2)
+    asyncio.run(asyncio.wait_for(middleware(scope, receive, send), timeout=5))
+    assert sent[0]["status"] == 408
+    assert b"REQUEST_TIMEOUT" in b"".join(m.get("body", b"") for m in sent)
+
+
+@pytest.mark.req("R11")
+def test_server_uses_a_30_second_body_deadline() -> None:
+    from certgen import main
+    from certgen.middleware import BodySizeLimitMiddleware
+
+    options = [m.kwargs for m in main.app.user_middleware if m.cls is BodySizeLimitMiddleware]
+    assert options and options[0]["body_timeout_seconds"] == 30
+
+
+@pytest.mark.req("R11")
+@pytest.mark.parametrize("settings_overrides", [{"max_recipients": 3, "max_active_items": 3}])
+def test_full_queue_is_refused_before_validation(client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    from conftest import JOBS, job_payload
+
+    from certgen import api
+
+    assert client.post(JOBS, json=job_payload(n=3)).status_code == 202  # the queue is now full
+    calls: list[int] = []
+    real = api.validate_request
+
+    def spy(*args: Any, **kwargs: Any) -> Any:
+        calls.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(api, "validate_request", spy)
+    resp = client.post(JOBS, json=job_payload(n=1))
+    assert resp.status_code == 503 and resp.json()["code"] == "CAPACITY_EXCEEDED"
+    assert calls == []  # refused without spending CPU on validation
+    assert client.post(JOBS + "?dry_run=true", json=job_payload(n=1)).status_code == 200

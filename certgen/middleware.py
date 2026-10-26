@@ -6,6 +6,7 @@ SQLite waits never stall the event loop.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import threading
 from collections.abc import AsyncIterator, Callable
@@ -130,28 +131,37 @@ class BodySizeLimitMiddleware:
     """Reject bodies over `max_body_bytes` with 413 before anything parses them (§7.1 step 1).
 
     Content-Length is checked first; chunked bodies are counted while buffering, so a client cannot
-    bypass the limit by omitting the header. The buffered body is then replayed to the app.
+    bypass the limit by omitting the header. The whole body must arrive within `body_timeout_seconds`,
+    else 408: a client trickling its upload cannot hold its request slot indefinitely (audit P8-N2).
+    The buffered body is then replayed to the app.
     """
 
-    def __init__(self, app: ASGIApp, max_body_bytes: int) -> None:
+    def __init__(self, app: ASGIApp, max_body_bytes: int, body_timeout_seconds: float) -> None:
         self.app = app
         self.max_body_bytes = max_body_bytes
+        self.body_timeout_seconds = body_timeout_seconds
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         if self._declared_length(scope) > self.max_body_bytes:
-            await self._reject(scope, receive, send)
+            await self._reject(scope, receive, send, ProblemCode.PAYLOAD_TOO_LARGE)
             return
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.body_timeout_seconds
         body = bytearray()
         while True:
-            message = await receive()
+            try:
+                message = await asyncio.wait_for(receive(), timeout=max(deadline - loop.time(), 0))
+            except TimeoutError:
+                await self._reject(scope, receive, send, ProblemCode.REQUEST_TIMEOUT)
+                return
             if message["type"] == "http.disconnect":
                 return
             body += message.get("body", b"")
             if len(body) > self.max_body_bytes:
-                await self._reject(scope, receive, send)
+                await self._reject(scope, receive, send, ProblemCode.PAYLOAD_TOO_LARGE)
                 return
             if not message.get("more_body", False):
                 break
@@ -178,6 +188,50 @@ class BodySizeLimitMiddleware:
         return 0
 
     @staticmethod
-    async def _reject(scope: Scope, receive: Receive, send: Send) -> None:
-        response = problem_response(ProblemCode.PAYLOAD_TOO_LARGE, "The request body is too large.")
-        await response(scope, receive, send)
+    async def _reject(scope: Scope, receive: Receive, send: Send, code: ProblemCode) -> None:
+        detail = {
+            ProblemCode.PAYLOAD_TOO_LARGE: "The request body is too large.",
+            ProblemCode.REQUEST_TIMEOUT: "The request body did not arrive in time.",
+        }[code]
+        await problem_response(code, detail)(scope, receive, send)
+
+
+class SubmissionLimitMiddleware:
+    """At most `max_submissions` job submissions (POST /v1/certificate-jobs, dry runs included) at once.
+
+    A submission is the expensive request: its body is buffered, parsed and validated (seconds of CPU
+    and up to ~1 GB of memory at the body limit). Excess ones get 503 SERVER_BUSY before their body is
+    read, so polling and downloads stay responsive (audit P8-N2).
+    """
+
+    def __init__(self, app: ASGIApp, path: str, max_submissions: int) -> None:
+        self.app = app
+        self.path = path
+        self.max_submissions = max_submissions
+        self.in_progress = 0
+        self._lock = threading.Lock()
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("method") != "POST" or _route_path(scope) != self.path:
+            await self.app(scope, receive, send)
+            return
+        with self._lock:
+            admitted = self.in_progress < self.max_submissions
+            if admitted:
+                self.in_progress += 1
+        if not admitted:
+            detail = "Too many job submissions are being processed; retry shortly."
+            await problem_response(ProblemCode.SERVER_BUSY, detail)(scope, receive, send)
+            return
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            with self._lock:
+                self.in_progress -= 1
+
+
+def _route_path(scope: Scope) -> str:
+    """The path the app routes on: without the mount prefix when the app is mounted (e.g. under /api)."""
+    path: str = scope.get("path", "")
+    root: str = scope.get("root_path", "")
+    return path[len(root) :] if root and path.startswith(root) else path

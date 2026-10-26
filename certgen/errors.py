@@ -41,6 +41,7 @@ class ProblemCode(StrEnum):
     CAPACITY_EXCEEDED = "CAPACITY_EXCEEDED"
     SERVER_BUSY = "SERVER_BUSY"
     STORAGE_FULL = "STORAGE_FULL"
+    REQUEST_TIMEOUT = "REQUEST_TIMEOUT"
 
 
 # HTTP status and short title per code.
@@ -62,6 +63,7 @@ PROBLEMS: dict[ProblemCode, tuple[int, str]] = {
     ProblemCode.CAPACITY_EXCEEDED: (503, "Capacity exceeded"),
     ProblemCode.SERVER_BUSY: (503, "Server busy"),
     ProblemCode.STORAGE_FULL: (503, "Storage full"),
+    ProblemCode.REQUEST_TIMEOUT: (408, "Request timeout"),
 }
 
 

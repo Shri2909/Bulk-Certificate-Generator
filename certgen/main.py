@@ -15,9 +15,9 @@ from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from certgen import __version__
-from certgen.api import router
+from certgen.api import JOBS_PATH, router
 from certgen.clock import Clock, system_clock
-from certgen.config import ARCHIVE_CONCURRENCY, MAX_CONCURRENT_REQUESTS, Settings
+from certgen.config import ARCHIVE_CONCURRENCY, BODY_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS, Settings
 from certgen.db import check_sqlite_version, create_engines, create_schema
 from certgen.errors import (
     ApiError,
@@ -32,6 +32,7 @@ from certgen.middleware import (
     ConcurrencyLimitMiddleware,
     HostAllowlistMiddleware,
     NoStoreMiddleware,
+    SubmissionLimitMiddleware,
     async_lifespan,
 )
 from certgen.rendering import render_certificate
@@ -76,7 +77,15 @@ def create_app(
     app.state.clock = clock
     app.state.renderer = renderer
     app.state.archive_slots = threading.BoundedSemaphore(ARCHIVE_CONCURRENCY)
-    app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_bytes)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_body_bytes=settings.max_body_bytes,
+        body_timeout_seconds=BODY_TIMEOUT_SECONDS,
+    )
+    # Outside the body buffer: an excess submission is refused before its body is read.
+    app.add_middleware(
+        SubmissionLimitMiddleware, path=JOBS_PATH, max_submissions=settings.max_concurrent_submissions
+    )
     # Outside the body buffer, so a request still uploading holds a slot: bounded buffered memory.
     app.add_middleware(ConcurrencyLimitMiddleware, max_requests=MAX_CONCURRENT_REQUESTS)
     # Host check before any body is read: a rebinding page cannot even get its upload buffered.

@@ -24,6 +24,8 @@ BODY_BYTES_ENVELOPE = 65_536
 ARCHIVE_CONCURRENCY = 2  # archive builds per process (§6.7); fixed, not an env var
 # Requests in progress per process (§24.12, amended A-08): counted in the app, not as uvicorn connections.
 MAX_CONCURRENT_REQUESTS = 64
+# A request body must arrive completely within this time, else 408 (audit P8-N2).
+BODY_TIMEOUT_SECONDS = 30
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 MAX_BASE_URL_LENGTH = 100
@@ -46,6 +48,7 @@ ENV_NAMES = {
     "test_slow_render_ms": "CERTGEN_TEST_SLOW_RENDER_MS",
     "allowed_hosts": "CERTGEN_ALLOWED_HOSTS",
     "min_free_disk_mb": "CERTGEN_MIN_FREE_DISK_MB",
+    "max_concurrent_submissions": "CERTGEN_MAX_CONCURRENT_SUBMISSIONS",
 }
 HOSTNAME = re.compile(
     r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*"
@@ -63,6 +66,7 @@ RANGES: dict[str, tuple[float, float]] = {
     "max_active_items": (1, 1_000_000),
     "test_slow_render_ms": (0, 60_000),
     "min_free_disk_mb": (0, 1_000_000),
+    "max_concurrent_submissions": (1, 64),
 }
 
 
@@ -87,6 +91,8 @@ class Settings:
     allowed_hosts: tuple[str, ...] = ()
     # New jobs and retries are refused below this much free disk on the data dir; 0 disables (audit P8-N1).
     min_free_disk_mb: int = 1024
+    # Job submissions (incl. dry runs) parsed and validated at once per process (audit P8-N2).
+    max_concurrent_submissions: int = 2
 
     def __post_init__(self) -> None:
         for name, (low, high) in RANGES.items():

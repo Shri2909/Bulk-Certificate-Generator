@@ -58,6 +58,7 @@ def test_embedded_pool_under_concurrent_clients_and_transient_failures(tmp_path:
         retry_delay_seconds=0.05,
         max_active_items=50_000,
         allowed_hosts=("testserver",),
+        max_concurrent_submissions=8,  # 8 producers submit at once (default limit 2, audit P8-N2)
     )
     failed_once: set[str] = set()
     lock = threading.Lock()

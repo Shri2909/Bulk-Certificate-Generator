@@ -96,6 +96,9 @@ def test_validation_failure_not_stored(client: TestClient, app: FastAPI) -> None
 
 
 @pytest.mark.req("R1", "R11")
+# 8 simultaneous submissions: raise the per-process submission limit (default 2, audit P8-N2) so the
+# test still exercises the idempotency race rather than the limit.
+@pytest.mark.parametrize("settings_overrides", [{"max_concurrent_submissions": 8}])
 def test_concurrent_same_key_creates_one_job(client: TestClient, app: FastAPI) -> None:
     payload = job_payload(n=3)
     barrier = threading.Barrier(8)

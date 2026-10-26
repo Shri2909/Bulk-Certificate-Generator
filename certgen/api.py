@@ -141,6 +141,8 @@ def create_job(
         replay = service.find_replay(state.engines, key, service.request_hash(canonical_json(obj)))
         if replay is not None:  # same key, same body: answer with the job's current state, no re-validation
             return replayed(state, replay)
+    if not dry_run and service.queue_is_full(state.engines, state.settings):  # audit P8-N2: before validating
+        raise ApiError(ProblemCode.CAPACITY_EXCEEDED, "The queue is full; retry later.")
     try:
         body = CreateJobRequest.model_validate(obj)
     except ValidationError as exc:

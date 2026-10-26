@@ -540,7 +540,9 @@ def test_declared_oversize_body_is_refused_without_reading_it() -> None:
         "headers": [(b"content-length", b"101")],
         "query_string": b"",
     }
-    asyncio.run(BodySizeLimitMiddleware(app, max_body_bytes=100)(scope, receive, send))
+    asyncio.run(
+        BodySizeLimitMiddleware(app, max_body_bytes=100, body_timeout_seconds=30)(scope, receive, send)
+    )
     assert sent[0]["status"] == 413
 
 

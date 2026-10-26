@@ -39,7 +39,9 @@ CERT = {"title": "Python for Data Engineering", "issuer": "Acme Academy", "issue
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    config.addinivalue_line("markers", "red(finding): TDD red spec; expected to FAIL until the finding is fixed")
+    config.addinivalue_line(
+        "markers", "red(finding): TDD red spec; expected to FAIL until the finding is fixed"
+    )
     config.addinivalue_line("markers", "e2e: starts a real uvicorn server subprocess")
     config.addinivalue_line("markers", "stress: concurrency/load test under bounded resources")
 
@@ -86,14 +88,18 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def drain(app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock) -> Callable[..., list[int]]:
+def drain(
+    app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock
+) -> Callable[..., list[int]]:
     def _drain(renderer: Callable[[CertificateData], bytes] = render_certificate) -> list[int]:
         return Worker(app.state.engines, app.state.storage, settings, fake_clock, renderer).run_until_idle()
 
     return _drain
 
 
-def payload(recipients: list[Any] | None = None, n: int = 3, certificate: dict[str, Any] | None = None) -> dict[str, Any]:
+def payload(
+    recipients: list[Any] | None = None, n: int = 3, certificate: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "certificate": certificate if certificate is not None else dict(CERT),
         "recipients": recipients
@@ -138,7 +144,9 @@ class Server:
         except urllib.error.HTTPError as err:
             return err.code, {k.lower(): v for k, v in err.headers.items()}, err.read()
 
-    def json(self, method: str, path: str, obj: Any = None, headers: dict[str, str] | None = None) -> tuple[int, Any]:
+    def json(
+        self, method: str, path: str, obj: Any = None, headers: dict[str, str] | None = None
+    ) -> tuple[int, Any]:
         body = json.dumps(obj).encode() if obj is not None else None
         status, _, raw = self.request(method, path, body, {**JSON_HEADERS, **(headers or {})})
         return status, json.loads(raw) if raw else None

@@ -47,21 +47,33 @@ def failing_for(names: set[str]) -> Any:
     return render
 
 
-def test_full_lifecycle_with_failures_retry_and_archive(client: TestClient, app: FastAPI, drain: Any, fake_clock: FakeClock, settings: Settings) -> None:
+def test_full_lifecycle_with_failures_retry_and_archive(
+    client: TestClient, app: FastAPI, drain: Any, fake_clock: FakeClock, settings: Settings
+) -> None:
     rows = [{"name": f"Person {i}", "email": f"p{i}@example.com"} for i in range(30)]
     rows[3]["email"] = "bad"
     rows[7] = {"name": "Dup", "email": " P0@EXAMPLE.com "}
     resp = client.post(JOBS, json=payload(rows))
     assert resp.status_code == 202 and resp.headers["location"] == f"{JOBS}/{resp.json()['id']}"
     job_id = resp.json()["id"]
-    assert [(e["row_index"], e["code"]) for e in resp.json()["errors"]] == [(3, "INVALID_EMAIL"), (7, "DUPLICATE_RECIPIENT")]
+    assert [(e["row_index"], e["code"]) for e in resp.json()["errors"]] == [
+        (3, "INVALID_EMAIL"),
+        (7, "DUPLICATE_RECIPIENT"),
+    ]
     broken = {"Person 11", "Person 12"}
     for _ in range(settings.max_attempts):
         drain(failing_for(broken))
         fake_clock.advance(settings.retry_delay_ms + 1)
     job = client.get(f"{JOBS}/{job_id}").json()
     assert job["status"] == "completed_with_errors"
-    assert job["counts"] == {"total": 30, "rejected": 2, "pending": 0, "processing": 0, "succeeded": 26, "failed": 2}
+    assert job["counts"] == {
+        "total": 30,
+        "rejected": 2,
+        "pending": 0,
+        "processing": 0,
+        "succeeded": 26,
+        "failed": 2,
+    }
     assert job["progress"] == 1.0 and job["finished_at"] is not None
     failed = items(client, job_id, status="failed")
     assert [i["row_index"] for i in failed] == [11, 12]
@@ -69,7 +81,10 @@ def test_full_lifecycle_with_failures_retry_and_archive(client: TestClient, app:
     assert all(i["errors"][0]["message"] == "RuntimeError: Certificate generation failed." for i in failed)
     assert all("boom" not in str(i) for i in failed)
     for i in failed:
-        assert client.get(f"/v1/certificates/{i['certificate_id']}").json()["code"] == "CERTIFICATE_GENERATION_FAILED"
+        assert (
+            client.get(f"/v1/certificates/{i['certificate_id']}").json()["code"]
+            == "CERTIFICATE_GENERATION_FAILED"
+        )
     # archive snapshot is consistent with the item list
     z = zipfile.ZipFile(io.BytesIO(client.get(f"{JOBS}/{job_id}/archive").content))
     manifest = list(csv.DictReader(io.StringIO(z.read("manifest.csv").decode())))
@@ -86,7 +101,17 @@ def test_full_lifecycle_with_failures_retry_and_archive(client: TestClient, app:
     assert client.get(f"{JOBS}/{job_id}").json()["counts"]["succeeded"] == 28
     item = after[11]
     pdf = client.get(item["download_url"]).content
-    direct = render_certificate(CertificateData(job_id, item["certificate_id"], item["name"], item["email"], "Python for Data Engineering", "Acme Academy", "2026-10-01"))
+    direct = render_certificate(
+        CertificateData(
+            job_id,
+            item["certificate_id"],
+            item["name"],
+            item["email"],
+            "Python for Data Engineering",
+            "Acme Academy",
+            "2026-10-01",
+        )
+    )
     assert pdf == direct
 
 
@@ -119,7 +144,9 @@ def test_ten_thousand_rows_single_request(client: TestClient, app: FastAPI) -> N
     assert ids == 10_000
 
 
-def test_concurrent_retry_calls_requeue_once(client: TestClient, app: FastAPI, drain: Any, fake_clock: FakeClock, settings: Settings) -> None:
+def test_concurrent_retry_calls_requeue_once(
+    client: TestClient, app: FastAPI, drain: Any, fake_clock: FakeClock, settings: Settings
+) -> None:
     job_id = client.post(JOBS, json=payload(n=4)).json()["id"]
     for _ in range(settings.max_attempts):
         drain(failing_for({"Recipient 0", "Recipient 1", "Recipient 2", "Recipient 3"}))
@@ -141,10 +168,24 @@ def test_concurrent_retry_calls_requeue_once(client: TestClient, app: FastAPI, d
 
 @pytest.mark.parametrize(
     "body, ctype, status",
-    [(b"", None, 202), (b"{}", "application/json", 202), (b"[]", "application/json", 422), (b"{bad", "application/json", 422),
-     (b'{"x":1}', "application/json", 422), (b"{}", "text/plain", 415)],
+    [
+        (b"", None, 202),
+        (b"{}", "application/json", 202),
+        (b"[]", "application/json", 422),
+        (b"{bad", "application/json", 422),
+        (b'{"x":1}', "application/json", 422),
+        (b"{}", "text/plain", 415),
+    ],
 )
-def test_retry_body_rules(client: TestClient, drain: Any, fake_clock: FakeClock, settings: Settings, body: bytes, ctype: str | None, status: int) -> None:
+def test_retry_body_rules(
+    client: TestClient,
+    drain: Any,
+    fake_clock: FakeClock,
+    settings: Settings,
+    body: bytes,
+    ctype: str | None,
+    status: int,
+) -> None:
     job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
     for _ in range(settings.max_attempts):
         drain(failing_for({"Recipient 0"}))
@@ -154,7 +195,11 @@ def test_retry_body_rules(client: TestClient, drain: Any, fake_clock: FakeClock,
 
 
 def test_manifest_neutralizes_formula_emails(client: TestClient, drain: Any) -> None:
-    rows = [{"name": "A", "email": "=cmd@example.com"}, {"name": "B", "email": "+1@example.com"}, {"name": "C", "email": "-x@example.com"}]
+    rows = [
+        {"name": "A", "email": "=cmd@example.com"},
+        {"name": "B", "email": "+1@example.com"},
+        {"name": "C", "email": "-x@example.com"},
+    ]
     job_id = client.post(JOBS, json=payload(rows)).json()["id"]
     drain()
     z = zipfile.ZipFile(io.BytesIO(client.get(f"{JOBS}/{job_id}/archive").content))
@@ -170,7 +215,9 @@ def test_pdf_string_escaping_round_trips(client: TestClient, drain: Any) -> None
     assert name in PdfReader(io.BytesIO(client.get(url).content)).pages[0].extract_text()
 
 
-def test_stale_file_of_failed_item_is_never_served(app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock) -> None:
+def test_stale_file_of_failed_item_is_never_served(
+    app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock
+) -> None:
     """Worker A claims (attempt 1 of 1), stalls past its lease, the retire step fails the item WORKER_LOST,
     then A wakes and writes the PDF. The file exists, the item is failed: downloads must refuse it and the
     archive must not include it (BLUEPRINT §11.2)."""
@@ -188,7 +235,9 @@ def test_stale_file_of_failed_item_is_never_served(app: FastAPI, client: TestCli
     t.start()
     assert entered.wait(10)
     fake_clock.advance(s1.lease_ms + 1)
-    Worker(app.state.engines, app.state.storage, s1, fake_clock, render_certificate).run_once()  # retire step runs in the claim
+    Worker(
+        app.state.engines, app.state.storage, s1, fake_clock, render_certificate
+    ).run_once()  # retire step runs in the claim
     release.set()
     t.join(20)
     item = items(client, job_id)[0]
@@ -200,7 +249,9 @@ def test_stale_file_of_failed_item_is_never_served(app: FastAPI, client: TestCli
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
-def test_symlinked_job_dir_is_refused_on_write(client: TestClient, app: FastAPI, drain: Any, tmp_path: Path, settings: Settings, fake_clock: FakeClock) -> None:
+def test_symlinked_job_dir_is_refused_on_write(
+    client: TestClient, app: FastAPI, drain: Any, tmp_path: Path, settings: Settings, fake_clock: FakeClock
+) -> None:
     job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -235,7 +286,8 @@ def test_startup_on_corrupt_database_fails_loudly(tmp_path: Path) -> None:
 
 
 def test_readonly_database_maps_to_problem_json(client: TestClient, app: FastAPI, settings: Settings) -> None:
-    """Fault injection: the DB file becomes read-only while the API runs. Observed: problem+json 500, reads still work."""
+    """Fault injection: the DB file becomes read-only while the API runs.
+    Observed: problem+json 500, reads still work."""
     job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
     app.state.engines.dispose()
     os.chmod(settings.db_path, 0o400)
@@ -257,13 +309,22 @@ def test_unsupported_methods_are_problem_json(client: TestClient, method: str) -
 
 
 def test_every_response_is_no_store(client: TestClient) -> None:
-    for resp in (client.get("/healthz"), client.get("/nope"), post_raw(client, b"{"), client.get(f"{JOBS}/{'a' * 32}")):
+    for resp in (
+        client.get("/healthz"),
+        client.get("/nope"),
+        post_raw(client, b"{"),
+        client.get(f"{JOBS}/{'a' * 32}"),
+    ):
         assert resp.headers["cache-control"] == "no-store"
 
 
-def test_db_invariants_after_mixed_workload(client: TestClient, app: FastAPI, drain: Any, settings: Settings, fake_clock: FakeClock) -> None:
+def test_db_invariants_after_mixed_workload(
+    client: TestClient, app: FastAPI, drain: Any, settings: Settings, fake_clock: FakeClock
+) -> None:
     for j in range(5):
-        rows = [{"name": f"J{j} R{i}", "email": f"j{j}r{i}@example.com" if i != 2 else "bad"} for i in range(9)]
+        rows = [
+            {"name": f"J{j} R{i}", "email": f"j{j}r{i}@example.com" if i != 2 else "bad"} for i in range(9)
+        ]
         client.post(JOBS, json=payload(rows))
     for _ in range(settings.max_attempts):
         drain(failing_for({"J1 R4", "J3 R0"}))
@@ -272,8 +333,13 @@ def test_db_invariants_after_mixed_workload(client: TestClient, app: FastAPI, dr
     try:
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert conn.execute("SELECT COUNT(*) FROM items WHERE status IN ('pending','processing')").fetchone()[0] == 0
-        succeeded = conn.execute("SELECT job_id, certificate_id FROM items WHERE status='succeeded'").fetchall()
+        assert (
+            conn.execute("SELECT COUNT(*) FROM items WHERE status IN ('pending','processing')").fetchone()[0]
+            == 0
+        )
+        succeeded = conn.execute(
+            "SELECT job_id, certificate_id FROM items WHERE status='succeeded'"
+        ).fetchall()
     finally:
         conn.close()
     files = {p.stem for p in settings.certificates_dir.rglob("*.pdf")}

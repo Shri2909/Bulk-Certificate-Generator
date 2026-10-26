@@ -33,7 +33,9 @@ def test_overlong_email_is_rejected_in_bounded_time(client: TestClient) -> None:
     Fails today on the time bound: email-validator's syntax pass is O(n^2) and certgen passes it the
     unbounded string (measured 2.43 s at 512k chars; ~9-10 s at 1M)."""
     email = "a" * 1_000_000 + "@example.com"
-    body = json.dumps(payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}])).encode()
+    body = json.dumps(
+        payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}])
+    ).encode()
     started = time.perf_counter()
     resp = post_raw(client, body)
     elapsed = time.perf_counter() - started
@@ -51,28 +53,36 @@ def test_unknown_field_errors_are_bounded(client: TestClient, app: FastAPI) -> N
     the request (proposed contract: per-row UNKNOWN_FIELD errors capped, e.g. 10 + one summary; the exact
     cap is a Stage-2 product decision). Fails today: one error object per key is returned and persisted."""
     junk = {f"k{i:06d}": 0 for i in range(50_000)}
-    body = json.dumps(payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": "b@example.com", **junk}])).encode()
+    body = json.dumps(
+        payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": "b@example.com", **junk}])
+    ).encode()
     resp = post_raw(client, body)
     assert resp.status_code == 202
     with app.state.engines.read.connect() as conn:
         stored = conn.execute(text("SELECT length(errors) FROM items WHERE row_index = 1")).scalar_one()
     row_errors = [e for e in resp.json()["errors"] if e["row_index"] == 1]
     assert len(row_errors) <= 11, f"{len(row_errors)} errors returned for one row"
-    assert len(resp.content) <= 64 * 1024, f"response is {len(resp.content)} bytes for a {len(body)}-byte request"
+    assert len(resp.content) <= 64 * 1024, (
+        f"response is {len(resp.content)} bytes for a {len(body)}-byte request"
+    )
     assert stored <= 64 * 1024, f"{stored} bytes of errors persisted for one row"
 
 
 # --- F-03: lone UTF-16 surrogates -> 500 ---------------------------------------------------------
 
 _CERT = '"certificate":{"title":"T","issuer":"I","issued_on":"2026-10-01"}'
+_OK_ROW = '{"name":"A","email":"a@example.com"}'
+
+
+def _body(recipients: str) -> str:
+    return "{" + _CERT + ',"recipients":[' + recipients + "]}"
+
+
 SURROGATE_BODIES = {
-    "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
-    "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
-    % _CERT,
-    "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
-    % _CERT,
-    "unknown-key value only": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udfff"}]}'
-    % _CERT,
+    "unknown-key, all rows invalid": _body('{"name":"A","email":"a@example.com","\\ud800":1}'),
+    "name of rejected row": _body(_OK_ROW + ',{"name":"B\\ud800","email":"b@example.com"}'),
+    "email of rejected row": _body(_OK_ROW + ',{"name":"B","email":"b\\ud800@x.com"}'),
+    "unknown-key value only": _body(_OK_ROW + ',{"name":"B","email":"b@example.com","x":"\\udfff"}'),
 }
 
 
@@ -82,7 +92,8 @@ SURROGATE_BODIES = {
 def test_lone_surrogate_never_500(client: TestClient, case: str, variant: str) -> None:
     """F-03. JSON may legally contain \\ud800 escapes; json.loads turns them into lone surrogates that
     cannot be UTF-8 encoded. The contract is a 4xx/202 problem response, never 500. Fails today with
-    UnicodeEncodeError -> 500 INTERNAL_ERROR (sqlite3 bind, sha256 of canonical JSON, or JSON response encode)."""
+    UnicodeEncodeError -> 500 INTERNAL_ERROR (sqlite3 bind, sha256 of canonical JSON, or JSON response
+    encode)."""
     key = "k-" + "".join(ch if ch.isalnum() else "-" for ch in case)  # printable ASCII, no spaces
     headers = {"Idempotency-Key": key} if variant == "idempotency-key" else {}
     path = JOBS + "?dry_run=true" if variant == "dry-run" else JOBS
@@ -115,7 +126,12 @@ def test_accepted_name_round_trips_through_pdf_text_layer(client: TestClient, dr
     Fails today: the row is accepted and ReportLab writes the ToUnicode entry `<02> <1F63C>` (odd-length
     hex); readers decode it as U+1F63, so the certificate's text says 'Zoë ὣ Smith'."""
     name = "Zoë \U0001f63c Smith"
-    resp = client.post(JOBS, json=payload([{"name": name, "email": "zoe@example.com"}, {"name": "Ann", "email": "ann@example.com"}]))
+    resp = client.post(
+        JOBS,
+        json=payload(
+            [{"name": name, "email": "zoe@example.com"}, {"name": "Ann", "email": "ann@example.com"}]
+        ),
+    )
     assert resp.status_code == 202
     row0 = [e for e in resp.json()["errors"] if e["row_index"] == 0]
     if row0:
@@ -133,7 +149,9 @@ def test_accepted_name_round_trips_through_pdf_text_layer(client: TestClient, dr
 
 
 @pytest.mark.red("F-07")
-def test_key_violation_reaches_replay_backstop(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_key_violation_reaches_replay_backstop(
+    client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """F-07. If the in-transaction key re-check ever misses an existing key, the UNIQUE backstop must turn
     the IntegrityError into a replay (200) as service.create_job documents. Fails today: the message
     'UNIQUE constraint failed: jobs.idempotency_key' contains the substring 'jobs.id', so _insert_job
@@ -171,7 +189,11 @@ def test_progress_is_below_one_until_terminal(valid: int) -> None:
 
 def _nfd_4cp_name() -> str:
     chars = sorted(
-        (c for c in SUPPORTED_CHARS if len(unicodedata.normalize("NFD", c)) == 4 and _charset_error("n", c) is None and c.islower()),
+        (
+            c
+            for c in SUPPORTED_CHARS
+            if len(unicodedata.normalize("NFD", c)) == 4 and _charset_error("n", c) is None and c.islower()
+        ),
         key=lambda c: NAME.line_width(c, 1),
     )[:10]
     name = " ".join("".join(chars[(w + i) % len(chars)] for i in range(9)) for w in range(12))[:120].strip()
@@ -187,7 +209,10 @@ def test_body_limit_admits_every_valid_request(client: TestClient, settings: Any
     json.dumps, must be accepted. Fails today with 413: NFD input is ~2,880 bytes/row vs the 2,600 budget."""
     name = _nfd_4cp_name()
     rows = [
-        {"name": name, "email": f"x{i:04d}" + "a" * 59 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57]) + ".org"}
+        {
+            "name": name,
+            "email": f"x{i:04d}" + "a" * 59 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57]) + ".org",
+        }
         for i in range(1000)
     ]
     body = json.dumps(payload(rows)).encode()

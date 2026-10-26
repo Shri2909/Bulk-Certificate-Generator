@@ -12,9 +12,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
-import time
 from pathlib import Path
-from typing import Any
 
 import pytest
 from conftest import CERT, JOBS, ROOT, wait_until
@@ -38,19 +36,27 @@ def db_counts(db: Path) -> dict[str, int]:
 def check_invariants(settings: Settings) -> sqlite3.Connection:
     conn = sqlite3.connect(settings.db_path)
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-    assert conn.execute("SELECT COUNT(*) FROM items WHERE status IN ('pending','processing')").fetchone()[0] == 0
+    assert (
+        conn.execute("SELECT COUNT(*) FROM items WHERE status IN ('pending','processing')").fetchone()[0] == 0
+    )
     succeeded = {r[0] for r in conn.execute("SELECT certificate_id FROM items WHERE status = 'succeeded'")}
     files = [p.stem for p in settings.certificates_dir.rglob("*.pdf")]
     assert len(files) == len(set(files))
-    assert succeeded <= set(files)  # every success has its file (extra files only from stale writes of failed items)
+    assert succeeded <= set(
+        files
+    )  # every success has its file (extra files only from stale writes of failed items)
     assert list(settings.certificates_dir.rglob("*.tmp")) == []
     return conn
 
 
 def test_embedded_pool_under_concurrent_clients_and_transient_failures(tmp_path: Path) -> None:
     settings = Settings(
-        data_dir=tmp_path / "data", embedded_worker=True, worker_threads=4, poll_interval_seconds=0.05,
-        retry_delay_seconds=0.05, max_active_items=50_000,
+        data_dir=tmp_path / "data",
+        embedded_worker=True,
+        worker_threads=4,
+        poll_interval_seconds=0.05,
+        retry_delay_seconds=0.05,
+        max_active_items=50_000,
     )
     failed_once: set[str] = set()
     lock = threading.Lock()
@@ -109,12 +115,21 @@ def test_three_worker_processes_with_random_sigkill(tmp_path: Path) -> None:
         assert client.post(JOBS, json={"certificate": CERT, "recipients": rows}).status_code == 202
     env = {
         **{k: v for k, v in os.environ.items() if not k.startswith("CERTGEN_")},
-        "CERTGEN_DATA_DIR": str(data_dir), "CERTGEN_LEASE_SECONDS": "2", "CERTGEN_TEST_SLOW_RENDER_MS": "20",
-        "CERTGEN_POLL_INTERVAL_SECONDS": "0.05", "PYTHONPATH": str(ROOT),
+        "CERTGEN_DATA_DIR": str(data_dir),
+        "CERTGEN_LEASE_SECONDS": "2",
+        "CERTGEN_TEST_SLOW_RENDER_MS": "20",
+        "CERTGEN_POLL_INTERVAL_SECONDS": "0.05",
+        "PYTHONPATH": str(ROOT),
     }
 
     def spawn() -> subprocess.Popen[bytes]:
-        return subprocess.Popen([sys.executable, "-m", "certgen.worker"], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return subprocess.Popen(
+            [sys.executable, "-m", "certgen.worker"],
+            cwd=ROOT,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     procs = [spawn() for _ in range(3)]
     try:
@@ -122,7 +137,9 @@ def test_three_worker_processes_with_random_sigkill(tmp_path: Path) -> None:
         victim = random.Random(7).choice(procs)
         victim.send_signal(signal.SIGKILL)
         victim.wait(10)
-        assert wait_until(lambda: db_counts(settings.db_path).get("succeeded", 0) == 150, timeout=60), db_counts(settings.db_path)
+        assert wait_until(lambda: db_counts(settings.db_path).get("succeeded", 0) == 150, timeout=60), (
+            db_counts(settings.db_path)
+        )
     finally:
         for p in procs:
             if p.poll() is None:

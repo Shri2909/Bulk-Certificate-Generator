@@ -9,6 +9,7 @@ run it under a memory limit, e.g. `ulimit -v 6000000`.
 from __future__ import annotations
 
 import collections
+import contextlib
 import cProfile
 import io
 import json
@@ -34,18 +35,14 @@ def f01_curve() -> None:
     for n in (16_000, 32_000, 64_000, 128_000, 256_000, 512_000):
         email = "a" * n + "@example.com"
         started = time.perf_counter()
-        try:
+        with contextlib.suppress(EmailNotValidError):
             validate_email(email, check_deliverability=False, allow_smtputf8=False)
-        except EmailNotValidError:
-            pass
         print(f"local-part {n:>7} chars: {time.perf_counter() - started:7.3f} s", flush=True)
     prof = cProfile.Profile()
     email = "a" * 64_000 + "@example.com"
     prof.enable()
-    try:
+    with contextlib.suppress(EmailNotValidError):
         validate_email(email, check_deliverability=False, allow_smtputf8=False)
-    except EmailNotValidError:
-        pass
     prof.disable()
     out = io.StringIO()
     pstats.Stats(prof, stream=out).sort_stats("tottime").print_stats(3)
@@ -66,19 +63,28 @@ def f02_amplification(scratch: Path) -> None:
         n = (settings.max_body_bytes - 300) // 13
         row = "{" + ",".join(f'"k{i:07d}":0' for i in range(n)) + "}"
         rows = row if mode == "all_invalid" else '{"name":"A","email":"a@example.com"},' + row
-        body = ('{"certificate":%s,"recipients":[%s]}' % (json.dumps(cert), rows)).encode()
+        body = ('{"certificate":' + json.dumps(cert) + ',"recipients":[' + rows + "]}").encode()
         before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         with TestClient(create_app(settings), raise_server_exceptions=False) as client:
             started = time.perf_counter()
-            resp = client.post("/v1/certificate-jobs", content=body, headers={"Content-Type": "application/json"})
+            resp = client.post(
+                "/v1/certificate-jobs", content=body, headers={"Content-Type": "application/json"}
+            )
             took = time.perf_counter() - started
         peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        print(f"{mode}: request={len(body)} B status={resp.status_code} response={len(resp.content)} B "
-              f"({len(resp.content) / len(body):.2f}x) {took:.1f} s peak_rss={peak / 1024:.0f} MB (process high-water; before {before / 1024:.0f} MB)")
+        print(
+            f"{mode}: request={len(body)} B status={resp.status_code} response={len(resp.content)} B "
+            f"({len(resp.content) / len(body):.2f}x) {took:.1f} s peak_rss={peak / 1024:.0f} MB "
+            f"(process high-water; before {before / 1024:.0f} MB)"
+        )
         if resp.status_code == 202:
             import sqlite3
 
-            stored = sqlite3.connect(settings.db_path).execute("SELECT SUM(length(errors)) FROM items").fetchone()[0]
+            stored = (
+                sqlite3.connect(settings.db_path)
+                .execute("SELECT SUM(length(errors)) FROM items")
+                .fetchone()[0]
+            )
             print(f"   persisted items.errors = {stored} B")
         del resp
 
@@ -90,7 +96,9 @@ def f05_text_layer(scratch: Path) -> None:
 
     section("F-05 non-BMP name: ToUnicode entry, pdftotext, pypdf")
     name = "Zoë \U0001f63c Smith"
-    pdf = render_certificate(CertificateData("a" * 32, "b" * 32, name, "zoe@example.com", "T", "I", "2026-10-01"))
+    pdf = render_certificate(
+        CertificateData("a" * 32, "b" * 32, name, "zoe@example.com", "T", "I", "2026-10-01")
+    )
     path = scratch / "f05.pdf"
     path.write_bytes(pdf)
     reader = PdfReader(path)
@@ -103,7 +111,7 @@ def f05_text_layer(scratch: Path) -> None:
     print("pypdf text line:", repr(reader.pages[0].extract_text().splitlines()[2]))
     try:
         txt = subprocess.run(["pdftotext", str(path), "-"], capture_output=True, text=True, check=True).stdout
-        print("pdftotext line:", repr([ln for ln in txt.splitlines() if "Smith" in ln][0]))
+        print("pdftotext line:", repr(next(ln for ln in txt.splitlines() if "Smith" in ln)))
     except (OSError, subprocess.CalledProcessError) as exc:
         print("pdftotext unavailable:", exc)
 
@@ -114,7 +122,22 @@ def census() -> None:
 
     section("Charset census: characters accepted in names/titles/issuers")
     allowed = [c for c in SUPPORTED_CHARS if _charset_error("f", c) is None]
-    keys = ("LATIN", "GREEK", "CYRILLIC", "ARMENIAN", "GEORGIAN", "OLD ITALIC", "TIFINAGH", "LAO", "BRAILLE", "BOX DRAWING", "ARROW", "DOMINO", "PLAYING CARD", "MATHEMATICAL")
+    keys = (
+        "LATIN",
+        "GREEK",
+        "CYRILLIC",
+        "ARMENIAN",
+        "GEORGIAN",
+        "OLD ITALIC",
+        "TIFINAGH",
+        "LAO",
+        "BRAILLE",
+        "BOX DRAWING",
+        "ARROW",
+        "DOMINO",
+        "PLAYING CARD",
+        "MATHEMATICAL",
+    )
 
     def bucket(c: str) -> str:
         name = unicodedata.name(c, "?")
@@ -141,7 +164,12 @@ def f07_f08() -> None:
     settings = Settings(data_dir=tmp, embedded_worker=False)
     engines = create_engines(settings.db_path)
     create_schema(engines)
-    body = CreateJobRequest.model_validate({"certificate": {"title": "T", "issuer": "I", "issued_on": "2026-10-01"}, "recipients": [{"name": "A", "email": "a@example.com"}]})
+    body = CreateJobRequest.model_validate(
+        {
+            "certificate": {"title": "T", "issuer": "I", "issued_on": "2026-10-01"},
+            "recipients": [{"name": "A", "email": "a@example.com"}],
+        }
+    )
     validated = validate_request(body, today=date(2026, 10, 11), print_email=True, max_recipients=10)
     service.create_job(engines, settings, lambda: 1, validated, "{}", "K")
     drawn = {"n": 0}
@@ -155,9 +183,12 @@ def f07_f08() -> None:
     try:
         with engines.write.begin() as conn:
             service._insert_job(conn, settings, validated, "{}", 1, "K", "other-hash")
-    except Exception as exc:  # noqa: BLE001 - the probe reports whatever is raised
+    except Exception as exc:
         print(f"raised {type(exc).__name__}: {exc} (job ids drawn: {drawn['n']})")
-    print("'jobs.id' in 'UNIQUE constraint failed: jobs.idempotency_key' ->", "jobs.id" in "UNIQUE constraint failed: jobs.idempotency_key")
+    print(
+        "'jobs.id' in 'UNIQUE constraint failed: jobs.idempotency_key' ->",
+        "jobs.id" in "UNIQUE constraint failed: jobs.idempotency_key",
+    )
     section("F-08 progress")
     for valid in (10_000, 20_000, 20_001, 100_000):
         print(valid, derive_job_status({"succeeded": valid - 1, "pending": 1}, valid - 1))

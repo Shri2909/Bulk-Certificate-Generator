@@ -7,6 +7,7 @@ finding carry @pytest.mark.red("F-xx") and are expected to FAIL.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import string
 import unicodedata
@@ -14,7 +15,8 @@ from datetime import date
 from typing import Any
 
 import pytest
-from hypothesis import HealthCheck, assume, example, given, settings, strategies as st
+from hypothesis import HealthCheck, assume, example, given, settings
+from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from certgen.api import iso_ms
@@ -41,8 +43,18 @@ PROFILE = settings(max_examples=300, deadline=None, suppress_health_check=[Healt
 ALLOWED = sorted(c for c in SUPPORTED_CHARS if c != " " and _charset_error("f", c) is None)
 BMP_ALLOWED = [c for c in ALLOWED if ord(c) <= 0xFFFF]
 
-json_scalars = st.none() | st.booleans() | st.integers(-(10**20), 10**20) | st.floats(allow_nan=False, allow_infinity=False) | st.text(max_size=20)
-json_values = st.recursive(json_scalars, lambda kids: st.lists(kids, max_size=4) | st.dictionaries(st.text(max_size=8), kids, max_size=4), max_leaves=20)
+json_scalars = (
+    st.none()
+    | st.booleans()
+    | st.integers(-(10**20), 10**20)
+    | st.floats(allow_nan=False, allow_infinity=False)
+    | st.text(max_size=20)
+)
+json_values = st.recursive(
+    json_scalars,
+    lambda kids: st.lists(kids, max_size=4) | st.dictionaries(st.text(max_size=8), kids, max_size=4),
+    max_leaves=20,
+)
 
 
 def depth(v: Any) -> int:
@@ -59,10 +71,8 @@ def depth(v: Any) -> int:
 @PROFILE
 @given(st.binary(max_size=200))
 def test_decode_never_raises_anything_but_json_body_error(raw: bytes) -> None:
-    try:
+    with contextlib.suppress(JsonBodyError):
         decode_json_body(raw)
-    except JsonBodyError:
-        pass
 
 
 @PROFILE
@@ -74,8 +84,22 @@ def test_decode_round_trips_valid_json(value: Any) -> None:
 
 @pytest.mark.parametrize(
     "raw",
-    [b'{"a":1,"a":2}', b'{"x":{"b":1,"b":1}}', b"NaN", b"[Infinity]", b"-Infinity", b"1e400", b"1" * 5000,
-     b"[" * 9 + b"]" * 9, b"[" * 100_000, b"\xef\xbb\xbf{}", b"\xc0\xaf", b"\xed\xa0\x80", b"", b"{"],
+    [
+        b'{"a":1,"a":2}',
+        b'{"x":{"b":1,"b":1}}',
+        b"NaN",
+        b"[Infinity]",
+        b"-Infinity",
+        b"1e400",
+        b"1" * 5000,
+        b"[" * 9 + b"]" * 9,
+        b"[" * 100_000,
+        b"\xef\xbb\xbf{}",
+        b"\xc0\xaf",
+        b"\xed\xa0\x80",
+        b"",
+        b"{",
+    ],
 )
 def test_decode_rejects_hostile_inputs(raw: bytes) -> None:
     with pytest.raises(JsonBodyError):
@@ -112,9 +136,13 @@ def test_norm_is_idempotent_and_canonical(s: str) -> None:
 @given(st.text(max_size=40))
 def test_charset_rule_matches_its_definition(s: str) -> None:
     err = _charset_error("f", s)
-    bad_c1 = any(unicodedata.category(c)[0] == "C" or (unicodedata.category(c)[0] == "Z" and c != " ") for c in s)
+    bad_c1 = any(
+        unicodedata.category(c)[0] == "C" or (unicodedata.category(c)[0] == "Z" and c != " ") for c in s
+    )
     bad_c2 = any(
-        unicodedata.category(c)[0] == "M" or unicodedata.bidirectional(c) in ("R", "AL", "AN") or c not in SUPPORTED_CHARS
+        unicodedata.category(c)[0] == "M"
+        or unicodedata.bidirectional(c) in ("R", "AL", "AN")
+        or c not in SUPPORTED_CHARS
         for c in s
     )
     if bad_c1:
@@ -158,7 +186,11 @@ def test_fit_text_never_loses_reorders_or_overflows(ws: list[str], block: Any) -
 
 
 @PROFILE
-@given(st.text(alphabet=st.sampled_from(string.ascii_letters + string.digits + "@.-_+="), min_size=1, max_size=254))
+@given(
+    st.text(
+        alphabet=st.sampled_from(string.ascii_letters + string.digits + "@.-_+="), min_size=1, max_size=254
+    )
+)
 def test_email_block_fits_any_254_ascii_and_keeps_every_character(s: str) -> None:
     fit = fit_text(s, EMAIL)
     assert fit is not None
@@ -192,7 +224,9 @@ row = st.fixed_dictionaries(
 @PROFILE
 @given(st.lists(row, min_size=1, max_size=15))
 def test_validate_request_invariants(rows: list[dict[str, Any]]) -> None:
-    body = CreateJobRequest.model_validate({"certificate": {"title": "T", "issuer": "I", "issued_on": "2026-10-01"}, "recipients": rows})
+    body = CreateJobRequest.model_validate(
+        {"certificate": {"title": "T", "issuer": "I", "issued_on": "2026-10-01"}, "recipients": rows}
+    )
     v = validate_request(body, today=date(2026, 10, 11), print_email=True, max_recipients=100)
     assert [r.row_index for r in v.rows] == list(range(len(rows)))
     errs = v.row_errors
@@ -222,11 +256,15 @@ def test_pydantic_error_mapping_never_raises(value: Any) -> None:
 
 
 @settings(max_examples=60, deadline=None)
-@given(st.lists(st.text(alphabet=st.sampled_from(BMP_ALLOWED), min_size=1, max_size=12), min_size=1, max_size=6))
+@given(
+    st.lists(st.text(alphabet=st.sampled_from(BMP_ALLOWED), min_size=1, max_size=12), min_size=1, max_size=6)
+)
 def test_any_accepted_bmp_name_renders(ws: list[str]) -> None:
     name = norm(" ".join(ws))
     assume(len(name) <= 120 and _charset_error("name", name) is None and fit_text(name, NAME) is not None)
-    pdf = render_certificate(CertificateData("a" * 32, "b" * 32, name, "z@example.com", "T", "I", "2026-10-01"))
+    pdf = render_certificate(
+        CertificateData("a" * 32, "b" * 32, name, "z@example.com", "T", "I", "2026-10-01")
+    )
     assert pdf.startswith(b"%PDF-")
 
 
@@ -292,7 +330,10 @@ def test_iso_ms_round_trips(ms: int) -> None:
 @PROFILE
 @given(st.sampled_from(sorted(ENV_NAMES.values())), st.text(max_size=12))
 def test_settings_from_env_fails_only_with_value_error(var: str, raw: str) -> None:
-    try:
-        Settings.from_env({var: raw, "CERTGEN_DATA_DIR": "/tmp/certgen-audit-unused"} if var != "CERTGEN_DATA_DIR" else {var: raw or "x"})
-    except ValueError:
-        pass
+    env = (
+        {var: raw, "CERTGEN_DATA_DIR": "/tmp/certgen-audit-unused"}
+        if var != "CERTGEN_DATA_DIR"
+        else {var: raw or "x"}
+    )
+    with contextlib.suppress(ValueError):
+        Settings.from_env(env)

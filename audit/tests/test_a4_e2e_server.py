@@ -19,10 +19,16 @@ from typing import Any
 import pytest
 from conftest import CERT, JOBS, Server, start_server, stop_server, wait_until
 
+from certgen.config import Settings
+
 pytestmark = [pytest.mark.e2e, pytest.mark.skipif(os.name != "posix", reason="POSIX signals")]
 
 README_BODY = {
-    "certificate": {"title": "Python for Data Engineering", "issuer": "Acme Academy", "issued_on": "2026-10-01"},
+    "certificate": {
+        "title": "Python for Data Engineering",
+        "issuer": "Acme Academy",
+        "issued_on": "2026-10-01",
+    },
     "recipients": [
         {"name": "Zoë Łukasz", "email": "zoe@example.com"},
         {"name": "Bob", "email": "not-an-email"},
@@ -43,7 +49,9 @@ def terminal(server: Server, job_id: str) -> dict[str, Any]:
 
 
 def test_readme_quickstart_flow(server: Server) -> None:
-    status, headers, raw = server.request("POST", JOBS, json.dumps(README_BODY).encode(), {"Content-Type": "application/json"})
+    status, headers, raw = server.request(
+        "POST", JOBS, json.dumps(README_BODY).encode(), {"Content-Type": "application/json"}
+    )
     assert status == 202
     body = json.loads(raw)
     assert headers["location"] == f"{JOBS}/{body['id']}"
@@ -93,15 +101,16 @@ def test_api_process_sigkill_mid_job_then_restart_completes(tmp_path: Path) -> N
 
 
 def test_body_limit_over_real_http(server: Server) -> None:
-    limit = 10_000 * 2_600 + 65_536
+    limit = Settings().max_body_bytes  # the server runs with default settings
+    head = f"POST {JOBS} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
     with socket.create_connection(("127.0.0.1", server.port), timeout=10) as sock:
-        sock.sendall(f"POST {JOBS} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {limit + 1}\r\n\r\n".encode())
+        sock.sendall(f"{head}Content-Length: {limit + 1}\r\n\r\n".encode())
         assert b" 413 " in sock.recv(4096).split(b"\r\n", 1)[0]
     with socket.create_connection(("127.0.0.1", server.port), timeout=30) as sock:
-        sock.sendall(f"POST {JOBS} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nTransfer-Encoding: chunked\r\n\r\n".encode())
+        sock.sendall(f"{head}Transfer-Encoding: chunked\r\n\r\n".encode())
         chunk = b"a" * 1_000_000
         status_line = b""
-        for _ in range(30):
+        for _ in range(limit // len(chunk) + 2):
             try:
                 sock.sendall(b"%x\r\n" % len(chunk) + chunk + b"\r\n")
             except (BrokenPipeError, ConnectionResetError):
@@ -134,7 +143,10 @@ def test_foreign_host_header_is_rejected(server: Server) -> None:
     status, _, _ = server.request("GET", "/healthz", headers={"Host": "attacker.example:8000"})
     assert status == 400
     status, _, _ = server.request(
-        "POST", JOBS, json.dumps(README_BODY).encode(), {"Content-Type": "application/json", "Host": "attacker.example"}
+        "POST",
+        JOBS,
+        json.dumps(README_BODY).encode(),
+        {"Content-Type": "application/json", "Host": "attacker.example"},
     )
     assert status == 400
 
@@ -156,7 +168,9 @@ def test_idle_connections_do_not_lock_out_clients(server: Server) -> None:
                 statuses.append(type(exc).__name__)
             return statuses[-1] == 200
 
-        assert wait_until(ok, timeout=10, step=1.0), f"/healthz statuses while 64 idle sockets are open: {statuses}"
+        assert wait_until(ok, timeout=10, step=1.0), (
+            f"/healthz statuses while 64 idle sockets are open: {statuses}"
+        )
     finally:
         for s in socks:
             s.close()
@@ -167,12 +181,19 @@ def test_overlong_email_over_http_is_fast_and_does_not_starve_others(server: Ser
     """F-01 over real HTTP. A 600,000-character email must be rejected within 2 s, and /healthz must stay
     responsive meanwhile. Fails today on the duration (quadratic email-validator syntax pass)."""
     email = "a" * 600_000 + "@example.com"
-    body = json.dumps({"certificate": CERT, "recipients": [{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}]}).encode()
+    body = json.dumps(
+        {
+            "certificate": CERT,
+            "recipients": [{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}],
+        }
+    ).encode()
     result: dict[str, Any] = {}
 
     def submit() -> None:
         started = time.perf_counter()
-        result["status"] = server.request("POST", JOBS, body, {"Content-Type": "application/json"}, timeout=120)[0]
+        result["status"] = server.request(
+            "POST", JOBS, body, {"Content-Type": "application/json"}, timeout=120
+        )[0]
         result["seconds"] = time.perf_counter() - started
 
     t = threading.Thread(target=submit)
@@ -185,7 +206,9 @@ def test_overlong_email_over_http_is_fast_and_does_not_starve_others(server: Ser
         time.sleep(0.05)
     t.join(120)
     worst = max(latencies) if latencies else 0.0
-    print(f"\nPOST with 600k-char email: status={result.get('status')} seconds={result.get('seconds', 0):.2f}; "
-          f"/healthz samples={len(latencies)} max latency={worst * 1000:.0f} ms")
+    print(
+        f"\nPOST with 600k-char email: status={result.get('status')} seconds={result.get('seconds', 0):.2f}; "
+        f"/healthz samples={len(latencies)} max latency={worst * 1000:.0f} ms"
+    )
     assert result["status"] == 202
     assert result["seconds"] < 2.0

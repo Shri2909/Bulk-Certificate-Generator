@@ -1,0 +1,6 @@
+12 passed, 9 deselected in 0.31s
+E   AssertionError: assert 'processing' in ('completed', 'completed_with_errors', 'failed')
+         'failed': 0},
+/home/abc/Desktop/Resume Projects/certgen-remediation/audit/tests/test_a2_unit_property.py:298: AssertionError: assert 'processing' in ('completed', 'completed_with_errors', 'failed')
+FAILED audit/tests/test_a2_unit_property.py::test_progress_one_only_when_terminal
+1 failed, 31 passed in 5.20s

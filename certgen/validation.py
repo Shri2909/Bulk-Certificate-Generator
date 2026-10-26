@@ -24,6 +24,7 @@ from certgen.layout import EMAIL, ISSUER, NAME, TITLE, Block, fit_text
 from certgen.models import CreateJobRequest
 
 SPACE_RUNS = re.compile(" {2,}")
+LONE_SURROGATE = re.compile(f"[{chr(0xD800)}-{chr(0xDFFF)}]")  # built with chr(): no surrogate in the source
 ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 MAX_JSON_DEPTH = 8  # root = 1; the deepest legitimate value (a row field) sits at depth 4
 MAX_NAME_LENGTH = 120
@@ -66,6 +67,10 @@ def decode_json_body(raw: bytes) -> Any:
         raise JsonBodyError(f"The request body is not valid JSON: {exc.msg}.") from None
     if _depth_exceeds(value, MAX_JSON_DEPTH):
         raise JsonBodyError(f"The request body is nested deeper than {MAX_JSON_DEPTH} levels.")
+    # Valid JSON syntax, but "\ud800"-style escapes decode to strings that cannot be encoded as UTF-8,
+    # so they could be neither stored, hashed nor echoed back (audit F-03). I-JSON (RFC 7493) forbids them.
+    if _has_lone_surrogate(value):
+        raise JsonBodyError("The request body contains an unpaired UTF-16 surrogate escape.")
     return value
 
 
@@ -96,6 +101,16 @@ def _bounded_int(literal: str) -> int:
 
 def _reject_constant(name: str) -> Any:
     raise JsonBodyError(f"{name} is not valid JSON.")
+
+
+def _has_lone_surrogate(value: Any) -> bool:
+    if isinstance(value, str):
+        return LONE_SURROGATE.search(value) is not None
+    if isinstance(value, dict):
+        return any(_has_lone_surrogate(k) or _has_lone_surrogate(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_has_lone_surrogate(v) for v in value)
+    return False
 
 
 def _depth_exceeds(value: Any, limit: int) -> bool:

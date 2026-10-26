@@ -389,7 +389,7 @@ Field codes (in `errors[].code`, and stored on items):
 
 | Field code | Meaning |
 |---|---|
-| `INVALID_JSON` | body is not strict JSON (syntax, invalid UTF-8, duplicate keys, `NaN`/`Infinity`, depth > 8) |
+| `INVALID_JSON` | body is not strict JSON (syntax, invalid UTF-8, duplicate keys, `NaN`/`Infinity`, depth > 8, an unpaired UTF-16 surrogate escape U+D800–U+DFFF) |
 | `REQUIRED` | missing, `null` or blank |
 | `INVALID_TYPE` | wrong JSON type (e.g. a number for `name`, a recipient that is not an object) |
 | `UNKNOWN_FIELD` | a field the API does not accept (per row: the first 10, then one summary error with `field: null`) |

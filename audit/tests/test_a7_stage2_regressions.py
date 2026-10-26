@@ -82,3 +82,44 @@ def test_worst_case_unknown_field_body_is_not_amplified(client: TestClient, sett
     resp = post_raw(client, body)
     assert resp.status_code == 422
     assert len(resp.content) < 4096
+
+
+# --- F-03: lone surrogates are INVALID_JSON wherever they appear ---------------------------------
+
+LONE = "\\" + "ud800"  # written as concatenation so no escape sequence appears in the source
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"certificate":{"title":"T' + LONE + '","issuer":"I","issued_on":"2026-10-01"},"recipients":[]}',
+        '{"certificate":{"title":"T","issuer":"I","issued_on":"2026-10-01"},"recipients":[],"x'
+        + LONE
+        + '":1}',
+        '{"certificate":{"title":"T","issuer":"I","issued_on":"2026-10-01"},"recipients":[["' + LONE + '"]]}',
+        '"' + LONE + '"',
+    ],
+)
+def test_lone_surrogate_anywhere_is_invalid_json(client: TestClient, body: str) -> None:
+    resp = post_raw(client, body.encode())
+    assert resp.status_code == 422
+    assert [e["code"] for e in resp.json()["errors"]] == ["INVALID_JSON"]
+
+
+def test_lone_surrogate_in_retry_body_is_invalid_json(client: TestClient) -> None:
+    job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
+    body = ('{"k' + LONE + '":1}').encode()
+    resp = client.post(f"{JOBS}/{job_id}/retry", content=body, headers={"Content-Type": "application/json"})
+    assert resp.status_code == 422
+    assert [e["code"] for e in resp.json()["errors"]] == ["INVALID_JSON"]
+
+
+def test_paired_surrogate_escape_is_still_valid_json(client: TestClient) -> None:
+    pair = "\\" + "ud83d" + "\\" + "ude00"  # U+1F600 written as a valid escape pair
+    body = (
+        '{"certificate":{"title":"T","issuer":"I","issued_on":"2026-10-01"},"recipients":[{"name":"A","email":"a@example.com","x":"'
+        + pair
+        + '"}]}'
+    )
+    codes = [e["code"] for e in post_raw(client, body.encode()).json()["errors"]]
+    assert "INVALID_JSON" not in codes

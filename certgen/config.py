@@ -20,6 +20,8 @@ from urllib.parse import urlsplit
 BODY_BYTES_PER_RECIPIENT = 2_600
 BODY_BYTES_ENVELOPE = 65_536
 ARCHIVE_CONCURRENCY = 2  # archive builds per process (§6.7); fixed, not an env var
+# Requests in progress per process (§24.12, amended A-08): counted in the app, not as uvicorn connections.
+MAX_CONCURRENT_REQUESTS = 64
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 MAX_BASE_URL_LENGTH = 100

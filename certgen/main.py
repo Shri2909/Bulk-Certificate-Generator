@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from certgen import __version__
 from certgen.api import router
 from certgen.clock import Clock, system_clock
-from certgen.config import ARCHIVE_CONCURRENCY, Settings
+from certgen.config import ARCHIVE_CONCURRENCY, MAX_CONCURRENT_REQUESTS, Settings
 from certgen.db import check_sqlite_version, create_engines, create_schema
 from certgen.errors import (
     ApiError,
@@ -28,6 +28,7 @@ from certgen.errors import (
 )
 from certgen.middleware import (
     BodySizeLimitMiddleware,
+    ConcurrencyLimitMiddleware,
     HostAllowlistMiddleware,
     NoStoreMiddleware,
     async_lifespan,
@@ -75,6 +76,8 @@ def create_app(
     app.state.renderer = renderer
     app.state.archive_slots = threading.BoundedSemaphore(ARCHIVE_CONCURRENCY)
     app.add_middleware(BodySizeLimitMiddleware, max_body_bytes=settings.max_body_bytes)
+    # Outside the body buffer, so a request still uploading holds a slot: bounded buffered memory.
+    app.add_middleware(ConcurrencyLimitMiddleware, max_requests=MAX_CONCURRENT_REQUESTS)
     # Host check before any body is read: a rebinding page cannot even get its upload buffered.
     app.add_middleware(HostAllowlistMiddleware, allowed_hosts=settings.trusted_hosts)
     app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 400/413 responses
@@ -95,8 +98,8 @@ def serve() -> None:
         "certgen.main:app",
         host=settings.host,
         port=settings.port,
-        # Bounded concurrency and short keep-alive: excess connections get 503 instead of piling up.
-        limit_concurrency=64,
+        # No limit_concurrency: uvicorn counts open connections, so 64 idle sockets locked every client
+        # out (audit F-11). Requests in progress are limited by ConcurrencyLimitMiddleware instead.
         timeout_keep_alive=5,
     )
 

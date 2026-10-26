@@ -241,3 +241,75 @@ def test_configured_host_is_served_and_others_refused(tmp_path: Any) -> None:
     with TestClient(app, base_url="http://certs.example.org") as c:
         assert c.get("/healthz").status_code == 200
         assert c.get("/healthz", headers={"Host": "testserver"}).status_code == 400
+
+
+# --- F-11: requests in progress are limited in the app; idle connections hold no slot ------------
+
+
+def test_request_limit_admits_64_and_refuses_the_65th_with_problem_json() -> None:
+    import asyncio
+
+    from certgen.middleware import ConcurrencyLimitMiddleware
+
+    release = asyncio.Event()
+    started = 0
+
+    async def slow_app(scope: Any, receive: Any, send: Any) -> None:
+        nonlocal started
+        started += 1
+        await release.wait()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    limited = ConcurrencyLimitMiddleware(slow_app, max_requests=64)
+
+    async def call() -> int:
+        out: list[dict[str, Any]] = []
+
+        async def receive() -> dict[str, Any]:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message: dict[str, Any]) -> None:
+            out.append(message)
+
+        await limited(
+            {"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b""}, receive, send
+        )
+        return int(out[0]["status"])
+
+    async def scenario() -> tuple[list[int], int, int]:
+        first = [asyncio.create_task(call()) for _ in range(64)]
+        while started < 64:
+            await asyncio.sleep(0)
+        refused = await call()  # the 65th while 64 are in progress
+        release.set()
+        statuses = await asyncio.gather(*first)
+        after = await call()  # slots are returned when requests finish
+        return list(statuses), refused, after
+
+    statuses, refused, after = asyncio.run(scenario())
+    assert statuses == [200] * 64 and refused == 503 and after == 200
+    assert limited.in_flight == 0
+
+
+def test_server_busy_is_problem_json_with_retry_after() -> None:
+    from certgen.errors import ProblemCode, problem_response
+
+    resp = problem_response(ProblemCode.SERVER_BUSY, "busy")
+    assert resp.status_code == 503 and resp.headers["retry-after"] == "1"
+    assert resp.media_type == "application/problem+json"
+
+
+def test_slot_is_released_when_the_app_raises() -> None:
+    import asyncio
+
+    from certgen.middleware import ConcurrencyLimitMiddleware
+
+    async def boom(scope: Any, receive: Any, send: Any) -> None:
+        raise RuntimeError("boom")
+
+    limited = ConcurrencyLimitMiddleware(boom, max_requests=1)
+    for _ in range(3):
+        with pytest.raises(RuntimeError):
+            asyncio.run(limited({"type": "http", "headers": []}, None, None))  # type: ignore[arg-type]
+    assert limited.in_flight == 0

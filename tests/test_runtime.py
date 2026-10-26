@@ -16,6 +16,7 @@ from conftest import ROOT, wait_until
 
 from certgen import main
 from certgen.config import Settings
+from certgen.middleware import ConcurrencyLimitMiddleware
 
 
 @pytest.mark.req("R11", "R13")
@@ -31,7 +32,11 @@ def test_server_limits_passed_to_uvicorn(monkeypatch: pytest.MonkeyPatch) -> Non
     main.serve()
     assert captured["app"] == "certgen.main:app"
     assert (captured["host"], captured["port"]) == ("127.0.0.1", 8123)
-    assert captured["limit_concurrency"] == 64
+    # §24.12 as amended (A-08, audit F-11): uvicorn's limit_concurrency counted open connections, so 64
+    # idle sockets locked every client out. The 64-request limit now lives in the app.
+    assert "limit_concurrency" not in captured
+    limits = [m.kwargs for m in main.app.user_middleware if m.cls is ConcurrencyLimitMiddleware]
+    assert limits == [{"max_requests": 64}]
     assert captured["timeout_keep_alive"] == 5
 
 

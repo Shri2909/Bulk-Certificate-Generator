@@ -7,6 +7,7 @@ SQLite waits never stall the event loop.
 from __future__ import annotations
 
 import re
+import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractContextManager, asynccontextmanager
 from typing import Any
@@ -67,6 +68,41 @@ def _strip_port(host: str) -> str:
         return match.group(1) if match else value
     name, sep, port = value.rpartition(":")
     return name if sep and port.isdigit() and ":" not in name else value
+
+
+class ConcurrencyLimitMiddleware:
+    """At most `max_requests` HTTP requests in progress; more get 503 SERVER_BUSY (problem+json).
+
+    Counts requests, not connections: a TCP connection that never completes its request headers holds
+    no slot, so idle sockets cannot lock other clients out (audit F-11). A request whose body is still
+    arriving does hold one, which keeps the memory spent on buffered bodies bounded.
+    """
+
+    def __init__(self, app: ASGIApp, max_requests: int) -> None:
+        self.app = app
+        self.max_requests = max_requests
+        self.in_flight = 0
+        self._lock = threading.Lock()  # TestClient may drive the app from more than one event loop
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        with self._lock:
+            admitted = self.in_flight < self.max_requests
+            if admitted:
+                self.in_flight += 1
+        if not admitted:
+            response = problem_response(
+                ProblemCode.SERVER_BUSY, "Too many requests are in progress; retry shortly."
+            )
+            await response(scope, receive, send)
+            return
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            with self._lock:
+                self.in_flight -= 1
 
 
 class NoStoreMiddleware:

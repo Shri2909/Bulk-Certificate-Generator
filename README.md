@@ -360,8 +360,9 @@ message naming the variable).
 | `CERTGEN_ALLOWED_HOSTS` | empty | comma-separated host names / IPs | `Host` header names served in addition to `localhost`, `127.0.0.1`, `[::1]`; anything else → `400 INVALID_HOST` (DNS-rebinding defence). Add the public name when running behind a proxy |
 | `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000 | **test only**: delay each render so crash tests can kill a worker mid-item |
 
-`python -m certgen` also limits uvicorn to 64 concurrent connections (`limit_concurrency`) with a 5 s
-keep-alive; requests over that limit get uvicorn's own plain-text `503`.
+At most 64 requests are in progress per process (counted by the app, whichever way it is served); a
+65th gets `503 SERVER_BUSY` with `Retry-After: 1`. Open connections that have not sent a complete
+request do not count, so idle sockets cannot lock clients out. `python -m certgen` uses a 5 s keep-alive.
 
 ## Error codes
 
@@ -386,6 +387,7 @@ Every non-2xx response is `application/problem+json`:
 | `DB_UNAVAILABLE` | 503 | database lock wait over 5 s, or the database cannot be read (`Retry-After: 1`) |
 | `ARCHIVE_BUSY` | 503 | two archives already being built in this process (`Retry-After: 1`) |
 | `CAPACITY_EXCEEDED` | 503 | accepting the job would exceed `CERTGEN_MAX_ACTIVE_ITEMS` (`Retry-After: 1`) |
+| `SERVER_BUSY` | 503 | 64 requests are already in progress in this process (`Retry-After: 1`) |
 
 Field codes (in `errors[].code`, and stored on items):
 
@@ -477,7 +479,11 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
   prints as "1 January 1").
 - **Leases use the wall clock:** a large forward clock step can expire live leases early (extra attempts,
   possibly `WORKER_LOST` after 3); the token fence still keeps one current owner and the same output.
-- **Over 64 concurrent connections** uvicorn answers with its own plain-text `503`, outside the problem+json contract.
+- **Slow uploads hold request slots:** a request counts toward the 64-request limit from its headers on,
+  so 64 clients that send headers and then trickle their bodies can still make others wait for
+  `503 SERVER_BUSY` (this bounds the memory spent buffering bodies). Idle connections are not limited
+  in the app; only the process's open-file limit (`ulimit -n`) caps them. Put a reverse proxy with
+  header and body timeouts in front of any exposed deployment.
 - Emails are printed on certificates by default, which puts contact details on a document that may be
   shared; set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to opt out.
 

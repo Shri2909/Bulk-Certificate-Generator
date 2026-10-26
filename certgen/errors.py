@@ -39,6 +39,7 @@ class ProblemCode(StrEnum):
     DB_UNAVAILABLE = "DB_UNAVAILABLE"
     ARCHIVE_BUSY = "ARCHIVE_BUSY"
     CAPACITY_EXCEEDED = "CAPACITY_EXCEEDED"
+    SERVER_BUSY = "SERVER_BUSY"
 
 
 # HTTP status and short title per code.
@@ -58,6 +59,7 @@ PROBLEMS: dict[ProblemCode, tuple[int, str]] = {
     ProblemCode.DB_UNAVAILABLE: (503, "Database unavailable"),
     ProblemCode.ARCHIVE_BUSY: (503, "Archive busy"),
     ProblemCode.CAPACITY_EXCEEDED: (503, "Capacity exceeded"),
+    ProblemCode.SERVER_BUSY: (503, "Server busy"),
 }
 
 

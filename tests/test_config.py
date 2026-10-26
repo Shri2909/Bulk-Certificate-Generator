@@ -56,7 +56,8 @@ def test_data_dir_is_resolved_to_absolute_path(tmp_path: Path) -> None:
         ("CERTGEN_POLL_INTERVAL_SECONDS", ["0.05", "10"], ["0.04", "10.1"]),
         ("CERTGEN_MAX_RECIPIENTS", ["1", "10000"], ["0", "100001"]),
         ("CERTGEN_LOG_LEVEL", ["DEBUG", "info", "WARNING", "ERROR"], ["TRACE", ""]),
-        ("CERTGEN_TEST_SLOW_RENDER_MS", ["0", "60000"], ["-1", "60001"]),
+        # Must also stay below the lease (30 s by default; amendment A-13, audit F-13).
+        ("CERTGEN_TEST_SLOW_RENDER_MS", ["0", "29999"], ["-1", "30000", "60001"]),
         ("CERTGEN_EMBEDDED_WORKER", ["1", "0", "TRUE", "false"], ["yes", "2", ""]),
         ("CERTGEN_PRINT_EMAIL_ON_CERTIFICATE", ["1", "0", "True", "FALSE"], ["on", "no"]),
         ("CERTGEN_HOST", ["127.0.0.1", "0.0.0.0", "::1"], ["localhost", "999.1.1.1"]),

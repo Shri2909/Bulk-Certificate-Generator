@@ -368,7 +368,7 @@ message naming the variable).
 | `CERTGEN_PUBLIC_BASE_URL` | `http://localhost:8000` | absolute http(s) URL, ≤ 100 chars; `http` only for localhost | stored per job (a snapshot) as the base for links on certificates; no link is printed in this version |
 | `CERTGEN_LOG_LEVEL` | `INFO` | `DEBUG/INFO/WARNING/ERROR` | `certgen` logger level |
 | `CERTGEN_ALLOWED_HOSTS` | empty | comma-separated host names / IPs | `Host` header names served in addition to `localhost`, `127.0.0.1`, `[::1]`; anything else → `400 INVALID_HOST` (DNS-rebinding defence). Add the public name when running behind a proxy |
-| `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000 | **test only**: delay each render so crash tests can kill a worker mid-item |
+| `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000, and below `CERTGEN_LEASE_SECONDS` | **test only**: delay each render so crash tests can kill a worker mid-item |
 
 At most 64 requests are in progress per process (counted by the app, whichever way it is served); a
 65th gets `503 SERVER_BUSY` with `Retry-After: 1`. Open connections that have not sent a complete

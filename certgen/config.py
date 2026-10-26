@@ -94,6 +94,12 @@ class Settings:
                 f"CERTGEN_MAX_ACTIVE_ITEMS ({self.max_active_items}) must be at least "
                 f"CERTGEN_MAX_RECIPIENTS ({self.max_recipients}); else a maximal request is never admitted"
             )
+        if self.test_slow_render_ms >= self.lease_seconds * 1000:
+            # Every render would outlive its lease and end as WORKER_LOST (audit F-13).
+            raise ValueError(
+                f"CERTGEN_TEST_SLOW_RENDER_MS ({self.test_slow_render_ms}) must be shorter than "
+                f"CERTGEN_LEASE_SECONDS ({self.lease_seconds} s)"
+            )
         try:
             ipaddress.ip_address(self.host)
         except ValueError:

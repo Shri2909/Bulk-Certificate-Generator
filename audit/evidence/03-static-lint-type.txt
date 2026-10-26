@@ -1,0 +1,371 @@
+$ ruff check .
+E501 Line too long (113 > 110)
+  --> audit/tests/conftest.py:42:111
+   |
+41 | def pytest_configure(config: pytest.Config) -> None:
+42 |     config.addinivalue_line("markers", "red(finding): TDD red spec; expected to FAIL until the finding is fixed")
+   |                                                                                                               ^^^
+43 |     config.addinivalue_line("markers", "e2e: starts a real uvicorn server subprocess")
+44 |     config.addinivalue_line("markers", "stress: concurrency/load test under bounded resources")
+   |
+
+E501 Line too long (115 > 110)
+  --> audit/tests/conftest.py:89:111
+   |
+88 | @pytest.fixture
+89 | def drain(app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock) -> Callable[..., list[int]]:
+   |                                                                                                               ^^^^^
+90 |     def _drain(renderer: Callable[[CertificateData], bytes] = render_certificate) -> list[int]:
+91 |         return Worker(app.state.engines, app.state.storage, settings, fake_clock, renderer).run_until_idle()
+   |
+
+E501 Line too long (122 > 110)
+  --> audit/tests/conftest.py:96:111
+   |
+96 | def payload(recipients: list[Any] | None = None, n: int = 3, certificate: dict[str, Any] | None = None) -> dict[str, Any]:
+   |                                                                                                               ^^^^^^^^^^^^
+97 |     return {
+98 |         "certificate": certificate if certificate is not None else dict(CERT),
+   |
+
+E501 Line too long (118 > 110)
+   --> audit/tests/conftest.py:141:111
+    |
+139 |             return err.code, {k.lower(): v for k, v in err.headers.items()}, err.read()
+140 |
+141 |     def json(self, method: str, path: str, obj: Any = None, headers: dict[str, str] | None = None) -> tuple[int, Any]:
+    |                                                                                                               ^^^^^^^^
+142 |         body = json.dumps(obj).encode() if obj is not None else None
+143 |         status, _, raw = self.request(method, path, body, {**JSON_HEADERS, **(headers or {})})
+    |
+
+E501 Line too long (113 > 110)
+  --> audit/tests/test_a1_red_contract.py:36:111
+   |
+34 |     unbounded string (measured 2.43 s at 512k chars; ~9-10 s at 1M)."""
+35 |     email = "a" * 1_000_000 + "@example.com"
+36 |     body = json.dumps(payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}])).encode()
+   |                                                                                                               ^^^
+37 |     started = time.perf_counter()
+38 |     resp = post_raw(client, body)
+   |
+
+E501 Line too long (131 > 110)
+  --> audit/tests/test_a1_red_contract.py:54:111
+   |
+52 |     cap is a Stage-2 product decision). Fails today: one error object per key is returned and persisted."""
+53 |     junk = {f"k{i:06d}": 0 for i in range(50_000)}
+54 |     body = json.dumps(payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": "b@example.com", **junk}])).encode()
+   |                                                                                                               ^^^^^^^^^^^^^^^^^^^^^
+55 |     resp = post_raw(client, body)
+56 |     assert resp.status_code == 202
+   |
+
+E501 Line too long (114 > 110)
+  --> audit/tests/test_a1_red_contract.py:61:111
+   |
+59 |     row_errors = [e for e in resp.json()["errors"] if e["row_index"] == 1]
+60 |     assert len(row_errors) <= 11, f"{len(row_errors)} errors returned for one row"
+61 |     assert len(resp.content) <= 64 * 1024, f"response is {len(resp.content)} bytes for a {len(body)}-byte request"
+   |                                                                                                               ^^^^
+62 |     assert stored <= 64 * 1024, f"{stored} bytes of errors persisted for one row"
+   |
+
+UP031 Use format specifiers instead of percent format
+  --> audit/tests/test_a1_red_contract.py:69:38
+   |
+67 | _CERT = '"certificate":{"title":"T","issuer":"I","issued_on":"2026-10-01"}'
+68 | SURROGATE_BODIES = {
+69 |     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+   |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+70 |     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+71 |     % _CERT,
+   |
+help: Replace with format specifiers
+   |
+68 | SURROGATE_BODIES = {
+   -     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+69 +     "unknown-key, all rows invalid": '{{{},"recipients":[{{"name":"A","email":"a@example.com","\\ud800":1}}]}}'.format(_CERT),
+70 |     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+   |
+note: This is an unsafe fix and may change runtime behavior
+
+E501 Line too long (116 > 110)
+  --> audit/tests/test_a1_red_contract.py:69:111
+   |
+67 | _CERT = '"certificate":{"title":"T","issuer":"I","issued_on":"2026-10-01"}'
+68 | SURROGATE_BODIES = {
+69 |     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+   |                                                                                                               ^^^^^^
+70 |     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+71 |     % _CERT,
+   |
+
+UP031 Use format specifiers instead of percent format
+  --> audit/tests/test_a1_red_contract.py:70:29
+   |
+68 |   SURROGATE_BODIES = {
+69 |       "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+70 |       "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+   |  _____________________________^
+71 | |     % _CERT,
+   | |___________^
+72 |       "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+73 |       % _CERT,
+   |
+help: Replace with format specifiers
+   |
+69 |     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+   -     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+   -     % _CERT,
+70 +     "name of rejected row": '{{{},"recipients":[{{"name":"A","email":"a@example.com"}},{{"name":"B\\ud800","email":"b@example.com"}}]}}'.format(_CERT),
+71 |     "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+   |
+note: This is an unsafe fix and may change runtime behavior
+
+E501 Line too long (130 > 110)
+  --> audit/tests/test_a1_red_contract.py:70:111
+   |
+68 | SURROGATE_BODIES = {
+69 |     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+70 |     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+   |                                                                                                               ^^^^^^^^^^^^^^^^^^^^
+71 |     % _CERT,
+72 |     "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+   |
+
+UP031 Use format specifiers instead of percent format
+  --> audit/tests/test_a1_red_contract.py:72:30
+   |
+70 |       "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+71 |       % _CERT,
+72 |       "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+   |  ______________________________^
+73 | |     % _CERT,
+   | |___________^
+74 |       "unknown-key value only": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udf…
+75 |       % _CERT,
+   |
+help: Replace with format specifiers
+   |
+71 |     % _CERT,
+   -     "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+   -     % _CERT,
+72 +     "email of rejected row": '{{{},"recipients":[{{"name":"A","email":"a@example.com"}},{{"name":"B","email":"b\\ud800@x.com"}}]}}'.format(_CERT),
+73 |     "unknown-key value only": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udfff"}]}'
+   |
+note: This is an unsafe fix and may change runtime behavior
+
+E501 Line too long (125 > 110)
+  --> audit/tests/test_a1_red_contract.py:72:111
+   |
+70 |     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+71 |     % _CERT,
+72 |     "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+   |                                                                                                               ^^^^^^^^^^^^^^^
+73 |     % _CERT,
+74 |     "unknown-key value only": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udfff…
+   |
+
+UP031 Use format specifiers instead of percent format
+  --> audit/tests/test_a1_red_contract.py:74:31
+   |
+72 |       "email of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+73 |       % _CERT,
+74 |       "unknown-key value only": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udf…
+   |  _______________________________^
+75 | |     % _CERT,
+   | |___________^
+76 |   }
+   |
+help: Replace with format specifiers
+   |
+73 |     % _CERT,
+   -     "unknown-key value only": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udfff"}]}'
+   -     % _CERT,
+74 +     "unknown-key value only": '{{{},"recipients":[{{"name":"A","email":"a@example.com"}},{{"name":"B","email":"b@example.com","x":"\\udfff"}}]}}'.format(_CERT),
+75 | }
+   |
+note: This is an unsafe fix and may change runtime behavior
+
+E501 Line too long (139 > 110)
+  --> audit/tests/test_a1_red_contract.py:74:111
+   |
+72 | …","email":"a@example.com"},{"name":"B","email":"b\\ud800@x.com"}]}'
+73 | …
+74 | …A","email":"a@example.com"},{"name":"B","email":"b@example.com","x":"\\udfff"}]}'
+   |                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+75 | …
+76 | …
+   |
+
+E501 Line too long (114 > 110)
+  --> audit/tests/test_a1_red_contract.py:85:111
+   |
+83 |     """F-03. JSON may legally contain \\ud800 escapes; json.loads turns them into lone surrogates that
+84 |     cannot be UTF-8 encoded. The contract is a 4xx/202 problem response, never 500. Fails today with
+85 |     UnicodeEncodeError -> 500 INTERNAL_ERROR (sqlite3 bind, sha256 of canonical JSON, or JSON response encode)."""
+   |                                                                                                               ^^^^
+86 |     key = "k-" + "".join(ch if ch.isalnum() else "-" for ch in case)  # printable ASCII, no spaces
+87 |     headers = {"Idempotency-Key": key} if variant == "idempotency-key" else {}
+   |
+
+E501 Line too long (133 > 110)
+   --> audit/tests/test_a1_red_contract.py:118:111
+    |
+116 |     hex); readers decode it as U+1F63, so the certificate's text says 'Zoë ὣ Smith'."""
+117 |     name = "Zoë \U0001f63c Smith"
+118 |     resp = client.post(JOBS, json=payload([{"name": name, "email": "zoe@example.com"}, {"name": "Ann", "email": "ann@example.com"}]))
+    |                                                                                                               ^^^^^^^^^^^^^^^^^^^^^^^
+119 |     assert resp.status_code == 202
+120 |     row0 = [e for e in resp.json()["errors"] if e["row_index"] == 0]
+    |
+
+E501 Line too long (122 > 110)
+   --> audit/tests/test_a1_red_contract.py:136:111
+    |
+135 | @pytest.mark.red("F-07")
+136 | def test_key_violation_reaches_replay_backstop(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    |                                                                                                               ^^^^^^^^^^^^
+137 |     """F-07. If the in-transaction key re-check ever misses an existing key, the UNIQUE backstop must turn
+138 |     the IntegrityError into a replay (200) as service.create_job documents. Fails today: the message
+    |
+
+E501 Line too long (133 > 110)
+   --> audit/tests/test_a1_red_contract.py:174:111
+    |
+172 | def _nfd_4cp_name() -> str:
+173 |     chars = sorted(
+174 |         (c for c in SUPPORTED_CHARS if len(unicodedata.normalize("NFD", c)) == 4 and _charset_error("n", c) is None and c.islower()),
+    |                                                                                                               ^^^^^^^^^^^^^^^^^^^^^^^
+175 |         key=lambda c: NAME.line_width(c, 1),
+176 |     )[:10]
+    |
+
+E501 Line too long (113 > 110)
+   --> audit/tests/test_a1_red_contract.py:190:111
+    |
+188 |     name = _nfd_4cp_name()
+189 |     rows = [
+190 |         {"name": name, "email": f"x{i:04d}" + "a" * 59 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57]) + ".org"}
+    |                                                                                                               ^^^
+191 |         for i in range(1000)
+192 |     ]
+    |
+
+Found 20 errors.
+4 unsafe fixes available with `--fix --unsafe-fixes`.
+[exit 1]
+$ ruff format --check .
+unformatted: File would be reformatted
+   --> audit/tests/conftest.py:42:29
+    |
+41  | def pytest_configure(config: pytest.Config) -> None:
+    -     config.addinivalue_line("markers", "red(finding): TDD red spec; expected to FAIL until the finding is fixed")
+42  +     config.addinivalue_line(
+43  +         "markers", "red(finding): TDD red spec; expected to FAIL until the finding is fixed"
+44  +     )
+45  |     config.addinivalue_line("markers", "e2e: starts a real uvicorn server subprocess")
+--------------------------------------------------------------------------------
+90  | @pytest.fixture
+    - def drain(app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock) -> Callable[..., list[int]]:
+91  + def drain(
+92  +     app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock
+93  + ) -> Callable[..., list[int]]:
+94  |     def _drain(renderer: Callable[[CertificateData], bytes] = render_certificate) -> list[int]:
+--------------------------------------------------------------------------------
+99  |
+    - def payload(recipients: list[Any] | None = None, n: int = 3, certificate: dict[str, Any] | None = None) -> dict[str, Any]:
+100 + def payload(
+101 +     recipients: list[Any] | None = None, n: int = 3, certificate: dict[str, Any] | None = None
+102 + ) -> dict[str, Any]:
+103 |     return {
+--------------------------------------------------------------------------------
+146 |
+    -     def json(self, method: str, path: str, obj: Any = None, headers: dict[str, str] | None = None) -> tuple[int, Any]:
+147 +     def json(
+148 +         self, method: str, path: str, obj: Any = None, headers: dict[str, str] | None = None
+149 +     ) -> tuple[int, Any]:
+150 |         body = json.dumps(obj).encode() if obj is not None else None
+    |
+
+unformatted: File would be reformatted
+   --> audit/tests/test_a1_red_contract.py:36:23
+    |
+35  |     email = "a" * 1_000_000 + "@example.com"
+    -     body = json.dumps(payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}])).encode()
+36  +     body = json.dumps(
+37  +         payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": email}])
+38  +     ).encode()
+39  |     started = time.perf_counter()
+--------------------------------------------------------------------------------
+55  |     junk = {f"k{i:06d}": 0 for i in range(50_000)}
+    -     body = json.dumps(payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": "b@example.com", **junk}])).encode()
+56  +     body = json.dumps(
+57  +         payload([{"name": "A", "email": "a@example.com"}, {"name": "B", "email": "b@example.com", **junk}])
+58  +     ).encode()
+59  |     resp = post_raw(client, body)
+--------------------------------------------------------------------------------
+64  |     assert len(row_errors) <= 11, f"{len(row_errors)} errors returned for one row"
+    -     assert len(resp.content) <= 64 * 1024, f"response is {len(resp.content)} bytes for a {len(body)}-byte request"
+65  +     assert len(resp.content) <= 64 * 1024, (
+66  +         f"response is {len(resp.content)} bytes for a {len(body)}-byte request"
+67  +     )
+68  |     assert stored <= 64 * 1024, f"{stored} bytes of errors persisted for one row"
+--------------------------------------------------------------------------------
+74  | SURROGATE_BODIES = {
+    -     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}' % _CERT,
+75  +     "unknown-key, all rows invalid": '{%s,"recipients":[{"name":"A","email":"a@example.com","\\ud800":1}]}'
+76  +     % _CERT,
+77  |     "name of rejected row": '{%s,"recipients":[{"name":"A","email":"a@example.com"},{"name":"B\\ud800","email":"b@example.com"}]}'
+--------------------------------------------------------------------------------
+124 |     name = "Zoë \U0001f63c Smith"
+    -     resp = client.post(JOBS, json=payload([{"name": name, "email": "zoe@example.com"}, {"name": "Ann", "email": "ann@example.com"}]))
+125 +     resp = client.post(
+126 +         JOBS,
+127 +         json=payload(
+128 +             [{"name": name, "email": "zoe@example.com"}, {"name": "Ann", "email": "ann@example.com"}]
+129 +         ),
+130 +     )
+131 |     assert resp.status_code == 202
+--------------------------------------------------------------------------------
+147 | @pytest.mark.red("F-07")
+    - def test_key_violation_reaches_replay_backstop(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+148 + def test_key_violation_reaches_replay_backstop(
+149 +     client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
+150 + ) -> None:
+151 |     """F-07. If the in-transaction key re-check ever misses an existing key, the UNIQUE backstop must turn
+--------------------------------------------------------------------------------
+187 |     chars = sorted(
+    -         (c for c in SUPPORTED_CHARS if len(unicodedata.normalize("NFD", c)) == 4 and _charset_error("n", c) is None and c.islower()),
+188 +         (
+189 +             c
+190 +             for c in SUPPORTED_CHARS
+191 +             if len(unicodedata.normalize("NFD", c)) == 4 and _charset_error("n", c) is None and c.islower()
+192 +         ),
+193 |         key=lambda c: NAME.line_width(c, 1),
+--------------------------------------------------------------------------------
+207 |     rows = [
+    -         {"name": name, "email": f"x{i:04d}" + "a" * 59 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57]) + ".org"}
+208 +         {
+209 +             "name": name,
+210 +             "email": f"x{i:04d}" + "a" * 59 + "@" + ".".join(["b" * 63, "c" * 63, "d" * 57]) + ".org",
+211 +         }
+212 |         for i in range(1000)
+    |
+
+2 files would be reformatted, 45 files already formatted
+[exit 1]
+$ mypy --strict certgen
+Success: no issues found in 20 source files
+[exit 0]
+$ mypy tests scripts (non-strict, informational; not a project gate)
+tests/test_spec_traceability.py:45: error: Incompatible return value type (got "list[tuple[str, int, list[expr]]]", expected "list[tuple[str, int, list[object]]]")  [return-value]
+tests/test_worker.py:126: error: Returning Any from function declared to return "bytes"  [no-any-return]
+tests/test_runtime.py:28: error: Module "certgen.main" does not explicitly export attribute "uvicorn"  [attr-defined]
+tests/test_rendering.py:92: error: Argument 3 to "Settings" has incompatible type "**dict[str, bool]"; expected "str"  [arg-type]
+tests/test_rendering.py:146: error: Unsupported operand types for in ("str | None" and "str")  [operator]
+tests/test_limits.py:164: error: Argument "headers" to "post" of "Client" has incompatible type "dict[str, bytes]"; expected "Headers | Mapping[str, str] | Mapping[bytes, bytes] | Sequence[tuple[str, str]] | Sequence[tuple[bytes, bytes]] | None"  [arg-type]
+tests/test_jobs_api.py:255: error: Returning Any from function declared to return "bool"  [no-any-return]
+Found 7 errors in 6 files (checked 24 source files)
+[exit 1]

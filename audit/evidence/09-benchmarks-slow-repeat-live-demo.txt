@@ -1,0 +1,203 @@
+== benchmark 1p
+CERTGEN_PUBLIC_BASE_URL is not set; certificate links will use http://localhost:8000
+{"processes": 1, "wall_ms": 12331.689, "throughput_per_s": 81.092, "acceptance": {"all_succeeded": true, "max_pdf_within_limit": true, "max_item_under_10pct_of_lease": true}}
+[exit 0] 25s
+== benchmark 2p
+CERTGEN_PUBLIC_BASE_URL is not set; certificate links will use http://localhost:8000
+{"processes": 2, "wall_ms": 7433.055, "throughput_per_s": 134.534, "acceptance": {"all_succeeded": true, "max_pdf_within_limit": true, "max_item_under_10pct_of_lease": true}}
+[exit 0] 21s
+== benchmark 4p
+CERTGEN_PUBLIC_BASE_URL is not set; certificate links will use http://localhost:8000
+{"processes": 4, "wall_ms": 6487.146, "throughput_per_s": 154.151, "acceptance": {"all_succeeded": true, "max_pdf_within_limit": true, "max_item_under_10pct_of_lease": true}}
+[exit 0] 19s
+== slow run 1
+5 passed, 319 deselected in 6.19s
+== slow run 2
+5 passed, 319 deselected in 5.80s
+== slow run 3
+5 passed, 319 deselected in 5.97s
+== slow run 4
+5 passed, 319 deselected in 5.85s
+== slow run 5
+5 passed, 319 deselected in 5.80s
+== check_live_demo
+PASS: assets, API docs, isolated empty session, same-origin controls
+PASS: dry run, partial acceptance, PDF, ZIP + manifest, safe replay
+PASS: real worker kill, lease recovery, same ID, exactly six PDFs
+PASS: isolated failure, attempt limit, explicit retry, stable certificate IDs
+PASS: demo end-to-end checks complete; temporary data and owned processes cleaned up
+[exit 0] 18s
+== bench-1p.json
+{
+  "schema_version": 1,
+  "timestamp_utc": "2026-10-26T04:06:30Z",
+  "git_commit": "261108d00e1b8657e81744e82882d6d2e447a06e",
+  "git_dirty": true,
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.11.9",
+  "versions": {
+    "fastapi": "0.143.0",
+    "starlette": "1.7.0",
+    "uvicorn": "0.54.0",
+    "pydantic": "2.14.0",
+    "email-validator": "2.3.0",
+    "sqlalchemy": "2.1.4",
+    "reportlab": "5.0.1",
+    "sqlite": "3.46.1"
+  },
+  "processes": 1,
+  "recipients": 1000,
+  "post_latency_ms": 123.683,
+  "wall_ms": 12331.689,
+  "throughput_per_s": 81.092,
+  "attempts_histogram": {
+    "1": 1000
+  },
+  "counts": {
+    "succeeded": 1000
+  },
+  "pdf_bytes": {
+    "max": 45167,
+    "count": 1000
+  },
+  "per_item_ms": {
+    "p50": 11.177,
+    "p95": 15.462,
+    "max": 28.817
+  },
+  "render_ms": {
+    "p50": 4.273,
+    "p95": 7.405,
+    "max": 10.937
+  },
+  "storage_ms": {
+    "p50": 3.72,
+    "p95": 5.503,
+    "max": 22.124
+  },
+  "serial_estimate_ms": 11177.0,
+  "peak_rss_bytes": 87568384,
+  "lease_ms": 30000,
+  "work_dir": "outside repository",
+  "acceptance": {
+    "all_succeeded": true,
+    "max_pdf_within_limit": true,
+    "max_item_under_10pct_of_lease": true
+  }
+}
+== bench-2p.json
+{
+  "schema_version": 1,
+  "timestamp_utc": "2026-10-26T04:06:50Z",
+  "git_commit": "261108d00e1b8657e81744e82882d6d2e447a06e",
+  "git_dirty": true,
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.11.9",
+  "versions": {
+    "fastapi": "0.143.0",
+    "starlette": "1.7.0",
+    "uvicorn": "0.54.0",
+    "pydantic": "2.14.0",
+    "email-validator": "2.3.0",
+    "sqlalchemy": "2.1.4",
+    "reportlab": "5.0.1",
+    "sqlite": "3.46.1"
+  },
+  "processes": 2,
+  "recipients": 1000,
+  "post_latency_ms": 117.226,
+  "wall_ms": 7433.055,
+  "throughput_per_s": 134.534,
+  "attempts_histogram": {
+    "1": 1000
+  },
+  "counts": {
+    "succeeded": 1000
+  },
+  "pdf_bytes": {
+    "max": 45167,
+    "count": 1000
+  },
+  "per_item_ms": {
+    "p50": 11.566,
+    "p95": 15.492,
+    "max": 22.714
+  },
+  "render_ms": {
+    "p50": 4.253,
+    "p95": 6.743,
+    "max": 12.109
+  },
+  "storage_ms": {
+    "p50": 4.291,
+    "p95": 5.477,
+    "max": 8.499
+  },
+  "serial_estimate_ms": 11566.0,
+  "peak_rss_bytes": 87416832,
+  "lease_ms": 30000,
+  "work_dir": "outside repository",
+  "acceptance": {
+    "all_succeeded": true,
+    "max_pdf_within_limit": true,
+    "max_item_under_10pct_of_lease": true
+  }
+}
+== bench-4p.json
+{
+  "schema_version": 1,
+  "timestamp_utc": "2026-10-26T04:07:10Z",
+  "git_commit": "261108d00e1b8657e81744e82882d6d2e447a06e",
+  "git_dirty": true,
+  "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.43",
+  "python": "3.11.9",
+  "versions": {
+    "fastapi": "0.143.0",
+    "starlette": "1.7.0",
+    "uvicorn": "0.54.0",
+    "pydantic": "2.14.0",
+    "email-validator": "2.3.0",
+    "sqlalchemy": "2.1.4",
+    "reportlab": "5.0.1",
+    "sqlite": "3.46.1"
+  },
+  "processes": 4,
+  "recipients": 1000,
+  "post_latency_ms": 123.836,
+  "wall_ms": 6487.146,
+  "throughput_per_s": 154.151,
+  "attempts_histogram": {
+    "1": 1000
+  },
+  "counts": {
+    "succeeded": 1000
+  },
+  "pdf_bytes": {
+    "max": 45167,
+    "count": 1000
+  },
+  "per_item_ms": {
+    "p50": 11.393,
+    "p95": 15.334,
+    "max": 24.614
+  },
+  "render_ms": {
+    "p50": 4.429,
+    "p95": 6.701,
+    "max": 10.548
+  },
+  "storage_ms": {
+    "p50": 4.194,
+    "p95": 5.412,
+    "max": 9.848
+  },
+  "serial_estimate_ms": 11393.0,
+  "peak_rss_bytes": 87212032,
+  "lease_ms": 30000,
+  "work_dir": "outside repository",
+  "acceptance": {
+    "all_succeeded": true,
+    "max_pdf_within_limit": true,
+    "max_item_under_10pct_of_lease": true
+  }
+}

@@ -1,0 +1,24 @@
+Name                    Stmts   Miss Branch BrPart  Cover   Missing
+-------------------------------------------------------------------
+certgen/__init__.py         1      0      0      0   100%
+certgen/__main__.py         2      2      0      0     0%   3-5
+certgen/api.py            153      1     50      1    99%   299
+certgen/archive.py         54      0      8      0   100%
+certgen/clock.py            6      0      0      0   100%
+certgen/config.py         114      0     36      0   100%
+certgen/db.py              62      4     10      0    92%   58-61
+certgen/errors.py         118      2     16      1    98%   190-191
+certgen/fonts.py           15      1      2      1    88%   28
+certgen/layout.py          56      0     14      0   100%
+certgen/main.py            61      0      4      0   100%
+certgen/middleware.py      69      3     20      2    94%   74, 79->71, 99-100
+certgen/models.py          67      0      0      0   100%
+certgen/rendering.py       67      0      6      0   100%
+certgen/service.py        192      9     38      3    93%   141-146, 210, 225-226
+certgen/status.py          22      0     10      0   100%
+certgen/storage.py         96     10     22      3    89%   33, 44, 59-60, 73, 102, 111-112, 126-127
+certgen/tables.py           8      0      0      0   100%
+certgen/validation.py     178      2     58      2    98%   83, 305
+certgen/worker.py         217     29     42      5    87%   107-111, 328, 336, 344-347, 368-388, 392
+-------------------------------------------------------------------
+TOTAL                    1558     63    336     18    95%

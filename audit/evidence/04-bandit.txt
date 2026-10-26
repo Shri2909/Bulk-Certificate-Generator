@@ -1,0 +1,558 @@
+[main]	INFO	profile include tests: None
+[main]	INFO	profile exclude tests: None
+[main]	INFO	cli include tests: None
+[main]	INFO	cli exclude tests: None
+[main]	INFO	running on Python 3.11.9
+Run started:2026-10-25 14:57:58.606246+00:00
+
+Test results:
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/errors.py:165:4
+164	def api_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+165	    assert isinstance(exc, ApiError)
+166	    return problem_response(exc.code, exc.detail, exc.errors, exc.headers)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/errors.py:171:4
+170	    """Query and path parameter errors: `field` is the parameter name (§6.5)."""
+171	    assert isinstance(exc, RequestValidationError)
+172	    errors = []
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/errors.py:181:4
+180	def http_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+181	    assert isinstance(exc, StarletteHTTPException)
+182	    if exc.status_code == 404:
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/errors.py:200:4
+199	def operational_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+200	    assert isinstance(exc, OperationalError)
+201	    if is_lock_timeout(exc):
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/service.py:163:16
+162	                view = _load_job(conn, existing)
+163	                assert view is not None
+164	                return view, True
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/service.py:176:4
+175	        view = _load_job(conn, job_id)
+176	    assert view is not None
+177	    return view, False
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: certgen/service.py:399:4
+398	        view = _load_job(conn, job_id)
+399	    assert view is not None
+400	    return view
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: scripts/benchmark.py:23:0
+22	import statistics
+23	import subprocess
+24	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: scripts/benchmark.py:138:8
+137	    workers = [
+138	        subprocess.Popen(
+139	            [sys.executable, "-m", "certgen.worker"], cwd=ROOT, env=env, stderr=subprocess.DEVNULL
+140	        )
+141	        for _ in range(processes)
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: scripts/benchmark.py:209:22
+208	        "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+209	        "git_commit": subprocess.run(
+210	            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
+211	        ).stdout.strip(),
+212	        # True if the code that ran differs from git_commit (uncommitted changes under certgen/ or scripts/).
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: scripts/benchmark.py:209:22
+208	        "timestamp_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+209	        "git_commit": subprocess.run(
+210	            ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
+211	        ).stdout.strip(),
+212	        # True if the code that ran differs from git_commit (uncommitted changes under certgen/ or scripts/).
+
+--------------------------------------------------
+>> Issue: [B607:start_process_with_partial_path] Starting a process with a partial executable path
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b607_start_process_with_partial_path.html
+   Location: scripts/benchmark.py:214:12
+213	        "git_dirty": bool(
+214	            subprocess.run(
+215	                ["git", "status", "--porcelain", "--", "certgen", "scripts"],
+216	                cwd=ROOT,
+217	                capture_output=True,
+218	                text=True,
+219	                check=False,
+220	            ).stdout.strip()
+221	        ),
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: scripts/benchmark.py:214:12
+213	        "git_dirty": bool(
+214	            subprocess.run(
+215	                ["git", "status", "--porcelain", "--", "certgen", "scripts"],
+216	                cwd=ROOT,
+217	                capture_output=True,
+218	                text=True,
+219	                check=False,
+220	            ).stdout.strip()
+221	        ),
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: scripts/check_live_demo.py:13:0
+12	import socket
+13	import subprocess
+14	import sys
+
+--------------------------------------------------
+>> Issue: [B310:blacklist] Audit url open for permitted schemes. Allowing use of file:/ or custom schemes is often unexpected.
+   Severity: Medium   Confidence: High
+   CWE: CWE-22 (https://cwe.mitre.org/data/definitions/22.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_calls.html#b310-urllib-urlopen
+   Location: scripts/check_live_demo.py:42:23
+41	        try:
+42	            response = urllib.request.urlopen(req, timeout=12)
+43	        except urllib.error.HTTPError as exc:
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:50:8
+49	        status, _, raw = request(path)
+50	        assert status == 200, (status, raw)
+51	        return json.loads(raw)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:55:8
+54	        status, _, raw = request(f"/demo/worker/{action}", post=True, headers={"X-Demo-Control": "local"})
+55	        assert status == 200, (status, raw)
+56	        return json.loads(raw)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:72:8
+71	        status, _, raw = request(jobs, body, headers={"Idempotency-Key": key})
+72	        assert status == 202, (status, raw)
+73	        return str(json.loads(raw)["id"])
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: scripts/check_live_demo.py:88:17
+87	    ):
+88	        server = subprocess.Popen(
+89	            [
+90	                sys.executable,
+91	                str(ROOT / "scripts/live_demo.py"),
+92	                "--no-browser",
+93	                "--port",
+94	                str(port),
+95	                "--data-dir",
+96	                str(Path(tmp) / "data"),
+97	            ],
+98	            cwd=ROOT,
+99	            stdout=log,
+100	            stderr=log,
+101	        )
+102	        try:
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:113:12
+112	                    time.sleep(0.1)
+113	            assert initial["jobs"] == [] and not initial["worker_running"]
+114	            for path in ["/", "/app.js", "/style.css", "/favicon.svg", "/api/docs"]:
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:115:16
+114	            for path in ["/", "/app.js", "/style.css", "/favicon.svg", "/api/docs"]:
+115	                assert request(path)[0] == 200, path
+116	            assert request("/demo/worker/start", post=True)[0] == 403
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:116:12
+115	                assert request(path)[0] == 200, path
+116	            assert request("/demo/worker/start", post=True)[0] == 403
+117	            assert (
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:117:12
+116	            assert request("/demo/worker/start", post=True)[0] == 403
+117	            assert (
+118	                request(
+119	                    "/demo/worker/start",
+120	                    post=True,
+121	                    headers={"X-Demo-Control": "local", "Origin": "https://unrelated.example"},
+122	                )[0]
+123	                == 403
+124	            )
+125	            print("PASS: assets, API docs, isolated empty session, same-origin controls", flush=True)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:136:12
+135	            status, _, raw = request(jobs + "?dry_run=true", body)
+136	            assert status == 200 and json.loads(raw)["counts"] == {"total": 4, "valid": 2, "rejected": 2}
+137	            assert get("/demo/state")["jobs"] == []
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:137:12
+136	            assert status == 200 and json.loads(raw)["counts"] == {"total": 4, "valid": 2, "rejected": 2}
+137	            assert get("/demo/state")["jobs"] == []
+138	            job_id = submit(body, "smoke-original")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:139:12
+138	            job_id = submit(body, "smoke-original")
+139	            assert get(f"{jobs}/{job_id}")["counts"]["pending"] == 2
+140	            control("start")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:142:12
+141	            job, rows = finish(job_id)
+142	            assert job["counts"]["succeeded"] == 2 and job["counts"]["rejected"] == 2
+143	            cert_id = next(row["certificate_id"] for row in rows if row["status"] == "succeeded")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:145:12
+144	            status, _, raw = request(f"/api/v1/certificates/{cert_id}")
+145	            assert status == 200 and raw.startswith(b"%PDF")
+146	            status, _, raw = request(f"{jobs}/{job_id}/archive")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:147:12
+146	            status, _, raw = request(f"{jobs}/{job_id}/archive")
+147	            assert status == 200
+148	            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:149:16
+148	            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+149	                assert len([name for name in archive.namelist() if name.endswith(".pdf")]) == 2
+150	                manifest = list(csv.DictReader(io.StringIO(archive.read("manifest.csv").decode())))
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:151:16
+150	                manifest = list(csv.DictReader(io.StringIO(archive.read("manifest.csv").decode())))
+151	                assert len(manifest) == 4
+152	            status, headers, raw = request(jobs, body, headers={"Idempotency-Key": "smoke-original"})
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:153:12
+152	            status, headers, raw = request(jobs, body, headers={"Idempotency-Key": "smoke-original"})
+153	            assert status == 200 and headers["Idempotent-Replayed"] == "true"
+154	            assert json.loads(raw)["id"] == job_id and len(get("/demo/state")["jobs"]) == 1
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:154:12
+153	            assert status == 200 and headers["Idempotent-Replayed"] == "true"
+154	            assert json.loads(raw)["id"] == job_id and len(get("/demo/state")["jobs"]) == 1
+155	            print("PASS: dry run, partial acceptance, PDF, ZIP + manifest, safe replay", flush=True)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:165:12
+164	            crashed = control("crash")
+165	            assert not crashed["worker_running"]
+166	            assert get(f"{jobs}/{crash_id}")["counts"]["processing"] == 1
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:166:12
+165	            assert not crashed["worker_running"]
+166	            assert get(f"{jobs}/{crash_id}")["counts"]["processing"] == 1
+167	            assert len(crashed["leases"]) == 1
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:167:12
+166	            assert get(f"{jobs}/{crash_id}")["counts"]["processing"] == 1
+167	            assert len(crashed["leases"]) == 1
+168	            control("start")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:170:12
+169	            job, rows = finish(crash_id)
+170	            assert job["counts"]["succeeded"] == 6
+171	            recovered = next(row for row in rows if row["certificate_id"] == crashed["crashed_certificate"])
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:172:12
+171	            recovered = next(row for row in rows if row["certificate_id"] == crashed["crashed_certificate"])
+172	            assert recovered["attempts"] == 2
+173	            files = list((Path(tmp) / "data" / "certificates" / crash_id).glob("*.pdf"))
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:174:12
+173	            files = list((Path(tmp) / "data" / "certificates" / crash_id).glob("*.pdf"))
+174	            assert len(files) == 6
+175	            print("PASS: real worker kill, lease recovery, same ID, exactly six PDFs", flush=True)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:191:12
+190	            job, rows = finish(failure_id)
+191	            assert job["counts"]["failed"] == 1 and job["counts"]["succeeded"] == 3
+192	            failed = next(row for row in rows if row["status"] == "failed")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:193:12
+192	            failed = next(row for row in rows if row["status"] == "failed")
+193	            assert failed["attempts"] == 3 and failed["email"] == "grace@example.org"
+194	            ids = [row["certificate_id"] for row in rows]
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:196:12
+195	            control("start")
+196	            assert request(f"{jobs}/{failure_id}/retry", post=True)[0] == 202
+197	            job, rows = finish(failure_id)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:198:12
+197	            job, rows = finish(failure_id)
+198	            assert job["counts"]["succeeded"] == 4
+199	            assert [row["certificate_id"] for row in rows] == ids
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:199:12
+198	            assert job["counts"]["succeeded"] == 4
+199	            assert [row["certificate_id"] for row in rows] == ids
+200	            assert all(row["attempts"] == 1 for row in rows)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:200:12
+199	            assert [row["certificate_id"] for row in rows] == ids
+200	            assert all(row["attempts"] == 1 for row in rows)
+201	            print(
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: scripts/check_live_demo.py:206:12
+205	            control("stop")
+206	            assert not get("/demo/state")["worker_running"]
+207	        finally:
+
+--------------------------------------------------
+>> Issue: [B404:blacklist] Consider possible security implications associated with the subprocess module.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess
+   Location: scripts/live_demo.py:12:0
+11	import signal
+12	import subprocess
+13	import sys
+
+--------------------------------------------------
+>> Issue: [B603:subprocess_without_shell_equals_true] subprocess call - check for execution of untrusted input.
+   Severity: Low   Confidence: High
+   CWE: CWE-78 (https://cwe.mitre.org/data/definitions/78.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html
+   Location: scripts/live_demo.py:113:30
+112	            with (self.data_dir / "worker.log").open("ab") as log:
+113	                self.worker = subprocess.Popen(
+114	                    [
+115	                        sys.executable,
+116	                        str(Path(__file__).resolve()),
+117	                        "--worker",
+118	                        mode,
+119	                        "--data-dir",
+120	                        str(self.data_dir),
+121	                    ],
+122	                    cwd=ROOT,
+123	                    stdin=subprocess.DEVNULL,
+124	                    stdout=log,
+125	                    stderr=log,
+126	                )
+127	
+
+--------------------------------------------------
+
+Code scanned:
+	Total lines of code: 2892
+	Total lines skipped (#nosec): 0
+	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 0
+
+Run metrics:
+	Total issues (by severity):
+		Undefined: 0
+		Low: 47
+		Medium: 1
+		High: 0
+	Total issues (by confidence):
+		Undefined: 0
+		Low: 0
+		Medium: 0
+		High: 48
+Files skipped (0):
+[exit 1]

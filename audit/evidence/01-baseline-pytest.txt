@@ -1,0 +1,7 @@
+# Baseline test run (EXECUTED) 2026-10-25T14:57:45Z
+# env: isolated copy /tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work (rsync of HEAD 261108d + uncommitted working tree), audit venv Python 3.11.9, pins from requirements-dev.txt
+$ python -m pytest -q -p no:cacheprovider
+........................................................................ [ 88%]
+....................................                                     [100%]
+324 passed in 12.01s
+[exit 0] wall 12.687422324 s

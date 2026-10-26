@@ -1,0 +1,108 @@
+# Audit suites (EXECUTED) 2026-10-26T04:08:22Z — isolated copy, CPython 3.11.9
+$ python -m pytest audit/tests -p no:cacheprovider -q -rfE --tb=line
+FFFFFFFFFF...FFFFFFFF................F..........F....................... [ 42%]
+............FFF......................................................... [ 85%]
+.........................                                                [100%]
+=================================== FAILURES ===================================
+E   AssertionError: validating one over-long email took 13.7 s
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:42: AssertionError: validating one over-long email took 13.7 s
+E   AssertionError: 50000 errors returned for one row
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:60: AssertionError: 50000 errors returned for one row
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 129: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 152: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\udfff' in position 159: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+certgen.errors.ApiError: 1 of 1 recipients are invalid; no job was created.
+During handling of the above exception, another exception occurred:
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 186: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 129: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 152: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\udfff' in position 159: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 118: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 119: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:90: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+OverflowError: Python int too large to convert to SQLite INTEGER
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:104: AssertionError: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+OverflowError: Python int too large to convert to SQLite INTEGER
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:104: AssertionError: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   AssertionError: text layer has 'Zoë  Smith'
+------------------------------ Captured log call -------------------------------
+WARNING  pypdf._cmap:_utils.py:504 Got invalid hex string: Odd-length string (b'1F63C')
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:129: AssertionError: text layer has 'Zoë  Smith'
+E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+------------------------------ Captured log call -------------------------------
+RuntimeError: no unique job id after 5 attempts
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:152: AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
+E   assert 1.0 < 1.0
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:166: assert 1.0 < 1.0
+E   assert 1.0 < 1.0
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:166: assert 1.0 < 1.0
+E   AssertionError: 413 for a 2884126-byte request of valid rows (limit 2665536)
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a1_red_contract.py:195: AssertionError: 413 for a 2884126-byte request of valid rows (limit 2665536)
+E   UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 6: surrogates not allowed
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a2_unit_property.py:96: UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 6: surrogates not allowed
+E   AssertionError: assert 'processing' in ('completed', 'completed_with_errors', 'failed')
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a2_unit_property.py:260: AssertionError: assert 'processing' in ('completed', 'completed_with_errors', 'failed')
+E   assert 200 == 400
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a4_e2e_server.py:135: assert 200 == 400
+E   AssertionError: /healthz statuses while 64 idle sockets are open: [503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503]
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a4_e2e_server.py:159: AssertionError: /healthz statuses while 64 idle sockets are open: [503, 503, 503, 503, 503, 503, 503, 503, 503, 503, 503]
+E   assert 3.8209563979999075 < 2.0
+----------------------------- Captured stdout call -----------------------------
+POST with 600k-char email: status=202 seconds=3.82; /healthz samples=23 max latency=201 ms
+/tmp/claude-1000/-home-abc-Desktop-Resume-Projects-bulk-certificate-generator/0fd90d05-7870-4e9d-8d3c-cf078830ec6a/scratchpad/work/audit/tests/test_a4_e2e_server.py:191: assert 3.8209563979999075 < 2.0
+=========================== short test summary info ============================
+FAILED audit/tests/test_a1_red_contract.py::test_overlong_email_is_rejected_in_bounded_time
+FAILED audit/tests/test_a1_red_contract.py::test_unknown_field_errors_are_bounded
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[plain-email of rejected row]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[plain-name of rejected row]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[plain-unknown-key value only]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[plain-unknown-key, all rows invalid]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[idempotency-key-email of rejected row]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[idempotency-key-name of rejected row]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[idempotency-key-unknown-key value only]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[idempotency-key-unknown-key, all rows invalid]
+FAILED audit/tests/test_a1_red_contract.py::test_lone_surrogate_never_500[dry-run-unknown-key, all rows invalid]
+FAILED audit/tests/test_a1_red_contract.py::test_items_after_out_of_range_is_422[9223372036854775808]
+FAILED audit/tests/test_a1_red_contract.py::test_items_after_out_of_range_is_422[1000000000000000000000000000000]
+FAILED audit/tests/test_a1_red_contract.py::test_accepted_name_round_trips_through_pdf_text_layer
+FAILED audit/tests/test_a1_red_contract.py::test_key_violation_reaches_replay_backstop
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[20001]
+FAILED audit/tests/test_a1_red_contract.py::test_progress_is_below_one_until_terminal[100000]
+FAILED audit/tests/test_a1_red_contract.py::test_body_limit_admits_every_valid_request[settings_overrides0]
+FAILED audit/tests/test_a2_unit_property.py::test_canonical_form_of_any_accepted_body_is_utf8_encodable
+FAILED audit/tests/test_a2_unit_property.py::test_progress_one_only_when_terminal
+FAILED audit/tests/test_a4_e2e_server.py::test_foreign_host_header_is_rejected
+FAILED audit/tests/test_a4_e2e_server.py::test_idle_connections_do_not_lock_out_clients
+FAILED audit/tests/test_a4_e2e_server.py::test_overlong_email_over_http_is_fast_and_does_not_starve_others
+23 failed, 146 passed in 55.02s
+[exit 1] wall 55 s

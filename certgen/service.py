@@ -167,9 +167,7 @@ def _create_job(
         if idempotency_key is not None and fingerprint is not None:
             existing = _job_for_key(conn, idempotency_key, fingerprint)
             if existing is not None:  # replays skip the capacity check: no new work is admitted
-                view = _load_job(conn, existing)
-                assert view is not None
-                return view, True
+                return _load_existing_job(conn, existing), True
         now = clock()  # read after BEGIN IMMEDIATE holds the lock, so timestamps follow commit order
         active = count_active_items(conn)
         if active + validated.valid_count > settings.max_active_items:
@@ -180,8 +178,7 @@ def _create_job(
             )
         job_id = _insert_job(conn, settings, validated, request_json, now, idempotency_key, fingerprint)
         _insert_items(conn, job_id, validated.rows)
-        view = _load_job(conn, job_id)
-    assert view is not None
+        view = _load_existing_job(conn, job_id)
     return view, False
 
 
@@ -251,6 +248,14 @@ def _item_values(job_id: str, row: ValidatedRow) -> dict[str, Any]:
 def get_job(engines: Engines, job_id: str) -> JobView | None:
     with engines.read.begin() as conn:  # one transaction: job row and counts see the same snapshot
         return _load_job(conn, job_id)
+
+
+def _load_existing_job(conn: Connection, job_id: str) -> JobView:
+    """A job this transaction just found or inserted; explicit, not an assert, so it holds under -O."""
+    view = _load_job(conn, job_id)
+    if view is None:
+        raise RuntimeError(f"job {job_id} vanished inside its own transaction")
+    return view
 
 
 def _load_job(conn: Connection, job_id: str) -> JobView | None:
@@ -403,6 +408,5 @@ def retry_failed(engines: Engines, settings: Settings, clock: Clock, job_id: str
                 f"would exceed the limit of {settings.max_active_items}. Retry later.",
             )
         conn.execute(text(RETRY_FAILED_SQL), {"job_id": job_id})
-        view = _load_job(conn, job_id)
-    assert view is not None
+        view = _load_existing_job(conn, job_id)
     return view

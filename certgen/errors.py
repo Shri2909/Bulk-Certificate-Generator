@@ -10,7 +10,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
@@ -166,13 +166,13 @@ def body_errors_from_pydantic(errors: Sequence[Mapping[str, Any]]) -> list[Field
 
 
 def api_error_handler(_request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, ApiError)
+    exc = cast(ApiError, exc)  # registered for this type only
     return problem_response(exc.code, exc.detail, exc.errors, exc.headers)
 
 
 def request_validation_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Query and path parameter errors: `field` is the parameter name (§6.5)."""
-    assert isinstance(exc, RequestValidationError)
+    exc = cast(RequestValidationError, exc)  # registered for this type only
     errors = []
     for err in exc.errors():
         loc = [str(part) for part in err["loc"][1:] if not isinstance(part, int)]
@@ -182,7 +182,7 @@ def request_validation_handler(_request: Request, exc: Exception) -> JSONRespons
 
 
 def http_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, StarletteHTTPException)
+    exc = cast(StarletteHTTPException, exc)  # registered for this type only
     if exc.status_code == 404:
         return problem_response(ProblemCode.NOT_FOUND, "The requested resource was not found.")
     if exc.status_code == 405:
@@ -201,7 +201,7 @@ def is_lock_timeout(exc: OperationalError) -> bool:
 
 
 def operational_error_handler(_request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, OperationalError)
+    exc = cast(OperationalError, exc)  # registered for this type only
     if is_lock_timeout(exc):
         log.warning("db_lock_timeout")
         return problem_response(ProblemCode.DB_UNAVAILABLE, "The database is busy; retry shortly.")

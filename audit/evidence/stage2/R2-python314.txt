@@ -1,0 +1,9 @@
+# Python 3.14 run (EXECUTED 2026-10-27T12:38:55Z) HEAD 946b267, Python 3.14.4; pins from requirements-dev.txt (+ hypothesis for audit/tests)
+$ pytest tests
+449 passed in 28.69s
+$ pytest audit/tests
+231 passed in 43.32s
+$ mypy --strict certgen
+Success: no issues found in 21 source files
+$ ruff check .
+All checks passed!

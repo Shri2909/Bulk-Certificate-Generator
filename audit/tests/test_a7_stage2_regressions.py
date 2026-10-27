@@ -559,7 +559,8 @@ def test_symlinked_file_is_refused_even_without_o_nofollow(
     job, cert = "a" * 32, "b" * 32
     store.save_atomic(job, cert, b"%PDF-real")
     secret = tmp_path / "secret.pdf"
-    secret.write_bytes(b"%PDF-secret outside the data dir")
+    # Framed like a PDF, so only the symlink check (not the F-15 damage check) can refuse it.
+    secret.write_bytes(b"%PDF-secret outside the data dir\n%%EOF\n")
     path = store.path_for(job, cert)
     path.unlink()
     path.symlink_to(secret)

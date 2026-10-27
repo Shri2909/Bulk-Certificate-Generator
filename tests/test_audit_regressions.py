@@ -807,7 +807,8 @@ def test_symlinked_file_is_refused_even_without_o_nofollow(
     job, cert = "a" * 32, "b" * 32
     store.save_atomic(job, cert, b"%PDF-real")
     secret = tmp_path / "secret.pdf"
-    secret.write_bytes(b"%PDF-secret outside the data dir")
+    # Framed like a PDF, so only the symlink check (not the F-15 damage check) can refuse it.
+    secret.write_bytes(b"%PDF-secret outside the data dir\n%%EOF\n")
     path = store.path_for(job, cert)
     path.unlink()
     path.symlink_to(secret)
@@ -819,11 +820,14 @@ def test_symlinked_file_is_refused_even_without_o_nofollow(
 
 @pytest.mark.req("R8", "R9")
 @pytest.mark.skipif(__import__("os").name != "posix", reason="POSIX symlinks")
+@pytest.mark.parametrize("target", ["outside the root", "another job's directory"])
 def test_symlinked_job_dir_is_refused_on_write(
-    client: TestClient, drain: Any, tmp_path: Path, settings: Any, fake_clock: Any
+    client: TestClient, drain: Any, tmp_path: Path, settings: Any, fake_clock: Any, target: str
 ) -> None:
+    """Kills M10: a link to another job's directory resolves inside the root, so only the symlink check
+    refuses it (a link outside the root is also refused by the root check)."""
     job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
-    outside = tmp_path / "outside"
+    outside = tmp_path / "outside" if target == "outside the root" else settings.certificates_dir / ("c" * 32)
     outside.mkdir()
     (settings.certificates_dir / job_id).symlink_to(outside, target_is_directory=True)
     for _ in range(settings.max_attempts):

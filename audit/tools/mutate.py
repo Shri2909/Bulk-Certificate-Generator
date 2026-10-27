@@ -225,7 +225,15 @@ def main() -> int:
     only = [a.removeprefix("--only=").split(",") for a in sys.argv if a.startswith("--only=")]
     if only:  # e.g. --only=R12,R13
         mutants = [m for m in mutants if m[0] in only[0]]
-    rows = ["id\tfile\tdescription\tverdict\tseconds\tfirst_failure"]
+    # A test that already fails on the unmutated copy (e.g. the secret scan, which needs git metadata the
+    # copy lacks) would "kill" every mutant it sees; it is deselected and listed in the output.
+    project_args = ["tests", "-m", "not slow"]
+    broken = _baseline_failures(copy, project_args) + (
+        _baseline_failures(copy, ["audit/tests"]) if with_audit else []
+    )
+    deselect = [arg for node in broken for arg in ("--deselect", node)]
+    rows = [f"# deselected, failing on the unmutated copy: {', '.join(broken) or 'none'}"]
+    rows.append("id\tfile\tdescription\tverdict\tseconds\tfirst_failure")
     for mid, rel, old, new, desc in mutants:
         path = copy / rel
         original = path.read_bytes()
@@ -237,9 +245,9 @@ def main() -> int:
         path.write_text(source.replace(old, new), encoding="utf-8")
         started = time.monotonic()
         try:
-            verdict, first = _run_suite(copy, ["tests", "-m", "not slow"], "KILLED (tests)")
+            verdict, first = _run_suite(copy, [*project_args, *deselect], "KILLED (tests)")
             if verdict == "SURVIVED" and with_audit:
-                verdict, first = _run_suite(copy, ["audit/tests"], "KILLED (audit)")
+                verdict, first = _run_suite(copy, ["audit/tests", *deselect], "KILLED (audit)")
         finally:
             path.write_bytes(original)
         assert path.read_bytes() == original
@@ -247,6 +255,17 @@ def main() -> int:
         print(rows[-1], flush=True)
     out.write_text("\n".join(rows) + "\n", encoding="utf-8")
     return 0
+
+
+def _baseline_failures(copy: Path, args: list[str]) -> list[str]:
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", *args, "-q", "-p", "no:cacheprovider", "--timeout=200", "-rf"],
+        cwd=copy,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+    return [line[7:].split(" - ")[0] for line in proc.stdout.splitlines() if line.startswith("FAILED ")]
 
 
 def _run_suite(copy: Path, args: list[str], killed: str) -> tuple[str, str]:

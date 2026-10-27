@@ -249,11 +249,19 @@ def test_stale_file_of_failed_item_is_never_served(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+@pytest.mark.parametrize("target", ["outside the root", "another job's directory"])
 def test_symlinked_job_dir_is_refused_on_write(
-    client: TestClient, app: FastAPI, drain: Any, tmp_path: Path, settings: Settings, fake_clock: FakeClock
+    client: TestClient,
+    app: FastAPI,
+    drain: Any,
+    tmp_path: Path,
+    settings: Settings,
+    fake_clock: FakeClock,
+    target: str,
 ) -> None:
     job_id = client.post(JOBS, json=payload(n=1)).json()["id"]
-    outside = tmp_path / "outside"
+    # Inside the root, only the symlink check refuses the link (outside, the root check does too).
+    outside = tmp_path / "outside" if target == "outside the root" else settings.certificates_dir / ("c" * 32)
     outside.mkdir()
     (settings.certificates_dir / job_id).symlink_to(outside, target_is_directory=True)
     for _ in range(settings.max_attempts):

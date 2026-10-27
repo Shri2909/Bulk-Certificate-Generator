@@ -1,0 +1,11 @@
+== R2-M10-M11 2026-10-27T13:47:04Z HEAD 39327ed python Python 3.11.9
+-- pytest tests
+475 passed in 21.24s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+66 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 21 source files
+-- pytest audit/tests
+232 passed in 32.38s

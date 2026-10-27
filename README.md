@@ -427,8 +427,14 @@ At most 64 requests are in progress per process (counted by the app, whichever w
 65th gets `503 SERVER_BUSY` with `Retry-After: 1`. Open connections that have not sent a complete
 request do not count, so idle sockets cannot lock clients out. At most `CERTGEN_MAX_CONCURRENT_SUBMISSIONS`
 (default 2) job submissions are parsed and validated at once, a request body must arrive within 30 s
-(else `408 REQUEST_TIMEOUT`), and a submission to a full queue is refused before it is validated.
+(else `408 REQUEST_TIMEOUT`), each piece of a response must be accepted by the client within 30 s (else
+the download is aborted), and a submission to a full queue is refused before it is validated.
 `python -m certgen` uses a 5 s keep-alive.
+
+A refused submission is answered before its body is read and the connection is then closed, so a client
+that is still sending a large body may see a connection reset instead of the `503`. Send
+`Expect: 100-continue` to get the `503` before sending the body, or
+treat a reset like a `503` and retry after a second.
 
 ## Error codes
 
@@ -580,8 +586,9 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
   (A-10), progress never 1.0 early (A-11), body budget for decomposed input (A-12). Its second round added
   A-13 to A-18: slow-render delay below the lease (A-13), damaged certificate files refused (A-14), row cap
   and free-disk guard (A-15), submission limit and body deadline (A-16), bearer-token authentication
-  (A-17), response send deadline (A-18). The audit's own tests run with `pytest audit/tests` (separately
-  from `pytest`, which runs `tests/`).
+  (A-17), response send deadline (A-18). The audit's own tests need its extra tools
+  (`pip install -r audit/requirements.txt`, which includes the dev requirements) and run with
+  `pytest audit/tests` (separately from `pytest`, which runs `tests/`).
 - **Interpretations** where the blueprint was silent or a library behaved differently than it assumed (no
   behavior added):
   - email-validator accepts internationalized domains even with SMTPUTF8 off, so emails are checked to be

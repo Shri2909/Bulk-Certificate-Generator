@@ -15,7 +15,8 @@ from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from certgen import __version__
-from certgen.api import JOBS_PATH, router
+from certgen.api import JOBS_PATH, health_router, router
+from certgen.auth import TokenStore, load_or_create_token
 from certgen.clock import Clock, system_clock
 from certgen.config import ARCHIVE_CONCURRENCY, BODY_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS, Settings
 from certgen.db import check_sqlite_version, create_engines, create_schema
@@ -33,6 +34,7 @@ from certgen.middleware import (
     HostAllowlistMiddleware,
     NoStoreMiddleware,
     SubmissionLimitMiddleware,
+    TokenAuthMiddleware,
     async_lifespan,
 )
 from certgen.rendering import render_certificate
@@ -43,11 +45,14 @@ from certgen.worker import Renderer, Worker, WorkerPool, with_slow_render
 def create_app(
     settings: Settings, clock: Clock = system_clock, renderer: Renderer = render_certificate
 ) -> FastAPI:
+    tokens = TokenStore()  # filled in lifespan, before the first request; empty = every /v1 request is 401
+
     @contextmanager
     def lifespan(app: FastAPI) -> Iterator[None]:
         logging.getLogger("certgen").setLevel(settings.log_level)
         check_sqlite_version()
         prepare_data_dir(settings.data_dir, settings.certificates_dir)
+        tokens.set_tokens(settings.api_tokens or (load_or_create_token(settings.token_file),))
         engines = create_engines(settings.db_path)
         create_schema(engines)
         storage = Storage(settings.certificates_dir)
@@ -88,6 +93,8 @@ def create_app(
     )
     # Outside the body buffer, so a request still uploading holds a slot: bounded buffered memory.
     app.add_middleware(ConcurrencyLimitMiddleware, max_requests=MAX_CONCURRENT_REQUESTS)
+    # Token check before a request slot is taken or a body is read (audit F-12).
+    app.add_middleware(TokenAuthMiddleware, store=tokens, prefix="/v1/")
     # Host check before any body is read: a rebinding page cannot even get its upload buffered.
     app.add_middleware(HostAllowlistMiddleware, allowed_hosts=settings.trusted_hosts)
     app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 400/413 responses
@@ -96,6 +103,7 @@ def create_app(
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(OperationalError, operational_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
+    app.include_router(health_router)
     app.include_router(router)
     return app
 

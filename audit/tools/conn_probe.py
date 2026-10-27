@@ -73,6 +73,9 @@ def main() -> None:
         port = s.getsockname()[1]
     env = {k: v for k, v in os.environ.items() if not k.startswith("CERTGEN_")}
     env.update(CERTGEN_DATA_DIR=str(data / "d"), CERTGEN_PORT=str(port), PYTHONPATH=str(root))
+    env["CERTGEN_API_TOKENS"] = (
+        "audit-token-0123456789abcdef"  # ignored by the baseline, which has no authentication
+    )
     log = (data / "server.log").open("wb")
     proc = subprocess.Popen([sys.executable, "-m", "certgen"], cwd=root, env=env, stdout=log, stderr=log)
     try:
@@ -83,6 +86,7 @@ def main() -> None:
         scenario(port, "idle sockets (no bytes)", None)
         stalled = (
             b"POST /v1/certificate-jobs HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"Authorization: Bearer audit-token-0123456789abcdef\r\n"
             b"Content-Type: application/json\r\nContent-Length: 100000\r\n\r\n{"
         )
         scenario(port, "stalled uploads, all connected first", stalled)

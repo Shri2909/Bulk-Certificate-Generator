@@ -6,7 +6,7 @@ import re
 import sqlite3
 
 import pytest
-from conftest import JOBS, job_payload, post_job, recipient
+from conftest import AUTH_HEADERS, JOBS, job_payload, post_job, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.exc import OperationalError
@@ -53,7 +53,7 @@ def test_internal_error_is_problem_json_without_traceback(
         raise RuntimeError("secret detail at /home/user/data/certgen.sqlite3")
 
     monkeypatch.setattr(service, "get_job", boom)
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, headers=AUTH_HEADERS, raise_server_exceptions=False) as c:
         resp = c.get(f"{JOBS}/{'0' * 32}")
     body = assert_problem(resp, 500, "INTERNAL_ERROR")
     assert body["detail"] == "Internal server error"
@@ -81,7 +81,7 @@ def test_other_operational_errors_are_500(app: FastAPI, monkeypatch: pytest.Monk
         raise OperationalError("SELECT", {}, sqlite3.OperationalError("no such table: jobs"))
 
     monkeypatch.setattr(service, "get_job", broken)
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, headers=AUTH_HEADERS, raise_server_exceptions=False) as c:
         resp = c.get(f"{JOBS}/{'0' * 32}")
     assert_problem(resp, 500, "INTERNAL_ERROR")
     assert "no such table" not in resp.text

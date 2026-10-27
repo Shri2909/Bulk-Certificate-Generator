@@ -5,7 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import JOBS, TESTCLIENT_HOSTS, job_payload, post_job, recipient, wait_until
+from conftest import (
+    AUTH_HEADERS,
+    JOBS,
+    TEST_API_TOKEN,
+    TESTCLIENT_HOSTS,
+    job_payload,
+    post_job,
+    recipient,
+    wait_until,
+)
 from fastapi.testclient import TestClient
 
 from certgen.config import Settings
@@ -19,8 +28,9 @@ def test_end_to_end_embedded_worker(tmp_path: Path) -> None:
         worker_threads=2,
         poll_interval_seconds=0.05,
         allowed_hosts=TESTCLIENT_HOSTS,
+        api_tokens=(TEST_API_TOKEN,),
     )
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings), headers=AUTH_HEADERS) as client:
         assert client.get("/healthz").json() == {
             "status": "ok",
             "db": "ok",

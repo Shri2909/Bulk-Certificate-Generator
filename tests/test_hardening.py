@@ -323,3 +323,178 @@ def test_full_queue_is_refused_before_validation(client: Any, monkeypatch: pytes
     assert resp.status_code == 503 and resp.json()["code"] == "CAPACITY_EXCEEDED"
     assert calls == []  # refused without spending CPU on validation
     assert client.post(JOBS + "?dry_run=true", json=job_payload(n=1)).status_code == 200
+
+
+# --- F-12: bearer-token authentication by default; Idempotency-Keys scoped per token -------------
+
+TOKEN_A = "token-a-0123456789abcdefghij"
+TOKEN_B = "token-b-0123456789abcdefghij"
+
+
+def _auth_app(tmp_path: Path, **overrides: Any) -> Any:
+    from conftest import TESTCLIENT_HOSTS
+
+    from certgen.config import Settings
+    from certgen.main import create_app
+
+    values: dict[str, Any] = {
+        "data_dir": tmp_path / "data",
+        "embedded_worker": False,
+        "allowed_hosts": TESTCLIENT_HOSTS,
+    }
+    values.update(overrides)
+    return create_app(Settings(**values))
+
+
+def _bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.mark.req("R11")
+@pytest.mark.parametrize(
+    "headers",
+    [
+        {},
+        {"Authorization": "Bearer wrong-token-0123456789"},
+        {"Authorization": f"Basic {TOKEN_A}"},
+        {"Authorization": "Bearer"},
+    ],
+)
+def test_v1_routes_require_a_valid_bearer_token(tmp_path: Path, headers: dict[str, str]) -> None:
+    from conftest import JOBS, job_payload
+    from fastapi.testclient import TestClient
+
+    with TestClient(_auth_app(tmp_path, api_tokens=(TOKEN_A,))) as c:
+        for method, path in (
+            ("POST", JOBS),
+            ("GET", f"{JOBS}/{'a' * 32}"),
+            ("GET", f"/v1/certificates/{'a' * 32}"),
+        ):
+            resp = c.request(method, path, json=job_payload(n=1), headers=headers)
+            assert resp.status_code == 401, (method, path)
+            assert resp.json()["code"] == "UNAUTHORIZED"
+            assert resp.headers["www-authenticate"] == "Bearer"
+
+
+@pytest.mark.req("R11")
+def test_token_is_accepted_and_open_routes_stay_open(tmp_path: Path) -> None:
+    from conftest import JOBS, job_payload
+    from fastapi.testclient import TestClient
+
+    with TestClient(_auth_app(tmp_path, api_tokens=(TOKEN_A, TOKEN_B))) as c:
+        assert c.post(JOBS, json=job_payload(n=1), headers=_bearer(TOKEN_A)).status_code == 202
+        assert (
+            c.post(JOBS, json=job_payload(n=1), headers={"Authorization": f"bearer {TOKEN_B}"}).status_code
+            == 202
+        )
+        for path in ("/healthz", "/docs", "/openapi.json"):
+            assert c.get(path).status_code == 200, path
+
+
+@pytest.mark.req("R11")
+def test_unauthenticated_request_is_refused_before_its_body_is_read(tmp_path: Path) -> None:
+    from conftest import JOBS
+    from fastapi.testclient import TestClient
+
+    with TestClient(_auth_app(tmp_path, api_tokens=(TOKEN_A,))) as c:
+        resp = c.post(
+            JOBS, content=b"x", headers={"Content-Type": "application/json", "Content-Length": str(10**9)}
+        )
+        assert resp.status_code == 401
+
+
+@pytest.mark.req("R1", "R11")
+def test_idempotency_keys_are_scoped_per_token(tmp_path: Path) -> None:
+    from conftest import JOBS, job_payload
+    from fastapi.testclient import TestClient
+
+    with TestClient(_auth_app(tmp_path, api_tokens=(TOKEN_A, TOKEN_B))) as c:
+        key = {"Idempotency-Key": "order-42"}
+        first = c.post(JOBS, json=job_payload(n=1), headers={**_bearer(TOKEN_A), **key})
+        assert first.status_code == 202
+        squatter = c.post(JOBS, json=job_payload(n=2), headers={**_bearer(TOKEN_B), **key})
+        assert squatter.status_code == 202  # B's key is its own: no 409, no oracle about A's keys
+        replay = c.post(JOBS, json=job_payload(n=1), headers={**_bearer(TOKEN_A), **key})
+        assert replay.status_code == 200 and replay.json()["id"] == first.json()["id"]
+        assert c.post(JOBS, json=job_payload(n=3), headers={**_bearer(TOKEN_A), **key}).status_code == 409
+
+
+@pytest.mark.req("R11", "R13")
+def test_a_token_file_is_created_once_when_no_token_is_configured(tmp_path: Path) -> None:
+    import stat
+
+    from conftest import JOBS, job_payload
+    from fastapi.testclient import TestClient
+
+    with TestClient(_auth_app(tmp_path)) as c:
+        token_file = tmp_path / "data" / "api-token"
+        token = token_file.read_text(encoding="utf-8").strip()
+        assert len(token) >= 32 and stat.S_IMODE(token_file.stat().st_mode) == 0o600
+        assert c.post(JOBS, json=job_payload(n=1), headers=_bearer(token)).status_code == 202
+        assert c.post(JOBS, json=job_payload(n=1)).status_code == 401
+    with TestClient(_auth_app(tmp_path)) as c:  # a restart reuses the same token
+        assert token_file.read_text(encoding="utf-8").strip() == token
+        assert c.post(JOBS, json=job_payload(n=1), headers=_bearer(token)).status_code == 202
+
+
+@pytest.mark.req("R11")
+@pytest.mark.parametrize("raw", ["short", "has space-0123456789abc", "a" * 300, "tokén-0123456789abcdef"])
+def test_invalid_configured_tokens_are_refused_at_startup(raw: str) -> None:
+    from certgen.config import Settings
+
+    with pytest.raises(ValueError, match="CERTGEN_API_TOKENS"):
+        Settings.from_env({"CERTGEN_API_TOKENS": raw})
+
+
+@pytest.mark.req("R11")
+def test_configured_tokens_are_parsed_from_the_environment() -> None:
+    from certgen.config import Settings
+
+    assert Settings.from_env({"CERTGEN_API_TOKENS": f" {TOKEN_A} ,{TOKEN_B}"}).api_tokens == (
+        TOKEN_A,
+        TOKEN_B,
+    )
+
+
+@pytest.mark.req("R11", "R13")
+@pytest.mark.slow
+@pytest.mark.skipif(__import__("os").name != "posix", reason="POSIX signals")
+def test_real_server_creates_and_enforces_its_token_file(tmp_path: Path) -> None:
+    import os
+    import socket
+    import subprocess
+    import sys
+    import urllib.error
+    import urllib.request
+
+    from conftest import ROOT, wait_until
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CERTGEN_")}
+    env.update(CERTGEN_DATA_DIR=str(tmp_path / "data"), CERTGEN_PORT=str(port), PYTHONPATH=str(ROOT))
+    proc = subprocess.Popen([sys.executable, "-m", "certgen"], cwd=ROOT, env=env, stderr=subprocess.PIPE)
+
+    def status(path: str, token: str | None = None) -> int:
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        try:
+            with urllib.request.urlopen(
+                urllib.request.Request(f"http://127.0.0.1:{port}{path}", headers=headers), timeout=2
+            ) as r:
+                return int(r.status)
+        except urllib.error.HTTPError as err:
+            return err.code
+        except OSError:
+            return 0
+
+    try:
+        assert wait_until(lambda: status("/healthz") == 200, timeout=20)
+        token = (tmp_path / "data" / "api-token").read_text(encoding="utf-8").strip()
+        missing = f"/v1/certificate-jobs/{'a' * 32}"
+        assert status(missing) == 401
+        assert status(missing, token) == 404  # authenticated: the job simply does not exist
+    finally:
+        proc.send_signal(__import__("signal").SIGINT)
+        _, stderr = proc.communicate(timeout=20)
+    assert token not in stderr.decode(errors="replace")  # the token itself is never logged

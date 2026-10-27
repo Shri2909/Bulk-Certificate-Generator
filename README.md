@@ -14,10 +14,13 @@ pip install -r requirements.txt
 python -m certgen                    # serves http://127.0.0.1:8000 with 2 embedded workers
 ```
 
-In a second terminal, submit a job:
+In a second terminal, submit a job. Every `/v1` call needs the API token, which the server writes to
+`data/api-token` on first start (see [Authentication](#authentication)):
 
 ```bash
+TOKEN=$(cat data/api-token)
 curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"certificate": {"title": "Python for Data Engineering", "issuer": "Acme Academy", "issued_on": "2026-10-01"}, "recipients": [{"name": "Zoë Łukasz", "email": "zoe@example.com"}, {"name": "Bob", "email": "not-an-email"}, {"name": "Νίκος Παπαδόπουλος", "email": "nikos@example.org"}]}'
 ```
@@ -52,6 +55,16 @@ python -m certgen
 This starts uvicorn on `127.0.0.1:8000` (change with `CERTGEN_HOST` / `CERTGEN_PORT`) and two worker
 threads inside the same process. Data goes to `./data/` (`CERTGEN_DATA_DIR`): `certgen.sqlite3` and
 `certificates/{job_id}/{certificate_id}.pdf`. `uvicorn certgen.main:app` also works.
+
+### Authentication
+
+Every `/v1` request needs `Authorization: Bearer <token>`; anything else gets `401 UNAUTHORIZED`.
+`/healthz`, `/docs` and `/openapi.json` stay open (use **Authorize** in `/docs`). Tokens come from
+`CERTGEN_API_TOKENS` (comma-separated, 16–256 characters, e.g. `python -c "import secrets;
+print(secrets.token_urlsafe(32))"`). If it is not set, the server creates a random token in
+`{CERTGEN_DATA_DIR}/api-token` (mode `0600`) on first start and reuses it; its path, never the token, is
+logged. Idempotency-Keys belong to the token that sent them. To rotate, change `CERTGEN_API_TOKENS`
+(or delete the file) and restart.
 
 To scale generation, turn the embedded threads off and run separate worker processes against the same
 data directory; any mix is safe because every claim is atomic:
@@ -152,7 +165,7 @@ of many tiny invalid rows can still produce a response several times its own siz
 ASCII characters, e.g. a UUID) to make the POST safe to repeat after a timeout:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs -H 'Content-Type: application/json' \
+curl -s -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:8000/v1/certificate-jobs -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: 6f1c2a9e-order-42' --data @job.json
 ```
 
@@ -162,7 +175,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs -H 'Content-Type: appl
   not validated again.
 - Same key, different body: `409 IDEMPOTENCY_KEY_REUSED`.
 - A request that fails with `422`/`413`/`415` stores nothing, so the key can be reused once the body is
-  fixed. Keys never expire and are global (there is no authentication). `?dry_run=true` ignores the header.
+  fixed. Keys never expire and belong to the API token that sent them. `?dry_run=true` ignores the header.
 - Concurrent requests with the same key create exactly one job (`tests/test_idempotency.py`
   `test_concurrent_same_key_creates_one_job`).
 
@@ -174,7 +187,7 @@ Without the header, a blind resubmission after a lost response creates a second 
 Poll the job until it is terminal (`completed`, `completed_with_errors` or `failed`):
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/certificate-jobs/{job_id}
+curl -s -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8000/v1/certificate-jobs/{job_id}
 ```
 
 `status` is derived from item counts on every read; `progress` = finished valid items / valid items,
@@ -183,7 +196,7 @@ Which rows succeeded or failed, and why, is in the paginated item list (filter w
 `after` = the previous page's `next_after`, `limit` 1–1000):
 
 ```bash
-curl -s "http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/items?status=failed&limit=100"
+curl -s -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/items?status=failed&limit=100"
 ```
 
 Each item has `row_index`, `name`, `email`, `status`, `attempts`, `errors`, `certificate_id` and, when
@@ -192,7 +205,7 @@ Each item has `row_index`, `name`, `email`, `status`, `attempts`, `errors`, `cer
 One certificate:
 
 ```bash
-curl -s -o certificate.pdf http://127.0.0.1:8000/v1/certificates/{certificate_id}
+curl -s -H "Authorization: Bearer $TOKEN" -o certificate.pdf http://127.0.0.1:8000/v1/certificates/{certificate_id}
 ```
 
 `200 application/pdf` when ready; `409 CERTIFICATE_NOT_READY` while pending or processing;
@@ -203,7 +216,7 @@ unknown or malformed ids.
 Everything at once:
 
 ```bash
-curl -s -o certificates.zip http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/archive
+curl -s -H "Authorization: Bearer $TOKEN" -o certificates.zip http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/archive
 ```
 
 The ZIP holds `certificates/{row_index:05d}_{certificate_id}.pdf` for every succeeded item plus
@@ -221,14 +234,14 @@ Two optional helpers for large submissions (differentiator D3):
   `would_create_job` is `false` (still `200`) when every row is invalid. A dry run never checks capacity.
 
   ```bash
-  curl -s -X POST "http://127.0.0.1:8000/v1/certificate-jobs?dry_run=true" -H 'Content-Type: application/json' --data @job.json
+  curl -s -H "Authorization: Bearer $TOKEN" -X POST "http://127.0.0.1:8000/v1/certificate-jobs?dry_run=true" -H 'Content-Type: application/json' --data @job.json
   ```
 
 - **Retry failed certificates:** after fixing the cause of `GENERATION_FAILED`/`WORKER_LOST` failures
   (e.g. a full disk), re-queue every `failed` item of a job in one call:
 
   ```bash
-  curl -s -X POST http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/retry
+  curl -s -H "Authorization: Bearer $TOKEN" -X POST http://127.0.0.1:8000/v1/certificate-jobs/{job_id}/retry
   ```
 
   `202` with the job resource. Failed items go back to `pending` with attempts, errors, lease and
@@ -371,6 +384,7 @@ message naming the variable).
 | `CERTGEN_PUBLIC_BASE_URL` | `http://localhost:8000` | absolute http(s) URL, ≤ 100 chars; `http` only for localhost | stored per job (a snapshot) as the base for links on certificates; no link is printed in this version |
 | `CERTGEN_LOG_LEVEL` | `INFO` | `DEBUG/INFO/WARNING/ERROR` | `certgen` logger level |
 | `CERTGEN_ALLOWED_HOSTS` | empty | comma-separated host names / IPs | `Host` header names served in addition to `localhost`, `127.0.0.1`, `[::1]`; anything else → `400 INVALID_HOST` (DNS-rebinding defence). Add the public name when running behind a proxy |
+| `CERTGEN_API_TOKENS` | empty | comma-separated tokens, 16–256 chars each | bearer tokens accepted on `/v1`; empty = use (or create) `{CERTGEN_DATA_DIR}/api-token` |
 | `CERTGEN_MIN_FREE_DISK_MB` | `1024` | 0–1000000 | new jobs and retries get `503 STORAGE_FULL` while less disk than this is free on the data dir; `0` disables the check |
 | `CERTGEN_MAX_CONCURRENT_SUBMISSIONS` | `2` | 1–64 | job submissions (`POST /v1/certificate-jobs`, dry runs included) parsed and validated at once per process; more → `503 SERVER_BUSY` before their body is read |
 | `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000, and below `CERTGEN_LEASE_SECONDS` | **test only**: delay each render so crash tests can kill a worker mid-item |
@@ -391,6 +405,7 @@ Every non-2xx response is `application/problem+json`:
 | Code | HTTP | When |
 |---|---|---|
 | `INVALID_HOST` | 400 | the `Host` header is not `localhost`, `127.0.0.1`, `[::1]` or a name in `CERTGEN_ALLOWED_HOSTS` |
+| `UNAUTHORIZED` | 401 | a `/v1` request without a valid `Authorization: Bearer <token>` (`WWW-Authenticate: Bearer`) |
 | `VALIDATION_FAILED` | 422 | request-level errors, every row invalid, or invalid query parameters |
 | `PAYLOAD_TOO_LARGE` | 413 | body over the derived limit |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | `Content-Type` is not `application/json` (optionally `; charset=utf-8`) |
@@ -453,6 +468,8 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 ## Operations
 
 - **Local disk only.** SQLite WAL does not work on network filesystems; keep `CERTGEN_DATA_DIR` local.
+- **API token:** `{CERTGEN_DATA_DIR}/api-token` (or `CERTGEN_API_TOKENS`) is a credential; back it up with
+  the data and rotate it by replacing it and restarting.
 - **Backup:** stop all processes, then copy the whole data directory (`certgen.sqlite3`, its `-wal`/`-shm`
   files if present, and `certificates/`).
 - **Full reset:** stop all processes, delete the data directory, start again; the schema is recreated.
@@ -470,13 +487,11 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 
 ## Limitations
 
-- **No authentication or rate limiting.** Job and certificate ids are unguessable (128 bits) and act as
-  capability URLs, which expose names and emails to anyone holding them. The server binds to `127.0.0.1`
-  by default and only answers requests whose `Host` is a loopback name or listed in
-  `CERTGEN_ALLOWED_HOSTS`, so a web page cannot reach it through DNS rebinding; authentication is the
-  first change before any wider deployment.
-- **Idempotency keys are global and never expire** (no tenants to scope them to); a key used once is
-  bound to that body forever.
+- **One trust level per token, no per-client job isolation or rate limiting.** Every valid token can read
+  every job (job and certificate ids are unguessable 128-bit values); only Idempotency-Keys are per
+  token. The server binds to `127.0.0.1` by default and only answers requests whose `Host` is a loopback
+  name or listed in `CERTGEN_ALLOWED_HOSTS`, so a web page cannot reach it through DNS rebinding.
+- **Idempotency keys never expire**; a key used once by a token is bound to that body forever.
 - **SQLite is a single writer.** Fine for one machine: every write is a short single-row transaction. Larger scale would
   move to PostgreSQL with `FOR UPDATE SKIP LOCKED` (see BLUEPRINT §22).
 - **FIFO claiming:** a very large job delays smaller jobs submitted after it.

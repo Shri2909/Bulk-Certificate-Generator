@@ -8,7 +8,7 @@ from itertools import count
 from typing import Any
 
 import pytest
-from conftest import JOBS, FakeClock, job_payload, post_job, recipient, wait_until
+from conftest import AUTH_HEADERS, JOBS, FakeClock, job_payload, post_job, recipient, wait_until
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -71,7 +71,7 @@ def test_job_and_items_are_atomic(app: FastAPI, monkeypatch: pytest.MonkeyPatch)
         return f"{n:032x}"
 
     monkeypatch.setattr(service, "new_certificate_id", explode_on_third)
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, headers=AUTH_HEADERS, raise_server_exceptions=False) as c:
         resp = post_job(c, job_payload(n=3))
         assert resp.status_code == 500
         assert resp.json()["code"] == "INTERNAL_ERROR"
@@ -104,7 +104,7 @@ def test_id_collision_is_retried(client: TestClient, app: FastAPI, monkeypatch: 
 
 @pytest.mark.req("R1", "R14")
 def test_id_collision_exhaustion_rolls_back(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, headers=AUTH_HEADERS, raise_server_exceptions=False) as c:
         taken_job = post_job(c, job_payload(n=1)).json()["id"]
         monkeypatch.setattr(service, "new_job_id", lambda: taken_job)
         resp = post_job(c, job_payload(n=1))
@@ -146,7 +146,7 @@ def test_post_does_not_render_synchronously(settings: Any, fake_clock: FakeClock
         return render_certificate(data)
 
     app = create_app(settings, clock=fake_clock, renderer=counting)
-    with TestClient(app) as c:
+    with TestClient(app, headers=AUTH_HEADERS) as c:
         resp = post_job(c, job_payload(recipients=[recipient(i) for i in range(1000)]))
         assert resp.status_code == 202
         assert resp.json()["counts"]["pending"] == 1000
@@ -248,7 +248,7 @@ def test_healthz_degraded(settings: Any, fake_clock: FakeClock, monkeypatch: pyt
 
     monkeypatch.setattr(Worker, "run_forever", crash)
     app = create_app(replace(settings, embedded_worker=True, worker_threads=2), clock=fake_clock)
-    with TestClient(app) as c:
+    with TestClient(app, headers=AUTH_HEADERS) as c:
 
         def degraded() -> bool:
             body = c.get("/healthz").json()

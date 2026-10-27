@@ -15,7 +15,7 @@ import threading
 from pathlib import Path
 
 import pytest
-from conftest import CERT, JOBS, ROOT, wait_until
+from conftest import AUDIT_TOKEN, AUTH, CERT, JOBS, ROOT, wait_until
 from fastapi.testclient import TestClient
 
 from certgen.config import Settings
@@ -58,6 +58,7 @@ def test_embedded_pool_under_concurrent_clients_and_transient_failures(tmp_path:
         retry_delay_seconds=0.05,
         max_active_items=50_000,
         allowed_hosts=("testserver",),
+        api_tokens=(AUDIT_TOKEN,),
         max_concurrent_submissions=8,  # 8 producers submit at once (default limit 2, audit P8-N2)
     )
     failed_once: set[str] = set()
@@ -73,7 +74,7 @@ def test_embedded_pool_under_concurrent_clients_and_transient_failures(tmp_path:
 
     app = create_app(settings, renderer=flaky)
     job_ids: list[str] = []
-    with TestClient(app) as client:
+    with TestClient(app, headers=AUTH) as client:
         start = threading.Barrier(8)
 
         def producer(p: int) -> None:
@@ -117,8 +118,9 @@ def test_three_worker_processes_with_random_sigkill(tmp_path: Path) -> None:
         lease_seconds=2,
         max_recipients=200,
         allowed_hosts=("testserver",),
+        api_tokens=(AUDIT_TOKEN,),
     )
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings), headers=AUTH) as client:
         rows = [{"name": f"Proc {i}", "email": f"proc{i}@example.com"} for i in range(150)]
         assert client.post(JOBS, json={"certificate": CERT, "recipients": rows}).status_code == 202
     env = {

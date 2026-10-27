@@ -27,6 +27,9 @@ START_MS = int(datetime(2026, 10, 11, 8, 0, tzinfo=UTC).timestamp() * 1000)
 JOBS = "/v1/certificate-jobs"
 # Host header sent by Starlette's TestClient; the app only serves allowed hosts (audit F-10).
 TESTCLIENT_HOSTS = ("testserver",)
+# Every /v1 route needs a bearer token (audit F-12); tests use this one.
+TEST_API_TOKEN = "test-token-0123456789abcdef"
+AUTH_HEADERS = {"Authorization": f"Bearer {TEST_API_TOKEN}"}
 
 Renderer = Callable[[CertificateData], bytes]
 
@@ -61,6 +64,7 @@ def settings(tmp_path: Path, settings_overrides: dict[str, Any]) -> Settings:
         "data_dir": tmp_path / "data",
         "embedded_worker": False,
         "allowed_hosts": TESTCLIENT_HOSTS,
+        "api_tokens": (TEST_API_TOKEN,),
     }
     values.update(settings_overrides)
     return Settings(**values)
@@ -73,7 +77,7 @@ def app(settings: Settings, fake_clock: FakeClock) -> FastAPI:
 
 @pytest.fixture
 def client(app: FastAPI) -> Iterator[TestClient]:
-    with TestClient(app) as c:
+    with TestClient(app, headers=AUTH_HEADERS) as c:
         yield c
 
 

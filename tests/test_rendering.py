@@ -13,7 +13,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import TESTCLIENT_HOSTS, FakeClock, job_payload, post_job, recipient
+from conftest import (
+    AUTH_HEADERS,
+    TEST_API_TOKEN,
+    TESTCLIENT_HOSTS,
+    FakeClock,
+    job_payload,
+    post_job,
+    recipient,
+)
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pypdf import PdfReader
@@ -93,10 +101,11 @@ def test_email_printed_by_default_and_opt_out(tmp_path: Path, fake_clock: FakeCl
             data_dir=tmp_path / f"d{print_email}",
             embedded_worker=False,
             allowed_hosts=TESTCLIENT_HOSTS,
+            api_tokens=(TEST_API_TOKEN,),
             **overrides,
         )
         app = create_app(settings, clock=fake_clock)
-        with TestClient(app) as client:
+        with TestClient(app, headers=AUTH_HEADERS) as client:
             job = post_job(client, job_payload(recipients=[recipient(0, email="opt@example.com")])).json()
             assert job["print_email"] is (print_email is not False)
             from certgen.worker import Worker

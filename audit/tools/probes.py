@@ -59,13 +59,19 @@ def f02_amplification(scratch: Path) -> None:
     cert = {"title": "T", "issuer": "I", "issued_on": "2026-10-01"}
     for mode in ("all_invalid", "partial"):
         tmp = Path(tempfile.mkdtemp(dir=scratch))
-        settings = Settings(data_dir=tmp / "d", embedded_worker=False, allowed_hosts=("testserver",))
+        settings = Settings(
+            data_dir=tmp / "d",
+            embedded_worker=False,
+            allowed_hosts=("testserver",),
+            api_tokens=("audit-token-0123456789abcdef",),
+        )
         n = (settings.max_body_bytes - 300) // 13
         row = "{" + ",".join(f'"k{i:07d}":0' for i in range(n)) + "}"
         rows = row if mode == "all_invalid" else '{"name":"A","email":"a@example.com"},' + row
         body = ('{"certificate":' + json.dumps(cert) + ',"recipients":[' + rows + "]}").encode()
         before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        with TestClient(create_app(settings), raise_server_exceptions=False) as client:
+        auth = {"Authorization": "Bearer audit-token-0123456789abcdef"}
+        with TestClient(create_app(settings), headers=auth, raise_server_exceptions=False) as client:
             started = time.perf_counter()
             resp = client.post(
                 "/v1/certificate-jobs", content=body, headers={"Content-Type": "application/json"}

@@ -38,9 +38,11 @@ def app_client(scratch: Path, **overrides: Any) -> tuple[TestClient, Settings]:
         data_dir=Path(tempfile.mkdtemp(dir=scratch)) / "d",
         embedded_worker=False,
         allowed_hosts=("testserver",),
+        api_tokens=("audit-token-0123456789abcdef",),
         **overrides,
     )
-    return TestClient(create_app(settings), raise_server_exceptions=False), settings
+    auth = {"Authorization": "Bearer audit-token-0123456789abcdef"}
+    return TestClient(create_app(settings), headers=auth, raise_server_exceptions=False), settings
 
 
 def post(
@@ -176,6 +178,7 @@ def attacks_real_server(scratch: Path) -> None:
         "CERTGEN_DATA_DIR": str(data / "d"),
         "CERTGEN_PORT": str(port),
         "PYTHONPATH": str(Path.cwd()),
+        "CERTGEN_API_TOKENS": "audit-token-0123456789abcdef",
     }
     proc = subprocess.Popen(
         [sys.executable, "-m", "certgen"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -221,6 +224,7 @@ def attacks_real_server(scratch: Path) -> None:
             sk = socket.create_connection(("127.0.0.1", port))
             sk.sendall(
                 b"POST /v1/certificate-jobs HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                b"Authorization: Bearer audit-token-0123456789abcdef\r\n"
                 b"Content-Type: application/json\r\nContent-Length: 100000\r\n\r\n{"
             )
             socks.append(sk)
@@ -240,6 +244,7 @@ def attacks_real_server(scratch: Path) -> None:
             body = json.dumps({"certificate": CERT, "recipients": rows}).encode()
             sk.sendall(
                 b"POST /v1/certificate-jobs HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                b"Authorization: Bearer audit-token-0123456789abcdef\r\n"
                 b"Content-Type: application/json\r\nConnection: close\r\nContent-Length: "
                 + str(len(body)).encode()
                 + b"\r\n\r\n"
@@ -254,7 +259,12 @@ def attacks_real_server(scratch: Path) -> None:
         for _ in range(64):
             sk = socket.create_connection(("127.0.0.1", port))
             sk.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
-            sk.sendall(f"GET /v1/certificate-jobs/{job}/archive HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".encode())
+            sk.sendall(
+                (
+                    f"GET /v1/certificate-jobs/{job}/archive HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                    "Authorization: Bearer audit-token-0123456789abcdef\r\n\r\n"
+                ).encode()
+            )
             readers.append(sk)
             time.sleep(0.02)
         time.sleep(1.0)

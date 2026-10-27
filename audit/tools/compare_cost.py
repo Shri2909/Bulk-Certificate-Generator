@@ -23,14 +23,17 @@ from certgen.config import Settings
 from certgen.main import create_app
 
 CERT = {"title": "T", "issuer": "I", "issued_on": "2026-10-01"}
+TOKEN = "audit-token-0123456789abcdef"
+AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 
 def settings(scratch: Path) -> Settings:
-    extra = (
-        {"allowed_hosts": ("testserver",)}
-        if "allowed_hosts" in {f.name for f in dataclasses.fields(Settings)}
-        else {}
-    )
+    names = {f.name for f in dataclasses.fields(Settings)}  # the baseline lacks the newer settings
+    extra: dict[str, object] = {}
+    if "allowed_hosts" in names:
+        extra["allowed_hosts"] = ("testserver",)
+    if "api_tokens" in names:
+        extra["api_tokens"] = (TOKEN,)
     return Settings(data_dir=Path(tempfile.mkdtemp(dir=scratch)) / "d", embedded_worker=False, **extra)
 
 
@@ -46,7 +49,7 @@ def main() -> None:
         + key
         + '":0}]}'
     ).encode()
-    with TestClient(create_app(s)) as c:
+    with TestClient(create_app(s), headers=AUTH) as c:
         r = c.post("/v1/certificate-jobs", content=body, headers={"Content-Type": "application/json"})
     con = sqlite3.connect(s.db_path)
     req = con.execute("select sum(length(request_json)) from jobs").fetchone()[0] or 0
@@ -75,7 +78,7 @@ def main() -> None:
         for i in range(10_000)
     ]
     body = json.dumps({"certificate": CERT, "recipients": rows}).encode()
-    with TestClient(create_app(s)) as c:
+    with TestClient(create_app(s), headers=AUTH) as c:
         started = time.perf_counter()
         r = c.post("/v1/certificate-jobs", content=body, headers={"Content-Type": "application/json"})
         took = time.perf_counter() - started

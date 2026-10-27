@@ -49,7 +49,9 @@ ENV_NAMES = {
     "allowed_hosts": "CERTGEN_ALLOWED_HOSTS",
     "min_free_disk_mb": "CERTGEN_MIN_FREE_DISK_MB",
     "max_concurrent_submissions": "CERTGEN_MAX_CONCURRENT_SUBMISSIONS",
+    "api_tokens": "CERTGEN_API_TOKENS",
 }
+TOKEN = re.compile(r"[A-Za-z0-9._~+/-]{16,256}=*")  # RFC 6750 token68, at least 16 characters
 HOSTNAME = re.compile(
     r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*"
 )
@@ -93,6 +95,8 @@ class Settings:
     min_free_disk_mb: int = 1024
     # Job submissions (incl. dry runs) parsed and validated at once per process (audit P8-N2).
     max_concurrent_submissions: int = 2
+    # Bearer tokens accepted on /v1 routes; empty = use (or create) {data_dir}/api-token (audit F-12).
+    api_tokens: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         for name, (low, high) in RANGES.items():
@@ -124,6 +128,7 @@ class Settings:
         object.__setattr__(self, "log_level", self.log_level.upper())
         object.__setattr__(self, "public_base_url", _validate_base_url(self.public_base_url))
         object.__setattr__(self, "allowed_hosts", tuple(_validate_host(h) for h in self.allowed_hosts))
+        object.__setattr__(self, "api_tokens", tuple(validate_token(t) for t in self.api_tokens))
 
     @property
     def trusted_hosts(self) -> frozenset[str]:
@@ -149,6 +154,10 @@ class Settings:
     @property
     def certificates_dir(self) -> Path:
         return self.data_dir / "certificates"
+
+    @property
+    def token_file(self) -> Path:
+        return self.data_dir / "api-token"
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:
@@ -195,6 +204,14 @@ def normalize_host(value: str) -> str:
         return str(ipaddress.ip_address(name))
     except ValueError:
         return name
+
+
+def validate_token(value: str) -> str:
+    token = value.strip()
+    if not TOKEN.fullmatch(token):
+        var = ENV_NAMES["api_tokens"]
+        raise ValueError(f"{var} entries must be 16-256 token characters (A-Z a-z 0-9 . _ ~ + / -)")
+    return token
 
 
 def _validate_host(value: str) -> str:

@@ -15,6 +15,7 @@ from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from certgen.auth import TokenStore
 from certgen.config import normalize_host
 from certgen.errors import ProblemCode, problem_response
 
@@ -69,6 +70,37 @@ def _strip_port(host: str) -> str:
         return match.group(1) if match else value
     name, sep, port = value.rpartition(":")
     return name if sep and port.isdigit() and ":" not in name else value
+
+
+class TokenAuthMiddleware:
+    """Require `Authorization: Bearer <token>` on routes under `prefix`, with 401 UNAUTHORIZED (audit F-12).
+
+    Runs before any request slot is taken or body is buffered, so unauthenticated clients cost almost
+    nothing. A valid token's client id is put in the request state; it scopes Idempotency-Keys.
+    """
+
+    def __init__(self, app: ASGIApp, store: TokenStore, prefix: str) -> None:
+        self.app = app
+        self.store = store
+        self.prefix = prefix
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or not _route_path(scope).startswith(self.prefix):
+            await self.app(scope, receive, send)
+            return
+        header = next((v.decode("latin-1") for k, v in scope.get("headers", []) if k == b"authorization"), "")
+        scheme, _, token = header.partition(" ")
+        client = (
+            self.store.client_for(token.strip()) if scheme.lower() == "bearer" and token.strip() else None
+        )
+        if client is None:
+            detail = "Send a valid API token as 'Authorization: Bearer <token>'."
+            await problem_response(ProblemCode.UNAUTHORIZED, detail, headers={"WWW-Authenticate": "Bearer"})(
+                scope, receive, send
+            )
+            return
+        scope.setdefault("state", {})["client_id"] = client
+        await self.app(scope, receive, send)
 
 
 class ConcurrencyLimitMiddleware:

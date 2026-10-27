@@ -7,8 +7,9 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 import anyio.from_thread
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Query, Request, Response, Security
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import HTTPBearer
 from pydantic import ValidationError
 from sqlalchemy.exc import OperationalError
 
@@ -30,7 +31,12 @@ from certgen.models import (
 from certgen.storage import HEX32
 from certgen.validation import JsonBodyError, canonical_json, decode_json_body, validate_request
 
-router = APIRouter()
+# TokenAuthMiddleware enforces the token; this only documents it in OpenAPI (Swagger's "Authorize").
+BEARER = HTTPBearer(
+    auto_error=False, description="API token (CERTGEN_API_TOKENS or the data dir's api-token file)."
+)
+router = APIRouter(dependencies=[Security(BEARER)])
+health_router = APIRouter()  # open: no token
 
 JOBS_PATH = "/v1/certificate-jobs"
 ItemStatus = Literal["rejected", "pending", "processing", "succeeded", "failed"]
@@ -137,6 +143,8 @@ def create_job(
     obj = read_json_body(request)
     # D4: a dry run ignores the header completely; it neither reads nor stores a key.
     key = None if dry_run else idempotency_key(request)
+    if key is not None:  # keys are per client (audit F-12): another token's key is a different key
+        key = f"{request.state.client_id}:{key}"
     if key is not None:
         replay = service.find_replay(state.engines, key, service.request_hash(canonical_json(obj)))
         if replay is not None:  # same key, same body: answer with the job's current state, no re-validation
@@ -213,7 +221,7 @@ def download_certificate(request: Request, certificate_id: str) -> Response:
     )
 
 
-@router.get("/healthz", response_model=Health)
+@health_router.get("/healthz", response_model=Health)
 def healthz(request: Request) -> Health:
     state = request.app.state
     try:

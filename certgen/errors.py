@@ -25,6 +25,7 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 
 class ProblemCode(StrEnum):
     INVALID_HOST = "INVALID_HOST"
+    UNAUTHORIZED = "UNAUTHORIZED"
     VALIDATION_FAILED = "VALIDATION_FAILED"
     PAYLOAD_TOO_LARGE = "PAYLOAD_TOO_LARGE"
     UNSUPPORTED_MEDIA_TYPE = "UNSUPPORTED_MEDIA_TYPE"
@@ -47,6 +48,7 @@ class ProblemCode(StrEnum):
 # HTTP status and short title per code.
 PROBLEMS: dict[ProblemCode, tuple[int, str]] = {
     ProblemCode.INVALID_HOST: (400, "Invalid host"),
+    ProblemCode.UNAUTHORIZED: (401, "Unauthorized"),
     ProblemCode.VALIDATION_FAILED: (422, "Validation failed"),
     ProblemCode.PAYLOAD_TOO_LARGE: (413, "Payload too large"),
     ProblemCode.UNSUPPORTED_MEDIA_TYPE: (415, "Unsupported media type"),

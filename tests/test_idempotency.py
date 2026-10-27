@@ -8,7 +8,7 @@ import threading
 from typing import Any
 
 import pytest
-from conftest import JOBS, job_payload, recipient
+from conftest import JOBS, TEST_API_TOKEN, job_payload, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -127,7 +127,8 @@ def test_hash_matches_stored_request_json(client: TestClient, app: FastAPI) -> N
     assert post(client, job_payload(n=2)).status_code == 202
     with app.state.engines.read.connect() as conn:
         row = conn.execute(text("SELECT idempotency_key, request_hash, request_json FROM jobs")).one()
-    assert row.idempotency_key == "order-42"
+    # Keys are stored per client since audit F-12: "<first 16 hex of sha256(token)>:<key>".
+    assert row.idempotency_key == f"{hashlib.sha256(TEST_API_TOKEN.encode()).hexdigest()[:16]}:order-42"
     assert row.request_hash == hashlib.sha256(row.request_json.encode("utf-8")).hexdigest()
     post(client, job_payload(n=1), key=None)
     with app.state.engines.read.connect() as conn:

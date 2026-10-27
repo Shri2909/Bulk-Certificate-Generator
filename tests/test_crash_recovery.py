@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 from conftest import (
+    AUTH_HEADERS,
+    TEST_API_TOKEN,
     TESTCLIENT_HOSTS,
     FakeClock,
     db_rows,
@@ -118,8 +120,10 @@ def test_crash_loop_ends_failed_after_max_attempts(
 
 
 def _create_job(data_dir: Path, n: int) -> str:
-    settings = Settings(data_dir=data_dir, embedded_worker=False, allowed_hosts=TESTCLIENT_HOSTS)
-    with TestClient(create_app(settings, clock=system_clock)) as c:
+    settings = Settings(
+        data_dir=data_dir, embedded_worker=False, allowed_hosts=TESTCLIENT_HOSTS, api_tokens=(TEST_API_TOKEN,)
+    )
+    with TestClient(create_app(settings, clock=system_clock), headers=AUTH_HEADERS) as c:
         resp = post_job(c, job_payload(n=n))
         assert resp.status_code == 202
         return str(resp.json()["id"])

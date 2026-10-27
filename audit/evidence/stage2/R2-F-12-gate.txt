@@ -1,0 +1,11 @@
+== R2-F-12 2026-10-27T04:26:14Z HEAD ac6de25 python Python 3.11.9
+-- pytest tests
+365 passed in 18.09s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+60 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 21 source files
+-- pytest audit/tests
+231 passed in 49.41s

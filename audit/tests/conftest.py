@@ -35,6 +35,9 @@ ROOT = Path(__file__).resolve().parents[2]
 JOBS = "/v1/certificate-jobs"
 START_MS = int(datetime(2026, 10, 11, 8, 0, tzinfo=UTC).timestamp() * 1000)
 JSON_HEADERS = {"Content-Type": "application/json"}
+# Every /v1 route needs a bearer token since the round-2 fix of F-12.
+AUDIT_TOKEN = "audit-token-0123456789abcdef"
+AUTH = {"Authorization": f"Bearer {AUDIT_TOKEN}"}
 CERT = {"title": "Python for Data Engineering", "issuer": "Acme Academy", "issued_on": "2026-10-01"}
 
 
@@ -74,6 +77,7 @@ def settings(tmp_path: Path, settings_overrides: dict[str, Any]) -> Settings:
         "data_dir": tmp_path / "data",
         "embedded_worker": False,
         "allowed_hosts": ("testserver",),
+        "api_tokens": (AUDIT_TOKEN,),
     }
     values.update(settings_overrides)
     return Settings(**values)
@@ -88,7 +92,7 @@ def app(settings: Settings, fake_clock: FakeClock) -> FastAPI:
 def client(app: FastAPI) -> Iterator[TestClient]:
     # raise_server_exceptions=False: the audit observes what a real client receives (e.g. a 500),
     # instead of letting the test client re-raise the server-side exception.
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, headers=AUTH, raise_server_exceptions=False) as c:
         yield c
 
 
@@ -142,7 +146,10 @@ class Server:
         headers: dict[str, str] | None = None,
         timeout: float = 30,
     ) -> tuple[int, dict[str, str], bytes]:
-        req = urllib.request.Request(self.base + path, data=body, method=method, headers=headers or {})
+        # The token is sent by default; a test can override or blank the Authorization header.
+        req = urllib.request.Request(
+            self.base + path, data=body, method=method, headers={**AUTH, **(headers or {})}
+        )
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.status, {k.lower(): v for k, v in resp.headers.items()}, resp.read()
@@ -166,6 +173,7 @@ def start_server(tmp_path: Path, **env: str) -> Server:
         "CERTGEN_DATA_DIR": str(data_dir),
         "CERTGEN_PORT": str(port),
         "CERTGEN_POLL_INTERVAL_SECONDS": "0.05",
+        "CERTGEN_API_TOKENS": AUDIT_TOKEN,
         "PYTHONPATH": str(ROOT),
         **env,
     }

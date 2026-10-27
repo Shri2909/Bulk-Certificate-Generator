@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CERT, JOBS, Server, start_server, stop_server, wait_until
+from conftest import AUDIT_TOKEN, CERT, JOBS, Server, start_server, stop_server, wait_until
 
 from certgen.config import Settings
 
@@ -102,7 +102,10 @@ def test_api_process_sigkill_mid_job_then_restart_completes(tmp_path: Path) -> N
 
 def test_body_limit_over_real_http(server: Server) -> None:
     limit = Settings().max_body_bytes  # the server runs with default settings
-    head = f"POST {JOBS} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
+    head = (
+        f"POST {JOBS} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\n"
+        f"Authorization: Bearer {AUDIT_TOKEN}\r\n"
+    )
     with socket.create_connection(("127.0.0.1", server.port), timeout=10) as sock:
         sock.sendall(f"{head}Content-Length: {limit + 1}\r\n\r\n".encode())
         assert b" 413 " in sock.recv(4096).split(b"\r\n", 1)[0]

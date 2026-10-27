@@ -119,9 +119,8 @@ class Storage:
         except OSError:
             return None  # replaced by a symlink or removed after the check
         with os.fdopen(fd, "rb") as fh:
-            # The size is checked before anything is read into memory.
-            data = None if os.fstat(fh.fileno()).st_size > MAX_PDF_BYTES else fh.read(MAX_PDF_BYTES + 1)
-        if data is None or len(data) > MAX_PDF_BYTES or not _looks_like_pdf(data):
+            data = fh.read(MAX_PDF_BYTES + 1)  # bounded: a huge planted file is never read whole
+        if len(data) > MAX_PDF_BYTES or not _looks_like_pdf(data):
             log.warning("damaged_certificate_file certificate_id=%s", certificate_id)
             return None
         return data

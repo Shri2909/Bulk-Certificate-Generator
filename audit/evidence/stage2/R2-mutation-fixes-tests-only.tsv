@@ -1,0 +1,23 @@
+id	file	description	verdict	seconds	first_failure
+S01	certgen/validation.py	F-01 length pre-check removed	KILLED (tests)	9.2	tests/test_hardening.py::test_email_validator_never_sees_an_email_longer_than_254
+S02	certgen/validation.py	F-02 cap removed	KILLED (tests)	2.1	tests/test_audit_regressions.py::test_unknown_fields_capped_at_ten_plus_summary[11-10-1]
+S03	certgen/validation.py	F-03 surrogate check removed	KILLED (tests)	1.3	tests/test_audit_regressions.py::test_lone_surrogate_never_500[plain-email of rejected row]
+S04	certgen/api.py	F-04 upper bound removed	KILLED (tests)	1.6	tests/test_audit_regressions.py::test_items_after_out_of_range_is_422[9223372036854775808]
+S05	certgen/fonts.py	F-05 BMP filter removed	KILLED (tests)	1.2	tests/test_audit_regressions.py::test_accepted_name_round_trips_through_pdf_text_layer
+S06	certgen/service.py	F-07 substring match back	KILLED (tests)	1.6	tests/test_audit_regressions.py::test_key_violation_reaches_replay_backstop
+S07	certgen/status.py	F-08 progress cap removed	KILLED (tests)	1.2	tests/test_audit_regressions.py::test_progress_is_below_one_until_terminal[20001]
+S08	certgen/config.py	F-09 old budget	KILLED (tests)	1.2	tests/test_audit_regressions.py::test_body_limit_admits_every_valid_request[settings_overrides0]
+S09	certgen/middleware.py	F-10 host check off	KILLED (tests)	2.7	tests/test_audit_regressions.py::test_foreign_hosts_are_refused_with_problem_json[attacker.example]
+S10	certgen/middleware.py	F-11 request limit off	KILLED (tests)	202.9	tests/test_audit_regressions.py::test_request_limit_admits_64_and_refuses_the_65th_with_problem_json
+S11	certgen/middleware.py	F-10 '[::1].evil' prefix bypass	KILLED (tests)	2.5	tests/test_audit_regressions.py::test_foreign_hosts_are_refused_with_problem_json[[::1].evil]
+R01	certgen/worker.py	N-01 SIGTERM handler not installed	KILLED (tests)	8.6	tests/test_hardening.py::test_worker_installs_signal_handlers_before_touching_the_database
+R02	certgen/config.py	F-13 check removed	KILLED (tests)	8.0	tests/test_config.py::test_every_variable_is_range_checked[CERTGEN_TEST_SLOW_RENDER_MS-good8-bad8]
+R03	certgen/storage.py	F-15 header/trailer check removed	KILLED (tests)	8.9	tests/test_hardening.py::test_damaged_certificate_file_is_410[truncated]
+R04	certgen/storage.py	F-15 size check removed	SURVIVED	15.8	
+R05	certgen/validation.py	P8-N1 row cap removed	KILLED (tests)	9.4	tests/test_hardening.py::test_oversized_row_rejects_the_request_and_stores_nothing
+R06	certgen/service.py	P8-N1 disk guard removed	KILLED (tests)	10.1	tests/test_hardening.py::test_new_jobs_are_refused_when_free_disk_is_low
+R07	certgen/middleware.py	P8-N2 submission limit off	KILLED (tests)	30.6	tests/test_hardening.py::test_at_most_two_submissions_are_processed_at_once
+R08	certgen/middleware.py	P8-N2 body deadline off	KILLED (tests)	14.1	tests/test_hardening.py::test_body_that_does_not_arrive_in_time_is_408
+R09	certgen/api.py	P8-N2 queue pre-check removed	KILLED (tests)	9.3	tests/test_hardening.py::test_full_queue_is_refused_before_validation[settings_overrides0]
+R10	certgen/auth.py	F-12 any token accepted	KILLED (tests)	9.5	tests/test_hardening.py::test_v1_routes_require_a_valid_bearer_token[headers1]
+R11	certgen/api.py	F-12 keys not scoped	KILLED (tests)	10.6	tests/test_hardening.py::test_idempotency_keys_are_scoped_per_token - ...

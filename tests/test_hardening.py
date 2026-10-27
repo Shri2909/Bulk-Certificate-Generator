@@ -78,7 +78,7 @@ def _one_certificate(client: Any, app: Any, drain: Any) -> tuple[str, Path]:
 @pytest.mark.req("R8", "R19")
 @pytest.mark.parametrize(
     "damage",
-    ["truncated", "no-header", "no-trailer", "empty", "oversized"],
+    ["truncated", "no-header", "no-trailer", "empty", "oversized", "oversized-framed"],
 )
 def test_damaged_certificate_file_is_410(client: Any, app: Any, drain: Any, damage: str) -> None:
     cert, path = _one_certificate(client, app, drain)
@@ -89,6 +89,8 @@ def test_damaged_certificate_file_is_410(client: Any, app: Any, drain: Any, dama
         "no-trailer": good.replace(b"%%EOF", b"%%XXX"),
         "empty": b"",
         "oversized": good[:-7] + b" " * (2_097_152 + 1) + b"%%EOF\n",
+        # exactly one byte over the cap, yet framed like a PDF: only the size limit refuses it
+        "oversized-framed": good[:-6] + b" " * (2_097_152 + 1 - len(good)) + b"%%EOF\n",
     }[damage]
     path.write_bytes(damaged)
     resp = client.get(f"/v1/certificates/{cert}")

@@ -215,7 +215,13 @@ def main() -> int:
     # --with-audit: a mutant the project suite misses is re-run against audit/tests.
     # --stage2: also run the STAGE2_MUTANTS, each of which undoes one remediation fix.
     with_audit = "--with-audit" in sys.argv
-    mutants = MUTANTS + (STAGE2_MUTANTS if "--stage2" in sys.argv else [])
+    mutants = (
+        MUTANTS
+        + (STAGE2_MUTANTS if "--stage2" in sys.argv else [])
+        + (ROUND2_MUTANTS if "--round2" in sys.argv else [])
+    )
+    if "--fixes-only" in sys.argv:  # only the mutants that undo an audit fix
+        mutants = [m for m in mutants if m[0].startswith(("S", "R"))]
     rows = ["id\tfile\tdescription\tverdict\tseconds\tfirst_failure"]
     for mid, rel, old, new, desc in mutants:
         path = copy / rel
@@ -229,7 +235,7 @@ def main() -> int:
         started = time.monotonic()
         try:
             verdict, first = _run_suite(copy, ["tests", "-m", "not slow"], "KILLED (tests)")
-            if verdict == "SURVIVED" and (with_audit or mid.startswith("S")):
+            if verdict == "SURVIVED" and with_audit:
                 verdict, first = _run_suite(copy, ["audit/tests"], "KILLED (audit)")
         finally:
             path.write_bytes(original)
@@ -324,6 +330,88 @@ STAGE2_MUTANTS: list[tuple[str, str, str, str, str]] = [
         "match = BRACKETED_HOST.fullmatch(value)",
         "match = BRACKETED_HOST.match(value)",
         "F-10 '[::1].evil' prefix bypass",
+    ),
+]
+
+
+# Each undoes one round-2 fix (audit F-12, F-13, F-15, N-01, P8-N1, P8-N2).
+ROUND2_MUTANTS: list[tuple[str, str, str, str, str]] = [
+    (
+        "R01",
+        "certgen/worker.py",
+        "    signal.signal(signal.SIGTERM, request_stop)\n    check_sqlite_version()\n",
+        "    check_sqlite_version()\n",
+        "N-01 SIGTERM handler not installed",
+    ),
+    (
+        "R02",
+        "certgen/config.py",
+        "        if self.test_slow_render_ms >= self.lease_seconds * 1000:\n",
+        "        if False:\n",
+        "F-13 check removed",
+    ),
+    (
+        "R03",
+        "certgen/storage.py",
+        "    return data.startswith(PDF_HEADER) and data.rstrip().endswith(PDF_TRAILER)\n",
+        "    return True\n",
+        "F-15 header/trailer check removed",
+    ),
+    (
+        "R04",
+        "certgen/storage.py",
+        "        if len(data) > MAX_PDF_BYTES or not _looks_like_pdf(data):\n",
+        "        if not _looks_like_pdf(data):\n",
+        "F-15 size limit removed",
+    ),
+    (
+        "R05",
+        "certgen/validation.py",
+        "        if size > BODY_BYTES_PER_RECIPIENT:\n",
+        "        if False:\n",
+        "P8-N1 row cap removed",
+    ),
+    (
+        "R06",
+        "certgen/service.py",
+        "    if minimum and shutil.disk_usage(settings.data_dir).free < minimum:\n",
+        "    if False:\n",
+        "P8-N1 disk guard removed",
+    ),
+    (
+        "R07",
+        "certgen/middleware.py",
+        "admitted = self.in_progress < self.max_submissions",
+        "admitted = True",
+        "P8-N2 submission limit off",
+    ),
+    (
+        "R08",
+        "certgen/middleware.py",
+        "timeout=max(deadline - loop.time(), 0)",
+        "timeout=None",
+        "P8-N2 body deadline off",
+    ),
+    (
+        "R09",
+        "certgen/api.py",
+        "    if not dry_run and service.queue_is_full(state.engines, state.settings):",
+        "    if False:",
+        "P8-N2 queue pre-check removed",
+    ),
+    (
+        "R10",
+        "certgen/auth.py",
+        "        return match[:CLIENT_ID_LENGTH] if match is not None else None\n",
+        '        return (match or "anonymous-client")[:CLIENT_ID_LENGTH]\n',
+        "F-12 any token accepted",
+    ),
+    (
+        "R11",
+        "certgen/api.py",
+        '        key = f"{request.state.client_id}:{key}"\n',
+        "        key = key\n",
+        "F-12 keys not scoped",
     ),
 ]
 

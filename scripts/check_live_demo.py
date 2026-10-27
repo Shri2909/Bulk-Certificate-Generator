@@ -24,6 +24,12 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def check(condition: object, detail: object = "check failed") -> None:
+    """An explicit check: unlike `assert`, it still runs under `python -O`."""
+    if not condition:
+        raise AssertionError(detail)
+
+
 def main() -> None:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
@@ -47,12 +53,12 @@ def main() -> None:
 
     def get(path: str) -> Any:
         status, _, raw = request(path)
-        assert status == 200, (status, raw)
+        check(status == 200, (status, raw))
         return json.loads(raw)
 
     def control(action: str) -> Any:
         status, _, raw = request(f"/demo/worker/{action}", post=True, headers={"X-Demo-Control": "local"})
-        assert status == 200, (status, raw)
+        check(status == 200, (status, raw))
         return json.loads(raw)
 
     jobs = "/api/v1/certificate-jobs"
@@ -69,7 +75,7 @@ def main() -> None:
 
     def submit(body: Any, key: str) -> str:
         status, _, raw = request(jobs, body, headers={"Idempotency-Key": key})
-        assert status == 202, (status, raw)
+        check(status == 202, (status, raw))
         return str(json.loads(raw)["id"])
 
     def finish(job_id: str) -> tuple[Any, list[Any]]:
@@ -110,11 +116,11 @@ def main() -> None:
                         log.seek(0)
                         raise AssertionError(f"Server failed to start:\n{log.read()}") from None
                     time.sleep(0.1)
-            assert initial["jobs"] == [] and not initial["worker_running"]
+            check(initial["jobs"] == [] and not initial["worker_running"])
             for path in ["/", "/app.js", "/style.css", "/favicon.svg", "/api/docs"]:
-                assert request(path)[0] == 200, path
-            assert request("/demo/worker/start", post=True)[0] == 403
-            assert (
+                check(request(path)[0] == 200, path)
+            check(request("/demo/worker/start", post=True)[0] == 403)
+            check(
                 request(
                     "/demo/worker/start",
                     post=True,
@@ -133,25 +139,25 @@ def main() -> None:
                 ]
             )
             status, _, raw = request(jobs + "?dry_run=true", body)
-            assert status == 200 and json.loads(raw)["counts"] == {"total": 4, "valid": 2, "rejected": 2}
-            assert get("/demo/state")["jobs"] == []
+            check(status == 200 and json.loads(raw)["counts"] == {"total": 4, "valid": 2, "rejected": 2})
+            check(get("/demo/state")["jobs"] == [])
             job_id = submit(body, "smoke-original")
-            assert get(f"{jobs}/{job_id}")["counts"]["pending"] == 2
+            check(get(f"{jobs}/{job_id}")["counts"]["pending"] == 2)
             control("start")
             job, rows = finish(job_id)
-            assert job["counts"]["succeeded"] == 2 and job["counts"]["rejected"] == 2
+            check(job["counts"]["succeeded"] == 2 and job["counts"]["rejected"] == 2)
             cert_id = next(row["certificate_id"] for row in rows if row["status"] == "succeeded")
             status, _, raw = request(f"/api/v1/certificates/{cert_id}")
-            assert status == 200 and raw.startswith(b"%PDF")
+            check(status == 200 and raw.startswith(b"%PDF"))
             status, _, raw = request(f"{jobs}/{job_id}/archive")
-            assert status == 200
+            check(status == 200)
             with zipfile.ZipFile(io.BytesIO(raw)) as archive:
-                assert len([name for name in archive.namelist() if name.endswith(".pdf")]) == 2
+                check(len([name for name in archive.namelist() if name.endswith(".pdf")]) == 2)
                 manifest = list(csv.DictReader(io.StringIO(archive.read("manifest.csv").decode())))
-                assert len(manifest) == 4
+                check(len(manifest) == 4)
             status, headers, raw = request(jobs, body, headers={"Idempotency-Key": "smoke-original"})
-            assert status == 200 and headers["Idempotent-Replayed"] == "true"
-            assert json.loads(raw)["id"] == job_id and len(get("/demo/state")["jobs"]) == 1
+            check(status == 200 and headers["Idempotent-Replayed"] == "true")
+            check(json.loads(raw)["id"] == job_id and len(get("/demo/state")["jobs"]) == 1)
             print("PASS: dry run, partial acceptance, PDF, ZIP + manifest, safe replay", flush=True)
 
             control("stop")
@@ -162,16 +168,16 @@ def main() -> None:
                 "smoke-crash",
             )
             crashed = control("crash")
-            assert not crashed["worker_running"]
-            assert get(f"{jobs}/{crash_id}")["counts"]["processing"] == 1
-            assert len(crashed["leases"]) == 1
+            check(not crashed["worker_running"])
+            check(get(f"{jobs}/{crash_id}")["counts"]["processing"] == 1)
+            check(len(crashed["leases"]) == 1)
             control("start")
             job, rows = finish(crash_id)
-            assert job["counts"]["succeeded"] == 6
+            check(job["counts"]["succeeded"] == 6)
             recovered = next(row for row in rows if row["certificate_id"] == crashed["crashed_certificate"])
-            assert recovered["attempts"] == 2
+            check(recovered["attempts"] == 2)
             files = list((Path(tmp) / "data" / "certificates" / crash_id).glob("*.pdf"))
-            assert len(files) == 6
+            check(len(files) == 6)
             print("PASS: real worker kill, lease recovery, same ID, exactly six PDFs", flush=True)
 
             control("stop")
@@ -188,22 +194,22 @@ def main() -> None:
             )
             control("failure")
             job, rows = finish(failure_id)
-            assert job["counts"]["failed"] == 1 and job["counts"]["succeeded"] == 3
+            check(job["counts"]["failed"] == 1 and job["counts"]["succeeded"] == 3)
             failed = next(row for row in rows if row["status"] == "failed")
-            assert failed["attempts"] == 3 and failed["email"] == "grace@example.org"
+            check(failed["attempts"] == 3 and failed["email"] == "grace@example.org")
             ids = [row["certificate_id"] for row in rows]
             control("start")
-            assert request(f"{jobs}/{failure_id}/retry", post=True)[0] == 202
+            check(request(f"{jobs}/{failure_id}/retry", post=True)[0] == 202)
             job, rows = finish(failure_id)
-            assert job["counts"]["succeeded"] == 4
-            assert [row["certificate_id"] for row in rows] == ids
-            assert all(row["attempts"] == 1 for row in rows)
+            check(job["counts"]["succeeded"] == 4)
+            check([row["certificate_id"] for row in rows] == ids)
+            check(all(row["attempts"] == 1 for row in rows))
             print(
                 "PASS: isolated failure, attempt limit, explicit retry, stable certificate IDs",
                 flush=True,
             )
             control("stop")
-            assert not get("/demo/state")["worker_running"]
+            check(not get("/demo/state")["worker_running"])
         finally:
             server.terminate()
             try:

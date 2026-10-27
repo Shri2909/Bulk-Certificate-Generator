@@ -20,7 +20,6 @@ from certgen.storage import O_NOFOLLOW
 
 log = logging.getLogger("certgen.auth")
 
-TOKEN_FILE_NAME = "api-token"
 CLIENT_ID_LENGTH = 16
 _READ_RETRIES = 50  # another process may have created the file and not written it yet
 

@@ -1,0 +1,11 @@
+== R2-N-02 2026-10-27T13:15:34Z HEAD 5893f60 python Python 3.11.9
+-- pytest tests
+474 passed in 21.08s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+65 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 21 source files
+-- pytest audit/tests
+231 passed in 32.94s

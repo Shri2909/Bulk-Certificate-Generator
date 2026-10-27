@@ -597,3 +597,14 @@ def test_server_uses_a_30_second_send_deadline() -> None:
 
     options = [m.kwargs for m in main.app.user_middleware if m.cls is SendDeadlineMiddleware]
     assert options == [{"send_timeout_seconds": 30}]
+
+
+@pytest.mark.req("R21")
+@pytest.mark.parametrize("path", [*sorted(Path("certgen").glob("*.py")), Path("scripts/check_live_demo.py")])
+def test_runtime_checks_are_not_assert_statements(path: Path) -> None:
+    """`python -O` strips assert statements: a handler's check (F-19) or the README's demo checker would pass
+    silently. Both must use explicit checks instead (audit N-02)."""
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    assert [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Assert)] == []

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import secrets
 import signal
 import subprocess
 import sys
@@ -29,6 +30,7 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from starlette.middleware.trustedhost import TrustedHostMiddleware  # noqa: E402
+from starlette.types import ASGIApp, Receive, Scope, Send  # noqa: E402
 
 from certgen.clock import system_clock  # noqa: E402
 from certgen.config import Settings  # noqa: E402
@@ -43,10 +45,11 @@ RENDER_SECONDS = 0.65
 FAIL_EMAIL = "grace@example.org"
 
 
-def demo_settings(data_dir: Path) -> Settings:
+def demo_settings(data_dir: Path, api_token: str | None = None) -> Settings:
     return Settings(
         data_dir=data_dir,
         embedded_worker=False,
+        api_tokens=(api_token,) if api_token else (),
         lease_seconds=LEASE_SECONDS,
         retry_delay_seconds=0.5,
         poll_interval_seconds=0.1,
@@ -168,8 +171,27 @@ class DemoController:
             return self.state()
 
 
+def with_token(app: ASGIApp, token: str) -> ASGIApp:
+    """Attach the session's API token to every request the page makes to the mounted API.
+
+    The API requires a bearer token; the browser page (including plain download links) cannot send
+    one, so this local launcher adds it. It is reachable only on 127.0.0.1 with the Host and
+    same-origin checks below.
+    """
+    header = (b"authorization", f"Bearer {token}".encode())
+
+    async def wrapped(scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            headers = [h for h in scope.get("headers", []) if h[0] != b"authorization"]
+            scope = {**scope, "headers": [*headers, header]}
+        await app(scope, receive, send)
+
+    return wrapped
+
+
 def build_demo(data_dir: Path) -> FastAPI:
-    api = create_app(demo_settings(data_dir))
+    token = secrets.token_urlsafe(32)  # per launch; never shown or stored outside this process
+    api = create_app(demo_settings(data_dir, token))
     controller = DemoController(data_dir, api)
 
     @asynccontextmanager
@@ -216,7 +238,7 @@ def build_demo(data_dir: Path) -> FastAPI:
                 raise HTTPException(404, "Unknown demo action")
             return controller.state()
 
-    app.mount("/api", api)
+    app.mount("/api", with_token(api, token))
     app.mount("/", StaticFiles(directory=ROOT / "demo", html=True), name="presentation")
     return app
 

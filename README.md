@@ -48,7 +48,8 @@ then fix and retry an individually failed certificate. Expand **Presenter notes*
 or **Inspect the real API calls** for the exact requests and responses.
 
 This is a local presentation app around the existing API, with no additional dependencies or external
-services. Each launch gets a new `data/live-demo/<session>/` directory; normal application data is not
+services. The launcher creates a fresh API token for each session and attaches it to the page's
+`/api` calls, so the browser needs no setup. Each launch gets a new `data/live-demo/<session>/` directory; normal application data is not
 used. Demo-only controls live in `scripts/live_demo.py`, not the production server. Rendering is
 deliberately slowed by 650 ms per certificate and leases shortened to 8 seconds. The failure chapter
 injects an error for one sample recipient; the crash chapter terminates a real child worker process.

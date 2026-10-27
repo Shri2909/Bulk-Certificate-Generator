@@ -64,7 +64,6 @@ Verify the complete demo, including crash recovery, over real localhost HTTP:
 .venv/bin/python scripts/check_live_demo.py
 ```
 
-
 ## Setup
 
 Requirements: Python ≥ 3.11 (uses `enum.StrEnum`), pip, a local disk. No Docker, Redis, broker or

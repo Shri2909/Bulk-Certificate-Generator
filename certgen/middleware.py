@@ -7,6 +7,7 @@ SQLite waits never stall the event loop.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import threading
 from collections.abc import AsyncIterator, Callable
@@ -20,6 +21,7 @@ from certgen.config import normalize_host
 from certgen.errors import ProblemCode, problem_response
 
 SyncLifespan = Callable[[Any], AbstractContextManager[None]]
+log = logging.getLogger("certgen.middleware")
 
 
 def async_lifespan(sync_lifespan: SyncLifespan) -> Callable[[Any], Any]:
@@ -101,6 +103,40 @@ class TokenAuthMiddleware:
             return
         scope.setdefault("state", {})["client_id"] = client
         await self.app(scope, receive, send)
+
+
+class _ClientTooSlow(Exception):
+    """A send did not complete in time: the client stopped reading the response."""
+
+
+class SendDeadlineMiddleware:
+    """Abort a response that the client stops reading: every send must finish within the deadline.
+
+    A send blocks while the client's receive window is full. Without a deadline, a client that never
+    reads a large download held its request slot forever, and 64 of them locked everyone out.
+    Clients that keep reading, however slowly, are unaffected (audit, round 2). The server then closes
+    the connection, which frees the slot (StreamingResponse re-raises the error out of its task group).
+    """
+
+    def __init__(self, app: ASGIApp, send_timeout_seconds: float) -> None:
+        self.app = app
+        self.send_timeout_seconds = send_timeout_seconds
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_deadline(message: Message) -> None:
+            try:
+                await asyncio.wait_for(send(message), timeout=self.send_timeout_seconds)
+            except TimeoutError:
+                raise _ClientTooSlow from None
+
+        try:
+            await self.app(scope, receive, send_with_deadline)
+        except _ClientTooSlow:
+            log.warning("slow_client_aborted")  # no request data: the path is client-controlled
 
 
 class ConcurrencyLimitMiddleware:

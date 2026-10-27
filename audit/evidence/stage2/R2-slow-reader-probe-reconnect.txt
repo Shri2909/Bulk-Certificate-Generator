@@ -1,0 +1,14 @@
+# commit-candidate code, 2026-10-27T13:02:12Z
+job of 1500 generated in 20.5 s
+t=  0.0s /healthz -> 503  server fds: 81
+t= 10.0s /healthz -> 503  server fds: 99
+t= 20.2s /healthz -> 503  server fds: 115
+t= 30.1s /healthz -> 503  server fds: 130
+t= 40.2s /healthz -> 200  server fds: 153
+t= 50.1s /healthz -> 200  server fds: 174
+t= 60.2s /healthz -> 200  server fds: 191
+t= 70.2s /healthz -> 200  server fds: 207
+t= 80.0s /healthz -> 200  server fds: 243
+end: /healthz -> 200  server fds: 254
+after closing the readers: /healthz -> 200  server fds: 30
+server log: 105 slow_client_aborted, 0 tracebacks

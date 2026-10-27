@@ -550,8 +550,13 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
   prints as "1 January 1").
 - **Leases use the wall clock:** a large forward clock step can expire live leases early (extra attempts,
   possibly `WORKER_LOST` after 3); the token fence still keeps one current owner and the same output.
-- **Slow uploads:** a request counts toward the 64-request limit from its headers on, and its body must
-  arrive within 30 s (`408 REQUEST_TIMEOUT`), so a slow uploader holds a slot for at most 30 s.
+- **Slow clients:** a request counts toward the 64-request limit from its headers on. Its body must
+  arrive within 30 s (`408 REQUEST_TIMEOUT`), and the client must accept each piece of the response
+  within 30 s, else the download is aborted and the connection closed; so a client that stalls holds a
+  slot for about 30 s, not indefinitely. Two residuals: a token holder who keeps re-requesting downloads
+  it never reads can still keep all 64 slots busy (no per-token quotas, see the first item), and an
+  aborted connection keeps its file descriptor until the client closes it (bounded by `ulimit -n`, like
+  idle connections).
 - Emails are printed on certificates by default, which puts contact details on a document that may be
   shared; set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to opt out.
 
@@ -573,8 +578,11 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
   approved for its remediation ([audit/REMEDIATION_REPORT.md](audit/REMEDIATION_REPORT.md)): email length
   pre-check and bounded unknown-field errors (A-04), unpaired surrogates rejected (A-05), bounded `after`
   (A-06), `Host` allowlist (A-07), in-app request limit (A-08), BMP-only text (A-09), dependency bumps
-  (A-10), progress never 1.0 early (A-11), body budget for decomposed input (A-12). The audit's own
-  tests run with `pytest audit/tests` (separately from `pytest`, which runs `tests/`).
+  (A-10), progress never 1.0 early (A-11), body budget for decomposed input (A-12). Its second round added
+  A-13 to A-18: slow-render delay below the lease (A-13), damaged certificate files refused (A-14), row cap
+  and free-disk guard (A-15), submission limit and body deadline (A-16), bearer-token authentication
+  (A-17), response send deadline (A-18). The audit's own tests run with `pytest audit/tests` (separately
+  from `pytest`, which runs `tests/`).
 - **Interpretations** where the blueprint was silent or a library behaved differently than it assumed (no
   behavior added):
   - email-validator accepts internationalized domains even with SMTPUTF8 off, so emails are checked to be

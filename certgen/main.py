@@ -18,7 +18,13 @@ from certgen import __version__
 from certgen.api import JOBS_PATH, health_router, router
 from certgen.auth import TokenStore, load_or_create_token
 from certgen.clock import Clock, system_clock
-from certgen.config import ARCHIVE_CONCURRENCY, BODY_TIMEOUT_SECONDS, MAX_CONCURRENT_REQUESTS, Settings
+from certgen.config import (
+    ARCHIVE_CONCURRENCY,
+    BODY_TIMEOUT_SECONDS,
+    MAX_CONCURRENT_REQUESTS,
+    SEND_TIMEOUT_SECONDS,
+    Settings,
+)
 from certgen.db import check_sqlite_version, create_engines, create_schema
 from certgen.errors import (
     ApiError,
@@ -33,6 +39,7 @@ from certgen.middleware import (
     ConcurrencyLimitMiddleware,
     HostAllowlistMiddleware,
     NoStoreMiddleware,
+    SendDeadlineMiddleware,
     SubmissionLimitMiddleware,
     TokenAuthMiddleware,
     async_lifespan,
@@ -91,6 +98,8 @@ def create_app(
     app.add_middleware(
         SubmissionLimitMiddleware, path=JOBS_PATH, max_submissions=settings.max_concurrent_submissions
     )
+    # Inside the request limit: an aborted slow download releases its slot.
+    app.add_middleware(SendDeadlineMiddleware, send_timeout_seconds=SEND_TIMEOUT_SECONDS)
     # Outside the body buffer, so a request still uploading holds a slot: bounded buffered memory.
     app.add_middleware(ConcurrencyLimitMiddleware, max_requests=MAX_CONCURRENT_REQUESTS)
     # Token check before a request slot is taken or a body is read (audit F-12).

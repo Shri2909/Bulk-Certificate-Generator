@@ -222,6 +222,9 @@ def main() -> int:
     )
     if "--fixes-only" in sys.argv:  # only the mutants that undo an audit fix
         mutants = [m for m in mutants if m[0].startswith(("S", "R"))]
+    only = [a.removeprefix("--only=").split(",") for a in sys.argv if a.startswith("--only=")]
+    if only:  # e.g. --only=R12,R13
+        mutants = [m for m in mutants if m[0] in only[0]]
     rows = ["id\tfile\tdescription\tverdict\tseconds\tfirst_failure"]
     for mid, rel, old, new, desc in mutants:
         path = copy / rel
@@ -412,6 +415,34 @@ ROUND2_MUTANTS: list[tuple[str, str, str, str, str]] = [
         '        key = f"{request.state.client_id}:{key}"\n',
         "        key = key\n",
         "F-12 keys not scoped",
+    ),
+    (
+        "R12",
+        "certgen/middleware.py",
+        "                await asyncio.wait_for(send(message), timeout=self.send_timeout_seconds)\n",
+        "                await send(message)\n",
+        "P8-N2 no send deadline",
+    ),
+    (
+        "R13",
+        "certgen/middleware.py",
+        '            log.warning("slow_client_aborted")',
+        "            raise  # ",
+        "P8-N2 abort not handled",
+    ),
+    (
+        "R14",
+        "certgen/main.py",
+        "    app.add_middleware(SendDeadlineMiddleware, send_timeout_seconds=SEND_TIMEOUT_SECONDS)\n",
+        "",
+        "P8-N2 send deadline not installed",
+    ),
+    (
+        "R15",
+        "certgen/config.py",
+        "SEND_TIMEOUT_SECONDS = 30\n",
+        "SEND_TIMEOUT_SECONDS = 3600\n",
+        "P8-N2 send deadline 1 h",
     ),
 ]
 

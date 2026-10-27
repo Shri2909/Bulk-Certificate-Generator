@@ -26,6 +26,8 @@ ARCHIVE_CONCURRENCY = 2  # archive builds per process (§6.7); fixed, not an env
 MAX_CONCURRENT_REQUESTS = 64
 # A request body must arrive completely within this time, else 408 (audit P8-N2).
 BODY_TIMEOUT_SECONDS = 30
+# Every piece of a response must be accepted by the client within this time, else it is aborted.
+SEND_TIMEOUT_SECONDS = 30
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
 MAX_BASE_URL_LENGTH = 100

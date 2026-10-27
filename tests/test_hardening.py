@@ -500,3 +500,100 @@ def test_real_server_creates_and_enforces_its_token_file(tmp_path: Path) -> None
         proc.send_signal(__import__("signal").SIGINT)
         _, stderr = proc.communicate(timeout=20)
     assert token not in stderr.decode(errors="replace")  # the token itself is never logged
+
+
+# --- Slow readers: a response the client stops reading is aborted after 30 s ----------------------
+
+
+@pytest.mark.req("R11")
+def test_a_response_the_client_does_not_read_is_aborted_and_its_slot_released() -> None:
+    import asyncio
+
+    from certgen.middleware import ConcurrencyLimitMiddleware, SendDeadlineMiddleware
+
+    async def streaming_app(scope: Any, receive: Any, send: Any) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        while True:  # an endless download
+            await send({"type": "http.response.body", "body": b"x" * 65536, "more_body": True})
+
+    async def stuck_send(message: dict[str, Any]) -> None:
+        if message["type"] == "http.response.body":
+            await asyncio.sleep(3600)  # the client never reads, so the transport never drains
+
+    async def receive() -> dict[str, Any]:
+        await asyncio.sleep(3600)
+        return {"type": "http.disconnect"}
+
+    limited = ConcurrencyLimitMiddleware(
+        SendDeadlineMiddleware(streaming_app, send_timeout_seconds=0.2), max_requests=1
+    )
+    scope = {"type": "http", "method": "GET", "path": "/", "headers": []}
+    asyncio.run(
+        asyncio.wait_for(limited(scope, receive, stuck_send), timeout=5)
+    )  # returns instead of hanging
+    assert limited.in_flight == 0
+
+
+@pytest.mark.req("R11")
+def test_a_streamed_download_the_client_does_not_read_is_aborted() -> None:
+    """The same through FastAPI's StreamingResponse, driven the way uvicorn's h11 protocol does (ASGI 2.3)."""
+    import asyncio
+    from collections.abc import Iterator
+
+    from fastapi import FastAPI
+    from fastapi.responses import StreamingResponse
+
+    from certgen.middleware import ConcurrencyLimitMiddleware, SendDeadlineMiddleware
+
+    app = FastAPI()
+
+    @app.get("/archive")
+    def archive() -> StreamingResponse:
+        def chunks() -> Iterator[bytes]:
+            while True:
+                yield b"x" * 65536
+
+        return StreamingResponse(chunks())
+
+    async def stuck_send(message: dict[str, Any]) -> None:
+        if message["type"] == "http.response.body":
+            await asyncio.sleep(3600)
+
+    received = False
+
+    async def receive() -> dict[str, Any]:
+        nonlocal received
+        if not received:
+            received = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+        await asyncio.sleep(3600)
+        return {"type": "http.disconnect"}
+
+    limited = ConcurrencyLimitMiddleware(
+        SendDeadlineMiddleware(app, send_timeout_seconds=0.2), max_requests=1
+    )
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/archive",
+        "raw_path": b"/archive",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"localhost")],
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 8000),
+    }
+    asyncio.run(asyncio.wait_for(limited(scope, receive, stuck_send), timeout=5))
+    assert limited.in_flight == 0
+
+
+@pytest.mark.req("R11")
+def test_server_uses_a_30_second_send_deadline() -> None:
+    from certgen import main
+    from certgen.middleware import SendDeadlineMiddleware
+
+    options = [m.kwargs for m in main.app.user_middleware if m.cls is SendDeadlineMiddleware]
+    assert options == [{"send_timeout_seconds": 30}]

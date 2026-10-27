@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A guided, live demonstration of bulk certificate generation, validation and recovery.">
+  <title>certgen — From batch to certificate</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="certgen demo home"><span class="brand-mark">c<span>✓</span></span> certgen<span class="brand-divider">/</span><span class="brand-caption">the live demo</span></a>
+    <div class="top-actions"><span class="local-tag"><span class="dot"></span> Running locally</span><button class="quiet" id="present" title="Toggle fullscreen">⛶ <span>Present</span></button><a class="quiet" href="/api/docs" target="_blank" rel="noopener">API docs ↗</a></div>
+  </header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">ONE REQUEST. A WHOLE COHORT.</p><h1>From batch to <em>certificate.</em></h1><p class="intro-copy">Follow a real batch through validation, generation, and recovery.<br class="desktop"> Every status is live. Every PDF is yours to open.</p></div>
+      <div class="intro-note"><span class="note-number">05</span><div>chapters<br><span>One guided walkthrough</span></div></div>
+    </section>
+    <nav class="chapters" aria-label="Walkthrough progress">
+      <div data-chapter="0" class="chapter active"><span>01</span> Check the batch</div>
+      <div data-chapter="1" class="chapter"><span>02</span> Watch it work</div>
+      <div data-chapter="2" class="chapter"><span>03</span> See the output</div>
+      <div data-chapter="3" class="chapter"><span>04</span> Survive a crash</div>
+      <div data-chapter="4" class="chapter"><span>05</span> Fix & retry</div>
+    </nav>
+    <section class="feature-shortcuts" aria-label="Try individual demo features">
+      <div><strong>Try a feature directly</strong><p id="shortcut-hint">Run either scenario without completing the earlier chapters.</p></div>
+      <div class="download-actions"><button class="secondary" id="run-crash" disabled>Run crash demo ↗</button><button class="secondary" id="run-failure" disabled>Run failure demo ↗</button></div>
+    </section>
+    <details class="session-panel">
+      <summary><span>Isolated demo session <code id="session-id">Connecting…</code></span><span id="reload-status">Same-tab reload recovery</span></summary>
+      <div class="session-content"><div><p>This server launch has its own database and generated files:</p><code id="session-path"></code><p>A new server launch creates a separate session. Tabs share this server session; they are not separate databases.</p><p id="session-recovery">Reloading this tab restores your walkthrough step and reconnects to the same job.</p><p id="restored-state" class="hidden" role="status"></p></div><button class="secondary" id="reload-demo" disabled>Reload this tab ↻</button></div>
+    </details>
+    <div id="connection" class="connection hidden" role="alert"></div>
+    <div class="workspace">
+      <section class="work-panel" aria-label="Live batch">
+        <div class="panel-heading"><div><p class="eyebrow" id="batch-kicker">THE INPUT</p><h2 id="batch-title">A cohort, with a few imperfections.</h2></div><span id="job-badge" class="badge neutral">Not submitted</span></div>
+        <div class="batch-settings" id="batch-settings">
+          <label>Certificate title<input id="course" maxlength="200" value="Python for Data Engineering"></label>
+          <label>Issued by<input id="issuer" maxlength="200" value="Acme Academy"></label>
+        </div>
+        <div class="metrics" aria-label="Batch counts">
+          <div><span id="total-count">12</span><small>Recipients</small></div>
+          <div><span id="queue-count">—</span><small id="queue-label">Ready to generate</small></div>
+          <div><span id="success-count" class="green">0</span><small>PDFs created</small></div>
+          <div><span id="issue-count" class="amber">—</span><small id="issue-label">Need attention</small></div>
+        </div>
+        <div class="progress-area hidden" id="progress-area"><div class="progress-caption"><span id="progress-label">Waiting for a worker</span><strong id="progress-value">0%</strong></div><div class="progress-track" role="progressbar" aria-label="Generation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-fill"></div></div></div>
+        <div class="table-wrap"><table><thead><tr><th scope="col">#</th><th scope="col">Recipient</th><th scope="col">Status / explanation</th><th scope="col" class="attempt-heading">Attempts</th></tr></thead><tbody id="recipients"></tbody></table></div>
+        <div class="table-footer"><span id="table-note">Illustrative recipients. Edit a name or email before validating.</span><button id="restore" class="text-button">Restore sample</button></div>
+        <div id="downloads" class="downloads hidden"><div><strong>Your certificates are ready.</strong><p>Open a real PDF, or download all successful PDFs plus a CSV manifest.</p></div><div class="download-actions"><button id="preview" class="secondary">Preview certificate ↗</button><a id="archive" class="primary" href="#">Download ZIP ↓</a></div></div>
+      </section>
+      <aside class="guide" aria-label="Presenter guide">
+        <div class="guide-top"><span class="eyebrow">THE WALKTHROUGH</span><span id="step-number">01 / 10</span></div>
+        <div class="guide-symbol" id="guide-symbol" aria-hidden="true">01</div>
+        <h2 id="guide-title">Good data in. Clear errors out.</h2>
+        <p id="guide-copy">A real list is rarely perfect. This sample includes a bad email, a duplicate, and a name the template font cannot render. Let’s check it before creating anything.</p>
+        <div class="takeaway"><span class="mini-label">WHAT TO NOTICE</span><p id="takeaway">Validation runs independently for each recipient. One bad row doesn’t block everyone else.</p></div>
+        <div id="proof" class="proof hidden" role="status"></div>
+        <button class="primary next" id="next">Validate this batch <span>→</span></button>
+        <p class="action-caption" id="action-caption">Dry run · no job or PDFs will be created</p>
+        <div class="worker-box"><div><span class="worker-led" id="worker-led"></span><strong id="worker-label">Worker offline</strong></div><span id="worker-detail">Waiting for you to start</span></div>
+        <details class="speaker-notes"><summary>Presenter notes</summary><p id="speaker-note">Start with the problem: creating certificates one at a time is tedious. This service accepts a whole list, reports mistakes, and generates the valid certificates in the background.</p><p class="demo-disclosure">Demo settings: rendering slowed by 650 ms per item; leases shortened to 8 seconds. The crash kills a real child process. The failure chapter injects a rendering error for one sample recipient.</p></details>
+      </aside>
+    </div>
+    <section class="under-hood" aria-label="How it works">
+      <div class="flow-heading"><p class="eyebrow">FOLLOW THE REQUEST</p><span id="flow-caption">Start with the list. Follow the work all the way to disk.</span></div>
+      <div class="pipeline"><div data-node="input"><span class="node-icon">≡</span><div><strong>One batch</strong><small>JSON request</small></div></div><span class="flow-arrow">→</span><div data-node="validate"><span class="node-icon">✓</span><div><strong>Validate</strong><small>Row by row</small></div></div><span class="flow-arrow">→</span><div data-node="queue"><span class="node-icon">▤</span><div><strong>Save & queue</strong><small>SQLite on disk</small></div></div><span class="flow-arrow">→</span><div data-node="worker"><span class="node-icon">⚙</span><div><strong>Worker</strong><small>Claim · render · save</small></div></div><span class="flow-arrow">→</span><div data-node="output"><span class="node-icon">↧</span><div><strong>PDFs + ZIP</strong><small>Download results</small></div></div></div>
+    </section>
+    <details class="api-console" id="api-console"><summary><span><span class="code-icon">{ }</span> Inspect the real API calls <span class="console-hint">For the technical audience</span></span><span id="call-count">0 calls</span></summary><div class="console-content"><div id="call-list" class="call-list"></div><div class="call-detail"><div id="call-title">Requests and responses will appear here.</div><pre id="call-body">No calls yet.</pre></div></div></details>
+    <footer><span>FastAPI · SQLite · ReportLab <span class="footer-dot">/</span> No external services required</span><button id="restart" class="text-button">Start a new walkthrough ↺</button></footer>
+  </main>
+  <dialog id="pdf-dialog"><div class="dialog-heading"><div><p class="eyebrow">THE REAL OUTPUT</p><h2>A certificate, ready to share.</h2></div><button class="quiet" id="close-preview" aria-label="Close PDF preview">✕</button></div><iframe id="pdf-frame" title="Generated PDF certificate"></iframe><div class="dialog-footer"><span>This is the PDF produced by the worker, served by the API.</span><a id="pdf-download" class="primary" target="_blank" rel="noopener">Open / save PDF ↗</a></div></dialog>
+  <dialog id="restart-dialog"><div class="restart-content"><h2>Start another walkthrough?</h2><p>The current demo worker will stop gracefully. Existing certificates stay in this session’s data folder.</p><div class="download-actions"><button class="secondary" id="cancel-restart">Keep presenting</button><button class="primary" id="confirm-restart">Start fresh</button></div></div></dialog>
+  <div class="sr-only" id="announcement" aria-live="polite"></div>
+</body>
+</html>

@@ -30,6 +30,40 @@ The response is `202 Accepted` with a `Location` header pointing at the job. Row
 page loads Swagger UI from `cdn.jsdelivr.net`, so it needs internet access; the schema itself is served
 locally at `/openapi.json`).
 
+## Live visual demo
+
+After installing the runtime dependencies, launch the guided browser demo:
+
+```bash
+./scripts/demo-live.sh
+# Or, on any supported platform:
+.venv/bin/python scripts/live_demo.py
+# Windows: .venv\Scripts\python scripts\live_demo.py
+```
+
+Open **http://127.0.0.1:8010** (the launcher also tries to open your browser).
+Follow the green button through five chapters: validate an editable sample batch, watch a real worker
+generate PDFs, preview/download the output and replay the request, recover from a real worker crash,
+then fix and retry an individually failed certificate. Expand **Presenter notes** for talking points
+or **Inspect the real API calls** for the exact requests and responses.
+
+This is a local presentation app around the existing API, with no additional dependencies or external
+services. Each launch gets a new `data/live-demo/<session>/` directory; normal application data is not
+used. Demo-only controls live in `scripts/live_demo.py`, not the production server. Rendering is
+deliberately slowed by 650 ms per certificate and leases shortened to 8 seconds. The failure chapter
+injects an error for one sample recipient; the crash chapter terminates a real child worker process.
+
+Use `./scripts/demo-live.sh --no-browser` to open the URL yourself, or `--port 8011` if 8010 is occupied.
+Press **Ctrl+C** in the terminal to stop the server and its worker. Generated files remain available
+on disk. The [presenter's guide](docs/DEMO.md) includes a five-minute script and troubleshooting.
+
+Verify the complete demo, including crash recovery, over real localhost HTTP:
+
+```bash
+.venv/bin/python scripts/check_live_demo.py
+```
+
+
 ## Setup
 
 Requirements: Python ≥ 3.11 (uses `enum.StrEnum`), pip, a local disk. No Docker, Redis, broker or

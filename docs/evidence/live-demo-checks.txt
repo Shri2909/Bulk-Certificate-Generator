@@ -1,0 +1,64 @@
+Local browser demo verification — 2026-10-16
+
+Existing application regression suite:
+  .venv/bin/python -m pytest -q -p no:cacheprovider
+  324 passed in 12.50s
+
+After README / guide updates:
+  .venv/bin/python -m pytest -q tests/test_docs.py tests/test_spec_traceability.py -p no:cacheprovider
+  11 passed in 0.19s
+
+Repeatable demo integration check:
+  .venv/bin/python scripts/check_live_demo.py
+  PASS: assets, API docs, isolated empty session, same-origin controls
+  PASS: dry run, partial acceptance, PDF, ZIP + manifest, safe replay
+  PASS: real worker kill, lease recovery, same ID, exactly six PDFs
+  PASS: isolated failure, attempt limit, explicit retry, stable certificate IDs
+  PASS: demo end-to-end checks complete; temporary data and owned processes cleaned up
+
+Browser verification with locally available Playwright / Chromium:
+  PASS: all 11 walkthrough steps, default sample 9 valid / 3 rejected
+  PASS: real PDF Blob preview URL and ZIP download
+  PASS: Idempotent-Replayed header and matching original job ID
+  PASS: real crash, recovered row, 6 successful recipients
+  PASS: 3 successful / 1 failed recipient, followed by 4 successful recipients after retry
+  PASS: reload preserves the step, completed walkthrough restarts
+  PASS: 390px layout has no document-level horizontal overflow
+  PASS: no uncaught page errors
+
+PDF visual verification:
+  The lightweight Chromium headless shell does not render native PDF previews.
+  Rechecked with installed Google Chrome: the PDF viewer displayed the real generated
+  certificate. Screenshot: live-demo-certificate.png.
+
+Laptop and interruption checks:
+  PASS: original primary walkthrough action fit above the fold at 1366x768
+  PASS: requesting a restart during generation preserves the running worker
+  PASS: the same batch finishes; completed walkthrough restarts cleanly
+  Screenshot: live-demo-desktop.png (updated below after adding feature shortcuts).
+
+Feature visibility update — 2026-10-16:
+  Added always-visible crash/failure shortcuts and a session/reload panel.
+  PASS: direct crash starts without completing earlier chapters
+  PASS: shortcuts disabled while current work is unfinished
+  PASS: reload shows restored step, same session and same job; no new submission
+  PASS: crash recovery, direct individual failure, targeted retry, repeatable crash
+  PASS: full original 11-step browser walkthrough still works
+  PASS: 390px layout has no document-level horizontal overflow; no browser errors
+  Tests used a separate server on port 8011, preserving the user's port 8010 session.
+  Updated desktop screenshot includes the new feature controls.
+
+Static checks:
+  ruff check .: All checks passed!
+  ruff format --check .: 45 files already formatted
+  mypy --strict certgen: Success: no issues found in 20 source files
+  mypy --strict scripts/live_demo.py scripts/check_live_demo.py:
+    Success: no issues found in 2 source files
+  node --check demo/app.js: pass
+  bash -n scripts/demo-live.sh: pass
+  git diff --check: pass
+
+Environment note:
+  Localhost and API-backed tests were run outside the restricted sandbox. Within
+  the sandbox, binding localhost failed and API TestClient tests stalled. No
+  production application code or runtime dependencies were changed for the demo.

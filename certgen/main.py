@@ -101,7 +101,11 @@ def create_app(
     # Inside the request limit: an aborted slow download releases its slot.
     app.add_middleware(SendDeadlineMiddleware, send_timeout_seconds=SEND_TIMEOUT_SECONDS)
     # Outside the body buffer, so a request still uploading holds a slot: bounded buffered memory.
-    app.add_middleware(ConcurrencyLimitMiddleware, max_requests=MAX_CONCURRENT_REQUESTS)
+    app.add_middleware(
+        ConcurrencyLimitMiddleware,
+        max_requests=MAX_CONCURRENT_REQUESTS,
+        max_per_client=settings.max_requests_per_token,
+    )
     # Token check before a request slot is taken or a body is read (audit F-12).
     app.add_middleware(TokenAuthMiddleware, store=tokens, prefix="/v1/")
     # Host check before any body is read: a rebinding page cannot even get its upload buffered.

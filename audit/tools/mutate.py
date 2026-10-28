@@ -463,6 +463,34 @@ ROUND2_MUTANTS: list[tuple[str, str, str, str, str]] = [
         "SEND_TIMEOUT_SECONDS = 3600\n",
         "P8-N2 send deadline 1 h",
     ),
+    (
+        "R16",
+        "certgen/middleware.py",
+        "            admitted = self.in_flight < self.max_requests and not client_full\n",
+        "            admitted = self.in_flight < self.max_requests\n",
+        "R2-O1 per-token cap not enforced",
+    ),
+    (
+        "R17",
+        "certgen/config.py",
+        "    max_requests_per_token: int = 32\n",
+        "    max_requests_per_token: int = 64\n",
+        "R2-O1 default cap = whole limit",
+    ),
+    (
+        "R18",
+        "certgen/main.py",
+        "        max_per_client=settings.max_requests_per_token,\n",
+        "",
+        "R2-O1 cap not passed to the middleware",
+    ),
+    (
+        "R19",
+        "certgen/middleware.py",
+        "                    if left:\n",
+        "                    if True:\n",
+        "R2-O1 finished token entries never removed",
+    ),
 ]
 
 

@@ -36,7 +36,7 @@ def test_server_limits_passed_to_uvicorn(monkeypatch: pytest.MonkeyPatch) -> Non
     # idle sockets locked every client out. The 64-request limit now lives in the app.
     assert "limit_concurrency" not in captured
     limits = [m.kwargs for m in main.app.user_middleware if m.cls is ConcurrencyLimitMiddleware]
-    assert limits == [{"max_requests": 64}]
+    assert limits == [{"max_requests": 64, "max_per_client": 32}]  # 32 per API token (A-19)
     assert captured["timeout_keep_alive"] == 5
 
 

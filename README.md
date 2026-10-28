@@ -421,10 +421,13 @@ message naming the variable).
 | `CERTGEN_API_TOKENS` | empty | comma-separated tokens, 16–256 chars each | bearer tokens accepted on `/v1`; empty = use (or create) `{CERTGEN_DATA_DIR}/api-token` |
 | `CERTGEN_MIN_FREE_DISK_MB` | `1024` | 0–1000000 | new jobs and retries get `503 STORAGE_FULL` while less disk than this is free on the data dir; `0` disables the check |
 | `CERTGEN_MAX_CONCURRENT_SUBMISSIONS` | `2` | 1–64 | job submissions (`POST /v1/certificate-jobs`, dry runs included) parsed and validated at once per process; more → `503 SERVER_BUSY` before their body is read |
+| `CERTGEN_MAX_REQUESTS_PER_TOKEN` | `32` | 1–64 | requests in progress per API token, of the 64 per process; more → `503 SERVER_BUSY`. Requests without a token (`/healthz`, `/docs`) count only towards the 64 |
 | `CERTGEN_TEST_SLOW_RENDER_MS` | `0` | 0–60000, and below `CERTGEN_LEASE_SECONDS` | **test only**: delay each render so crash tests can kill a worker mid-item |
 
 At most 64 requests are in progress per process (counted by the app, whichever way it is served); a
-65th gets `503 SERVER_BUSY` with `Retry-After: 1`. Open connections that have not sent a complete
+65th gets `503 SERVER_BUSY` with `Retry-After: 1`. One API token may hold at most
+`CERTGEN_MAX_REQUESTS_PER_TOKEN` (default 32) of them, so a single token holder cannot take every slot
+from other tokens or from `/healthz`. Open connections that have not sent a complete
 request do not count, so idle sockets cannot lock clients out. At most `CERTGEN_MAX_CONCURRENT_SUBMISSIONS`
 (default 2) job submissions are parsed and validated at once, a request body must arrive within 30 s
 (else `408 REQUEST_TIMEOUT`), each piece of a response must be accepted by the client within 30 s (else
@@ -460,7 +463,7 @@ Every non-2xx response is `application/problem+json`:
 | `DB_UNAVAILABLE` | 503 | database lock wait over 5 s, or the database cannot be read (`Retry-After: 1`) |
 | `ARCHIVE_BUSY` | 503 | two archives already being built in this process (`Retry-After: 1`) |
 | `CAPACITY_EXCEEDED` | 503 | accepting the job would exceed `CERTGEN_MAX_ACTIVE_ITEMS` (`Retry-After: 1`) |
-| `SERVER_BUSY` | 503 | 64 requests, or `CERTGEN_MAX_CONCURRENT_SUBMISSIONS` job submissions, are already in progress in this process (`Retry-After: 1`) |
+| `SERVER_BUSY` | 503 | 64 requests, `CERTGEN_MAX_REQUESTS_PER_TOKEN` requests of this API token, or `CERTGEN_MAX_CONCURRENT_SUBMISSIONS` job submissions are already in progress in this process (`Retry-After: 1`) |
 | `STORAGE_FULL` | 503 | less than `CERTGEN_MIN_FREE_DISK_MB` of disk is free for new jobs or retries (`Retry-After: 1`) |
 | `REQUEST_TIMEOUT` | 408 | the request body did not arrive completely within 30 s |
 
@@ -558,10 +561,11 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 - **Slow clients:** a request counts toward the 64-request limit from its headers on. Its body must
   arrive within 30 s (`408 REQUEST_TIMEOUT`), and the client must accept each piece of the response
   within 30 s, else the download is aborted and the connection closed; so a client that stalls holds a
-  slot for about 30 s, not indefinitely. Two residuals: a token holder who keeps re-requesting downloads
-  it never reads can still keep all 64 slots busy (no per-token quotas, see the first item), and an
-  aborted connection keeps its file descriptor until the client closes it (bounded by `ulimit -n`, like
-  idle connections).
+  slot for about 30 s, not indefinitely. A token holder who keeps re-requesting downloads it never reads
+  can keep its own 32 slots busy, but not the other 32. Residuals: every client sharing that token
+  shares its 32 slots; a token holder that keeps two slow uploads going can hold both job-submission
+  slots, delaying other tokens' submissions; and an aborted connection keeps its file descriptor until
+  the client closes it (bounded by `ulimit -n`, like idle connections).
 - Emails are printed on certificates by default, which puts contact details on a document that may be
   shared; set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to opt out.
 
@@ -586,9 +590,10 @@ Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
   pre-check and bounded unknown-field errors (A-04), unpaired surrogates rejected (A-05), bounded `after`
   (A-06), `Host` allowlist (A-07), in-app request limit (A-08), BMP-only text (A-09), dependency bumps
   (A-10), progress never 1.0 early (A-11), body budget for decomposed input (A-12). Its second round added
-  A-13 to A-18: slow-render delay below the lease (A-13), damaged certificate files refused (A-14), row cap
+  A-13 to A-19: slow-render delay below the lease (A-13), damaged certificate files refused (A-14), row cap
   and free-disk guard (A-15), submission limit and body deadline (A-16), bearer-token authentication
-  (A-17), response send deadline (A-18). The audit's own tests need its extra tools
+  (A-17), response send deadline (A-18), per-token request cap (A-19). The audit's own tests need its
+  extra tools
   (`pip install -r audit/requirements.txt`, which includes the dev requirements) and run with
   `pytest audit/tests` (separately from `pytest`, which runs `tests/`).
 - **Interpretations** where the blueprint was silent or a library behaved differently than it assumed (no

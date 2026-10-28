@@ -608,3 +608,85 @@ def test_runtime_checks_are_not_assert_statements(path: Path) -> None:
 
     tree = ast.parse(path.read_text(encoding="utf-8"))
     assert [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Assert)] == []
+
+
+def _limited_call(limited: Any, client: str | None) -> Any:
+    """One GET through `limited`, as TokenAuthMiddleware leaves it: client_id in the state, or none."""
+
+    async def call() -> tuple[int, bytes]:
+        out: list[dict[str, Any]] = []
+        scope: dict[str, Any] = {"type": "http", "method": "GET", "path": "/", "headers": []}
+        if client is not None:
+            scope["state"] = {"client_id": client}
+
+        async def receive() -> dict[str, Any]:
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message: dict[str, Any]) -> None:
+            out.append(message)
+
+        await limited(scope, receive, send)
+        return int(out[0]["status"]), b"".join(m.get("body", b"") for m in out[1:])
+
+    return call()
+
+
+@pytest.mark.req("R11")
+def test_one_token_cannot_hold_every_request_slot() -> None:
+    """R2-O1: a token holder whose requests never finish (downloads it never reads, renewed every 30 s)
+    occupied all 64 slots. One token may hold at most `max_per_client`; other tokens and routes without
+    a token (/healthz, /docs) still get in."""
+    import asyncio
+
+    from certgen.middleware import ConcurrencyLimitMiddleware
+
+    release = asyncio.Event()
+
+    async def held(scope: Any, receive: Any, send: Any) -> None:
+        await release.wait()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    limited = ConcurrencyLimitMiddleware(held, max_requests=4, max_per_client=2)
+
+    async def scenario() -> tuple[tuple[int, bytes], list[int], int]:
+        mine = [asyncio.create_task(_limited_call(limited, "a")) for _ in range(2)]
+        while limited.in_flight < 2:
+            await asyncio.sleep(0)
+        # Token a already holds its 2: refused at once (if it were admitted, it would wait forever).
+        third = await asyncio.wait_for(_limited_call(limited, "a"), timeout=5)
+        others = [asyncio.create_task(_limited_call(limited, c)) for c in ("b", None)]
+        while limited.in_flight < 4:
+            await asyncio.sleep(0)
+        release.set()
+        statuses = [status for status, _ in await asyncio.gather(*mine, *others)]
+        again = (await _limited_call(limited, "a"))[0]  # its slots come back when its requests finish
+        return third, statuses, again
+
+    third, statuses, again = asyncio.run(scenario())
+    assert third[0] == 503 and b"SERVER_BUSY" in third[1]
+    assert statuses == [200, 200, 200, 200] and again == 200
+    assert limited.in_flight == 0 and limited.per_client == {}
+
+
+@pytest.mark.req("R11")
+def test_token_slot_is_released_when_the_app_raises() -> None:
+    import asyncio
+
+    from certgen.middleware import ConcurrencyLimitMiddleware
+
+    async def boom(scope: Any, receive: Any, send: Any) -> None:
+        raise RuntimeError("boom")
+
+    limited = ConcurrencyLimitMiddleware(boom, max_requests=4, max_per_client=1)
+    for _ in range(3):
+        with pytest.raises(RuntimeError):
+            asyncio.run(_limited_call(limited, "a"))
+    assert limited.in_flight == 0 and limited.per_client == {}
+
+
+@pytest.mark.req("R11")
+def test_requests_per_token_default_is_half_the_request_limit() -> None:
+    from certgen.config import MAX_CONCURRENT_REQUESTS, Settings
+
+    assert Settings().max_requests_per_token == 32 == MAX_CONCURRENT_REQUESTS // 2

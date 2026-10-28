@@ -61,6 +61,7 @@ def test_data_dir_is_resolved_to_absolute_path(tmp_path: Path) -> None:
         ("CERTGEN_EMBEDDED_WORKER", ["1", "0", "TRUE", "false"], ["yes", "2", ""]),
         ("CERTGEN_PRINT_EMAIL_ON_CERTIFICATE", ["1", "0", "True", "FALSE"], ["on", "no"]),
         ("CERTGEN_HOST", ["127.0.0.1", "0.0.0.0", "::1"], ["localhost", "999.1.1.1"]),
+        ("CERTGEN_MAX_REQUESTS_PER_TOKEN", ["1", "64"], ["0", "65", "x"]),  # R2-O1, amendment A-19
     ],
 )
 def test_every_variable_is_range_checked(var: str, good: list[str], bad: list[str]) -> None:

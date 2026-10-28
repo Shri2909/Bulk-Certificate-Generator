@@ -140,38 +140,56 @@ class SendDeadlineMiddleware:
 
 
 class ConcurrencyLimitMiddleware:
-    """At most `max_requests` HTTP requests in progress; more get 503 SERVER_BUSY (problem+json).
+    """At most `max_requests` HTTP requests in progress, and at most `max_per_client` of them for one API
+    token; more get 503 SERVER_BUSY (problem+json).
 
     Counts requests, not connections: a TCP connection that never completes its request headers holds
     no slot, so idle sockets cannot lock other clients out (audit F-11). A request whose body is still
-    arriving does hold one, which keeps the memory spent on buffered bodies bounded.
+    arriving does hold one, which keeps the memory spent on buffered bodies bounded. The per-token share
+    means one token holder cannot take every slot; requests without a token (/healthz) count only
+    towards the total (audit R2-O1).
     """
 
-    def __init__(self, app: ASGIApp, max_requests: int) -> None:
+    def __init__(self, app: ASGIApp, max_requests: int, max_per_client: int | None = None) -> None:
         self.app = app
         self.max_requests = max_requests
+        self.max_per_client = max_requests if max_per_client is None else max_per_client
         self.in_flight = 0
+        self.per_client: dict[str, int] = {}
         self._lock = threading.Lock()  # TestClient may drive the app from more than one event loop
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        client: str | None = scope.get("state", {}).get("client_id")  # set by TokenAuthMiddleware
         with self._lock:
-            admitted = self.in_flight < self.max_requests
+            held = self.per_client.get(client, 0) if client is not None else 0
+            client_full = held >= self.max_per_client
+            admitted = self.in_flight < self.max_requests and not client_full
             if admitted:
                 self.in_flight += 1
+                if client is not None:
+                    self.per_client[client] = held + 1
         if not admitted:
-            response = problem_response(
-                ProblemCode.SERVER_BUSY, "Too many requests are in progress; retry shortly."
+            detail = (
+                "This API token already has the most requests in progress it may have; retry shortly."
+                if client_full
+                else "Too many requests are in progress; retry shortly."
             )
-            await response(scope, receive, send)
+            await problem_response(ProblemCode.SERVER_BUSY, detail)(scope, receive, send)
             return
         try:
             await self.app(scope, receive, send)
         finally:
             with self._lock:
                 self.in_flight -= 1
+                if client is not None:
+                    left = self.per_client[client] - 1
+                    if left:
+                        self.per_client[client] = left
+                    else:
+                        del self.per_client[client]
 
 
 class NoStoreMiddleware:

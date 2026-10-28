@@ -24,16 +24,16 @@ import urllib.request
 from pathlib import Path
 
 TOKEN = "audit-token-0123456789abcdef"
-AUTH = {"Authorization": f"Bearer {TOKEN}"}
+OTHER_TOKEN = "audit-other-token-0123456789"  # a second client, never used by the readers
 
 
-def call(port: int, method: str, path: str, body: object = None) -> tuple[int, bytes]:
+def call(port: int, method: str, path: str, body: object = None, token: str = TOKEN) -> tuple[int, bytes]:
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}{path}",
         data=data,
         method=method,
-        headers={**AUTH, "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -58,7 +58,7 @@ def main() -> None:
     env.update(
         CERTGEN_DATA_DIR=str(data / "d"),
         CERTGEN_PORT=str(port),
-        CERTGEN_API_TOKENS=TOKEN,
+        CERTGEN_API_TOKENS=f"{TOKEN},{OTHER_TOKEN}",
         PYTHONPATH=os.getcwd(),
     )
     env["CERTGEN_MAX_RECIPIENTS"] = str(max(recipients, 10_000))
@@ -122,7 +122,12 @@ def main() -> None:
             if time.monotonic() >= next_report:
                 elapsed = seconds - (end - time.monotonic())
                 health = call(port, "GET", "/healthz")[0]
-                print(f"t={elapsed:5.1f}s /healthz -> {health}  server fds: {server_fds()}", flush=True)
+                other = call(port, "GET", f"/v1/certificate-jobs/{job}", token=OTHER_TOKEN)[0]
+                print(
+                    f"t={elapsed:5.1f}s /healthz -> {health}  other token -> {other}"
+                    f"  server fds: {server_fds()}",
+                    flush=True,
+                )
                 next_report += 10
             time.sleep(0.2)
         print(f"end: /healthz -> {call(port, 'GET', '/healthz')[0]}  server fds: {server_fds()}", flush=True)

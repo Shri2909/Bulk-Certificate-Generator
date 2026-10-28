@@ -270,7 +270,7 @@ Raw: `audit/evidence/stage2/R2-<ID>-red.txt`, `-green.txt`, `-gate.txt`.
 | F-15 (R04) | mutant R04 survived (redundant `fstat`) | boundary test kills it | 449 / 231 |
 | P8-N2 (send deadline) | 2 × `ImportError: SendDeadlineMiddleware` | 2 passed (+1 through FastAPI `StreamingResponse`) | 452 / 231 |
 | N-02 | 1 failed: 30 assert statements in the checker | 22 passed; checker 5/5 normally and under `-O` | 474 / 231 |
-| N-03 | `ModuleNotFoundError: No module named 'hypothesis'` collecting `audit/tests` in a dev-only venv | see §9.6 | — (docs + requirements only; README tests 13 passed, ruff clean) |
+| N-03 | `ModuleNotFoundError: No module named 'hypothesis'` collecting `audit/tests` in a dev-only venv | the user's `.venv` after `pip install -r audit/requirements.txt`: 232 passed (§9.6) | — (docs + requirements only; README tests 13 passed, ruff clean) |
 | P8-N3 (M10/M11) | both mutants survive `tests/` (`R2-P7-03-mutation-first-run.tsv`; reproduced by hand: the 4 symlink tests pass with either mutant) | both killed by the strengthened tests (`R2-M10-M11-mutants.tsv`) | 475 / 232 |
 
 ### 9.4 Re-validation after round 2 (Phase 7 checks, EXECUTED)
@@ -319,7 +319,14 @@ Product code (`certgen/`) is unchanged since `395bc96`; the attack, benchmark, d
 
 ### 9.6 Merge
 
-⟨PENDING-MERGE⟩
+Done 2026-10-28, local only; nothing was pushed.
+
+1. **Backup.** In the main working tree, `git stash push -u` saved the user's uncommitted README change and every untracked file (the demo files and the untracked Stage 1 copy of `audit/`) as `stash@{0}` ("pre-merge backup (2026-10-28) …"). The stash is kept, not dropped.
+2. **Fast-forward.** `git merge --ff-only audit/remediation`: `main` `261108d` → `1121904`, no merge commit; working tree clean.
+3. **Backup vs `main`.** Of the 32 stashed untracked files, 21 are byte-identical in `main`; the 11 others differ only by committed changes — 9 audit tests/tools (the Stage 1 copy, updated during remediation), `scripts/live_demo.py` (token, `609b2c8`) and `scripts/check_live_demo.py` (N-02). Of the user's 33 added README lines, all are present verbatim except one, which `609b2c8` extended with a sentence on the per-session API token.
+4. **The user's `.venv`.** `pip install -r audit/requirements.txt` → pillow 13.0.0, pypdf 6.21.2 and the audit tools; `pip check` clean (N-03 GREEN, `R2-N-03-green.txt`). Its 3 `activate` scripts and 17 console scripts (`pytest`, `mypy`, `uvicorn`, `pip`, …) still named the project's former location (`/home/abc/Desktop/bulk certificate generator/`), so `pytest` or `mypy` after activation failed (pre-existing; the gate's mypy step reported `not found`). Re-running `python -m venv .venv` in place (no `--clear`) and force-reinstalling the same pinned packages with `--no-deps` fixed every one; the installed versions are unchanged.
+5. **Checks in `main` with that venv.** 475 passed, ruff clean, 66 files formatted, mypy clean, `pytest audit/tests` 232 passed — the secret scan included, now with real git metadata (`R2-main-merged-gate.txt`); `scripts/check_live_demo.py` 5/5 PASS (`R2-main-live-demo.txt`).
+6. **Cleanup.** The worktree `../certgen-remediation` is removed after this commit is fast-forwarded into `main`; the branch `audit/remediation` and the tags `audit-baseline-stage1` and `audit-remediation-freeze` stay.
 
 ### 9.7 Remaining items and residual risks
 

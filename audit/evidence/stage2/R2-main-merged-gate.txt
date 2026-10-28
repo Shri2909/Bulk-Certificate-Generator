@@ -1,0 +1,11 @@
+== R2-main-merged 2026-10-28T01:15:38Z HEAD 1121904 python Python 3.11.9
+-- pytest tests
+475 passed in 27.41s
+-- ruff check .
+All checks passed!
+-- ruff format --check .
+66 files already formatted
+-- mypy --strict certgen
+Success: no issues found in 21 source files
+-- pytest audit/tests
+232 passed in 46.18s

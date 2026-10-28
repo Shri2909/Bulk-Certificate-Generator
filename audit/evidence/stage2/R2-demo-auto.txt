@@ -1,0 +1,141 @@
+# scripts/demo.sh --auto (EXECUTED) 2026-10-27T13:26:44Z HEAD 39327ed
+
+[1m[36m━━ 1. Start the API (workers run as separate processes in this demo) ━━[0m
+[2mOne command, no broker: SQLite + files in data/demo. Embedded workers are off so we can kill one later.[0m
+[32m$ CERTGEN_EMBEDDED_WORKER=false .venv/bin/python -m certgen &[0m
+[32m$ curl -s http://127.0.0.1:8010/healthz | json[0m
+{
+    "status": "ok",
+    "db": "ok",
+    "embedded_workers_alive": 0,
+    "embedded_workers_expected": 0
+}
+
+[1m[36m━━ 2. Dry run: validate the whole batch without storing anything ━━[0m
+[2mBad email, Chinese characters the font cannot draw, and a case-insensitive duplicate are reported per row.[0m
+[32m$ curl -s -H "$AUTH" -X POST 'http://127.0.0.1:8010/v1/certificate-jobs?dry_run=true' -H 'Content-Type: application/json' --data @data/demo/job.json | json[0m
+{
+    "dry_run": true,
+    "would_create_job": true,
+    "counts": {
+        "total": 12,
+        "valid": 9,
+        "rejected": 3
+    },
+    "errors": [
+        {
+            "row_index": 4,
+            "field": "email",
+            "code": "INVALID_EMAIL",
+            "message": "An email address must have an @-sign."
+        },
+        {
+            "row_index": 5,
+            "field": "name",
+            "code": "UNSUPPORTED_CHARACTERS",
+            "message": "Character U+674E is not supported by the certificate font."
+        },
+        {
+            "row_index": 6,
+            "field": "email",
+            "code": "DUPLICATE_RECIPIENT",
+            "message": "Duplicate of row 0 (same email, case-insensitive).",
+            "duplicate_of_row_index": 0
+        }
+    ]
+}
+
+[1m[36m━━ 3. Submit for real, with an Idempotency-Key ━━[0m
+[2m202 immediately: valid rows are queued, invalid rows are stored as rejected. Nothing is rendered yet.[0m
+[32m$ curl -s -H "$AUTH" -X POST http://127.0.0.1:8010/v1/certificate-jobs -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-order-1' --data @data/demo/job.json -o data/demo/created.json -w '%{http_code}\n' | tail -1[0m
+202
+job 73ba2ef163c24325b95aa174a21f641d queued {'total': 12, 'rejected': 3, 'pending': 9, 'processing': 0, 'succeeded': 0, 'failed': 0}
+  row 4 INVALID_EMAIL - An email address must have an @-sign.
+  row 5 UNSUPPORTED_CHARACTERS - Character U+674E is not supported by the certificate font.
+  row 6 DUPLICATE_RECIPIENT - Duplicate of row 0 (same email, case-insensitive).
+
+[1m[36m━━ 4. The client timed out and sends the same request again ━━[0m
+[2mSame key + same body: 200 replay of the same job, no duplicate.[0m
+[32m$ curl -s -H "$AUTH" -o /dev/null -D - -X POST http://127.0.0.1:8010/v1/certificate-jobs -H 'Content-Type: application/json' -H 'Idempotency-Key: demo-order-1' --data @data/demo/job.json | grep -iE '^HTTP|^location|^idempotent'[0m
+HTTP/1.1 200 OK
+location: /v1/certificate-jobs/73ba2ef163c24325b95aa174a21f641d
+idempotent-replayed: true
+
+[1m[36m━━ 5. Start a worker and watch progress ━━[0m
+[2mThe worker claims one item at a time in a single locked transaction, renders it, writes it atomically.[0m
+[32m$ .venv/bin/python -m certgen.worker &   # worker A[0m
+  progress so far: {'total': 12, 'rejected': 3, 'pending': 5, 'processing': 1, 'succeeded': 3, 'failed': 0}
+
+[1m[36m━━ 6. Crash: kill -9 worker A in the middle of a certificate ━━[0m
+[2mIts item stays 'processing' with a 3 s lease. Nobody has to notice the crash.[0m
+[32m$ kill -9 43650[0m
+  stuck item: row 3 Seán O'Connor-Smith attempts 1
+
+[1m[36m━━ 7. Start worker B: it finishes the job and takes over the crashed item when the lease expires ━━[0m
+[2mA new random token fences out the dead worker. Same certificate id, same file, no duplicate.[0m
+[32m$ .venv/bin/python -m certgen.worker &   # worker B[0m
+  processing [#########.....................] 33% succeeded=3 processing=1 pending=5 failed=0 rejected=3          processing [#########.....................] 33% succeeded=3 processing=1 pending=5 failed=0 rejected=3          processing [#########.....................] 33% succeeded=3 processing=2 pending=4 failed=0 rejected=3          processing [#############.................] 44% succeeded=4 processing=2 pending=3 failed=0 rejected=3          processing [################..............] 56% succeeded=5 processing=2 pending=2 failed=0 rejected=3          processing [####################..........] 67% succeeded=6 processing=2 pending=1 failed=0 rejected=3          processing [####################..........] 67% succeeded=6 processing=2 pending=1 failed=0 rejected=3          processing [#######################.......] 78% succeeded=7 processing=2 pending=0 failed=0 rejected=3          processing [##########################....] 89% succeeded=8 processing=1 pending=0 failed=0 rejected=3          processing [##########################....] 89% succeeded=8 processing=1 pending=0 failed=0 rejected=3          processing [##########################....] 89% succeeded=8 processing=1 pending=0 failed=0 rejected=3          completed_with_errors [##############################] 100% succeeded=9 processing=0 pending=0 failed=0 rejected=3
+  row 0 attempts 1 
+  row 1 attempts 1 
+  row 2 attempts 1 
+  row 3 attempts 2 <- reclaimed after the crash
+  row 7 attempts 1 
+  row 8 attempts 1 
+  row 9 attempts 1 
+  row 10 attempts 1 
+  row 11 attempts 1 
+  PDF files on disk: 9   temp files: 0
+
+[1m[36m━━ 8. Results: which rows failed and why, one PDF, and the whole job as a ZIP ━━[0m
+[32m$ curl -s -H "$AUTH" 'http://127.0.0.1:8010/v1/certificate-jobs/73ba2ef163c24325b95aa174a21f641d/items?status=rejected' | field '[(i["row_index"], i["name"], i["errors"][0]["code"]) for i in d["items"]]'[0m
+[(4, 'Bob', 'INVALID_EMAIL'), (5, '李小龙', 'UNSUPPORTED_CHARACTERS'), (6, 'Zoe Again', 'DUPLICATE_RECIPIENT')]
+[32m$ curl -s -H "$AUTH" -o data/demo/certificate.pdf http://127.0.0.1:8010/v1/certificates/ccaa21ae05e0de7f53de15cef132b8f1 && file data/demo/certificate.pdf[0m
+data/demo/certificate.pdf: PDF document, version 1.4, 1 page(s)
+[32m$ curl -s -H "$AUTH" -o data/demo/certificates.zip http://127.0.0.1:8010/v1/certificate-jobs/73ba2ef163c24325b95aa174a21f641d/archive && .venv/bin/python -m zipfile -l data/demo/certificates.zip[0m
+File Name                                             Modified             Size
+certificates/00000_ccaa21ae05e0de7f53de15cef132b8f1.pdf 2026-10-27 18:56:50        44000
+certificates/00001_92b2041d9da2cc8bb8cccdccbbae7f41.pdf 2026-10-27 18:56:50        45157
+certificates/00002_1ee0677c59230a86028d0bc1401c7f50.pdf 2026-10-27 18:56:50        44391
+certificates/00003_584c99771605243616ac2e8f3093ad0e.pdf 2026-10-27 18:56:50        43819
+certificates/00007_dcc3ff5171c17e8c9f6c5f145ca13048.pdf 2026-10-27 18:56:50        43824
+certificates/00008_4559d3ca97c1be81eee9f972edd7a4a5.pdf 2026-10-27 18:56:50        43755
+certificates/00009_97610dc0639fe00ecf321735fd137835.pdf 2026-10-27 18:56:50        43744
+certificates/00010_8e5912264fc6a4ce1300b2b9f5d9d68e.pdf 2026-10-27 18:56:50        44007
+certificates/00011_678cc94c25ac0f8b8096363d260564fd.pdf 2026-10-27 18:56:50        44104
+manifest.csv                                   2026-10-27 18:56:50         1166
+[32m$ .venv/bin/python -c "import zipfile; print(zipfile.ZipFile('data/demo/certificates.zip').read('manifest.csv').decode())"[0m
+row_index,name,email,status,certificate_id,error_codes,error_messages
+0,Zoë Łukasz,zoe@example.com,succeeded,ccaa21ae05e0de7f53de15cef132b8f1,,
+1,Νίκος Παπαδόπουλος,nikos@example.org,succeeded,92b2041d9da2cc8bb8cccdccbbae7f41,,
+2,Екатерина Иванова,ekaterina@example.org,succeeded,1ee0677c59230a86028d0bc1401c7f50,,
+3,Seán O'Connor-Smith,sean@example.ie,succeeded,584c99771605243616ac2e8f3093ad0e,,
+4,Bob,not-an-email,rejected,,INVALID_EMAIL,An email address must have an @-sign.
+5,李小龙,bruce@example.com,rejected,,UNSUPPORTED_CHARACTERS,Character U+674E is not supported by the certificate font.
+6,Zoe Again,ZOE@example.com,rejected,,DUPLICATE_RECIPIENT,"Duplicate of row 0 (same email, case-insensitive)."
+7,Anne-Marie Lévesque,anne@example.ca,succeeded,dcc3ff5171c17e8c9f6c5f145ca13048,,
+8,Mohammed Al-Rashid,mohammed@example.com,succeeded,4559d3ca97c1be81eee9f972edd7a4a5,,
+9,Priya Raman,priya@example.in,succeeded,97610dc0639fe00ecf321735fd137835,,
+10,Ngọc Trần,ngoc@example.vn,succeeded,8e5912264fc6a4ce1300b2b9f5d9d68e,,
+11,Lars Øvergaard,lars@example.no,succeeded,678cc94c25ac0f8b8096363d260564fd,,
+
+
+[1m[36m━━ 9. A failure that is not the recipient's fault: the disk becomes read-only ━━[0m
+[2mEach item is retried, then marked failed with a safe message. Other jobs and items are unaffected.[0m
+[32m$ chmod 500 data/demo/certificates[0m
+[32m$ curl -s -H "$AUTH" -X POST http://127.0.0.1:8010/v1/certificate-jobs -H 'Content-Type: application/json' -d '{"certificate": {"title": "Retry Demo", "issuer": "Acme Academy", "issued_on": "2026-10-01"}, "recipients": [{"name": "Grace Hopper", "email": "grace@example.org"}, {"name": "Alan Turing", "email": "alan@example.org"}]}' -o data/demo/retry-job.json -w '%{http_code}\n'[0m
+202
+  queued [..............................] 0% succeeded=0 processing=0 pending=2 failed=0 rejected=0               processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [###############...............] 50% succeeded=0 processing=1 pending=0 failed=1 rejected=0          failed [##############################] 100% succeeded=0 processing=0 pending=0 failed=2 rejected=0           
+  row 0 Grace Hopper attempts 3 GENERATION_FAILED - PermissionError: Certificate generation failed.
+  row 1 Alan Turing attempts 3 GENERATION_FAILED - PermissionError: Certificate generation failed.
+
+[1m[36m━━ 10. Fix the disk, then retry only the failed certificates ━━[0m
+[2mOne call re-queues them; they keep their certificate ids.[0m
+[32m$ chmod 700 data/demo/certificates[0m
+[32m$ curl -s -H "$AUTH" -X POST http://127.0.0.1:8010/v1/certificate-jobs/23c573f6040548b78e47e45c9762e8ba/retry | field 'd["status"], d["counts"]'[0m
+('queued', {'total': 2, 'rejected': 0, 'pending': 2, 'processing': 0, 'succeeded': 0, 'failed': 0})
+  queued [..............................] 0% succeeded=0 processing=0 pending=2 failed=0 rejected=0               processing [..............................] 0% succeeded=0 processing=1 pending=1 failed=0 rejected=0           processing [###############...............] 50% succeeded=1 processing=1 pending=0 failed=0 rejected=0          completed [##############################] 100% succeeded=2 processing=0 pending=0 failed=0 rejected=0        
+
+[1m[36m━━ 11. Shut down gracefully ━━[0m
+[2mWorkers finish the item in hand; nothing is lost.[0m
+[1mDemo complete.[0m Files are in data/demo (delete it any time). API docs: run 'python -m certgen' and open http://127.0.0.1:8000/docs
+[exit 0]

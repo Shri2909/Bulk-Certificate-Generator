@@ -1,0 +1,61 @@
+id	file	description	verdict	seconds	first_failure
+M01	certgen/worker.py	success update loses the token fence	KILLED (tests)	8.3	tests/test_crash_recovery.py::test_stale_worker_done_write_rejected_by_fencing[distinct-ids]
+M02	certgen/worker.py	reclaim at lease boundary (< -> <=)	KILLED (tests)	8.0	tests/test_crash_recovery.py::test_expired_lease_is_reclaimed - assert...
+M03	certgen/worker.py	retry delay ignored	KILLED (tests)	8.4	tests/test_failure_isolation.py::test_one_failing_recipient_does_not_block_others
+M04	certgen/service.py	retry skips capacity check	KILLED (tests)	13.2	tests/test_retry.py::test_retry_respects_capacity - assert 202 == 503
+M05	certgen/service.py	create skips capacity check	KILLED (tests)	10.9	tests/test_limits.py::test_global_capacity_503 - assert 202 == 503
+M06	certgen/archive.py	CSV guard misses '-'	KILLED (tests)	13.3	tests/test_retrieval.py::test_manifest_neutralizes_formula_cells - ass...
+M07	certgen/archive.py	CSV guard not applied to email	KILLED (tests)	13.3	tests/test_retrieval.py::test_manifest_neutralizes_formula_cells - ass...
+M08	certgen/validation.py	non-ASCII (IDN) emails accepted	KILLED (tests)	14.2	tests/test_validation.py::test_non_ascii_email_invalid[zoe@ex\xe4mple.com]
+M09	certgen/validation.py	duplicate check case-sensitive	KILLED (tests)	14.2	tests/test_validation.py::test_duplicate_email_case_and_whitespace - A...
+M10	certgen/storage.py	job-dir symlink check removed	KILLED (audit)	44.8	audit/tests/test_a6_redteam.py::test_no_secrets_committed - subprocess...
+M11	certgen/storage.py	file symlink lstat check removed (O_NOFOLLOW remains)	KILLED (audit)	45.7	audit/tests/test_a6_redteam.py::test_no_secrets_committed - subprocess...
+M12	certgen/validation.py	nesting limit off by one	KILLED (tests)	14.9	tests/test_validation.py::test_nesting_depth_422 - assert 202 == 422
+M13	certgen/validation.py	future-date slack 1 -> 2 days	KILLED (tests)	14.6	tests/test_validation.py::test_issued_on_tomorrow_ok_day_after_rejected
+M14	certgen/service.py	pagination never ends	KILLED (tests)	11.5	tests/test_jobs_api.py::test_items_keyset_pagination - assert [1, 3, 4...
+M15	certgen/status.py	job regresses to queued during retry delay	KILLED (tests)	10.9	tests/test_job_status.py::test_derivation_table[item_counts10-1-expected10]
+M16	certgen/worker.py	PDF size cap removed	KILLED (tests)	9.5	tests/test_failure_isolation.py::test_oversized_pdf_is_item_failure - ...
+M17	certgen/config.py	base URL userinfo allowed	KILLED (tests)	8.9	tests/test_config.py::test_public_base_url_rules[https://user:pw@example.org-None]
+M18	certgen/errors.py	503 without Retry-After	KILLED (tests)	2.8	tests/test_audit_regressions.py::test_server_busy_is_problem_json_with_retry_after
+M19	certgen/api.py	failed certificate treated as succeeded	KILLED (tests)	9.6	tests/test_failure_isolation.py::test_download_failed_item_409 - asser...
+M20	certgen/validation.py	RTL scripts accepted	KILLED (tests)	14.6	tests/test_validation.py::test_rtl_unsupported[\u05d3\u05d5\u05d3 \u05db\u05d4\u05df]
+M21	certgen/validation.py	name length limit off by one	KILLED (tests)	14.1	tests/test_validation.py::test_name_120_ok_121_too_long - AssertionErr...
+M22	certgen/service.py	retry keeps old attempt count	KILLED (tests)	13.6	tests/test_retry.py::test_retry_resets_all_columns - assert (1, None, ...
+M23	certgen/service.py	idempotency ignores body changes	KILLED (tests)	10.1	tests/test_hardening.py::test_idempotency_keys_are_scoped_per_token - ...
+M24	certgen/middleware.py	Content-Length pre-check removed	KILLED (tests)	8.9	tests/test_audit_regressions.py::test_declared_oversize_body_is_refused_without_reading_it
+M25	certgen/middleware.py	streamed body not counted	KILLED (tests)	12.9	tests/test_limits.py::test_chunked_body_over_limit_413 - assert 422 ==...
+M26	certgen/worker.py	one extra attempt	KILLED (tests)	8.5	tests/test_audit_regressions.py::test_symlinked_job_dir_is_refused_on_write
+M27	certgen/api.py	idempotency key length off by one	KILLED (tests)	12.9	tests/test_limits.py::test_idempotency_key_too_long_422[kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk]
+M28	certgen/validation.py	non-ASCII whitespace accepted	KILLED (tests)	4.8	tests/test_audit_regressions.py::test_every_allowed_character_is_bmp_and_maps_back_in_the_pdf_text_layer
+M29	certgen/storage.py	orphan sweep ignores age	KILLED (tests)	15.8	tests/test_worker.py::test_orphan_tmp_sweep_age_rule - assert 2 == 1
+M30	certgen/db.py	no lock wait	KILLED (tests)	8.5	tests/test_db.py::test_pragmas_applied - AssertionError: assert 0 == 5000
+M31	certgen/worker.py	LIFO instead of FIFO claims	KILLED (tests)	11.4	tests/test_jobs_api.py::test_items_status_filter - assert [2] == [0]
+M32	certgen/api.py	dry run always says a job would be created	KILLED (tests)	9.1	tests/test_dry_run.py::test_dry_run_all_invalid_returns_200_report - a...
+M33	certgen/validation.py	email not trimmed	KILLED (tests)	11.1	tests/test_jobs_api.py::test_original_request_is_stored_canonically - ...
+M34	certgen/worker.py	token = worker id (reused across reclaims)	KILLED (tests)	8.8	tests/test_crash_recovery.py::test_stale_worker_done_write_rejected_by_fencing[reused-id]
+S01	certgen/validation.py	F-01 length pre-check removed	KILLED (tests)	9.9	tests/test_hardening.py::test_email_validator_never_sees_an_email_longer_than_254
+S02	certgen/validation.py	F-02 cap removed	KILLED (tests)	2.2	tests/test_audit_regressions.py::test_unknown_fields_capped_at_ten_plus_summary[11-10-1]
+S03	certgen/validation.py	F-03 surrogate check removed	KILLED (tests)	1.5	tests/test_audit_regressions.py::test_lone_surrogate_never_500[plain-email of rejected row]
+S04	certgen/api.py	F-04 upper bound removed	KILLED (tests)	1.8	tests/test_audit_regressions.py::test_items_after_out_of_range_is_422[9223372036854775808]
+S05	certgen/fonts.py	F-05 BMP filter removed	KILLED (tests)	1.3	tests/test_audit_regressions.py::test_accepted_name_round_trips_through_pdf_text_layer
+S06	certgen/service.py	F-07 substring match back	KILLED (tests)	1.7	tests/test_audit_regressions.py::test_key_violation_reaches_replay_backstop
+S07	certgen/status.py	F-08 progress cap removed	KILLED (tests)	1.3	tests/test_audit_regressions.py::test_progress_is_below_one_until_terminal[20001]
+S08	certgen/config.py	F-09 old budget	KILLED (tests)	1.3	tests/test_audit_regressions.py::test_body_limit_admits_every_valid_request[settings_overrides0]
+S09	certgen/middleware.py	F-10 host check off	KILLED (tests)	2.8	tests/test_audit_regressions.py::test_foreign_hosts_are_refused_with_problem_json[attacker.example]
+S10	certgen/middleware.py	F-11 request limit off	KILLED (tests)	202.9	tests/test_audit_regressions.py::test_request_limit_admits_64_and_refuses_the_65th_with_problem_json
+S11	certgen/middleware.py	F-10 '[::1].evil' prefix bypass	KILLED (tests)	2.6	tests/test_audit_regressions.py::test_foreign_hosts_are_refused_with_problem_json[[::1].evil]
+R01	certgen/worker.py	N-01 SIGTERM handler not installed	KILLED (tests)	8.5	tests/test_hardening.py::test_worker_installs_signal_handlers_before_touching_the_database
+R02	certgen/config.py	F-13 check removed	KILLED (tests)	7.9	tests/test_config.py::test_every_variable_is_range_checked[CERTGEN_TEST_SLOW_RENDER_MS-good8-bad8]
+R03	certgen/storage.py	F-15 header/trailer check removed	KILLED (tests)	8.7	tests/test_hardening.py::test_damaged_certificate_file_is_410[truncated]
+R04	certgen/storage.py	F-15 size limit removed	KILLED (tests)	9.0	tests/test_hardening.py::test_damaged_certificate_file_is_410[oversized-framed]
+R05	certgen/validation.py	P8-N1 row cap removed	KILLED (tests)	9.3	tests/test_hardening.py::test_oversized_row_rejects_the_request_and_stores_nothing
+R06	certgen/service.py	P8-N1 disk guard removed	KILLED (tests)	9.2	tests/test_hardening.py::test_new_jobs_are_refused_when_free_disk_is_low
+R07	certgen/middleware.py	P8-N2 submission limit off	KILLED (tests)	29.6	tests/test_hardening.py::test_at_most_two_submissions_are_processed_at_once
+R08	certgen/middleware.py	P8-N2 body deadline off	KILLED (tests)	14.0	tests/test_hardening.py::test_body_that_does_not_arrive_in_time_is_408
+R09	certgen/api.py	P8-N2 queue pre-check removed	KILLED (tests)	9.2	tests/test_hardening.py::test_full_queue_is_refused_before_validation[settings_overrides0]
+R10	certgen/auth.py	F-12 any token accepted	KILLED (tests)	9.3	tests/test_hardening.py::test_v1_routes_require_a_valid_bearer_token[headers1]
+R11	certgen/api.py	F-12 keys not scoped	KILLED (tests)	9.5	tests/test_hardening.py::test_idempotency_keys_are_scoped_per_token - ...
+R12	certgen/middleware.py	P8-N2 no send deadline	KILLED (tests)	15.3	tests/test_hardening.py::test_a_response_the_client_does_not_read_is_aborted_and_its_slot_released
+R13	certgen/middleware.py	P8-N2 abort not handled	KILLED (tests)	9.7	tests/test_hardening.py::test_a_response_the_client_does_not_read_is_aborted_and_its_slot_released
+R14	certgen/main.py	P8-N2 send deadline not installed	KILLED (tests)	10.3	tests/test_hardening.py::test_server_uses_a_30_second_send_deadline - ...
+R15	certgen/config.py	P8-N2 send deadline 1 h	KILLED (tests)	10.5	tests/test_hardening.py::test_server_uses_a_30_second_send_deadline - ...

@@ -1,0 +1,9 @@
+# Benchmarks (EXECUTED) 2026-10-27T13:18:05Z, same machine and session, alternated: baseline (261108d, pillow 12.3.0) vs remediated (39327ed, pillow 13.0.0); 1.5G free on the work-dir disk
+# audit/tools/bench_compare.py -> scripts/benchmark.py --recipients 1000 --processes N; work dirs under ~/.cache (ext4), deleted afterwards
+variant     proc   wall s  certs/s  POST ms render p50  item p50  item max  RSS MB  accept
+baseline       1    11.70     85.5      112       4.02     11.20      21.2      83  True
+remediated     1    11.34     88.2      118       4.14     11.05      18.1      84  True
+baseline       2     6.67    149.8      111       4.00     11.23      19.3      84  True
+remediated     2     6.82    146.6      119       4.04     11.29      23.7      84  True
+baseline       4     5.92    168.9      114       4.02     11.36      20.2      83  True
+remediated     4     5.82    171.9      120       4.01     11.07      25.4      84  True

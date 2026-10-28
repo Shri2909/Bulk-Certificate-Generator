@@ -570,9 +570,11 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
 [docs/BLUEPRINT.sha256](docs/BLUEPRINT.sha256), tag `blueprint-locked`).
 
-- **Build status:** complete (milestones M1–M11). Last full test run (M11 gate, raw pytest summary):
-  `324 passed in 12.11s` — transcript in [docs/evidence/gates/M11.txt](docs/evidence/gates/M11.txt); also
-  verified from clean clones on Python 3.11.9 and 3.14.4 (3 runs each) with every README command run verbatim.
+- **Build status:** complete (milestones M1–M11). M11 gate: `324 passed in 12.11s` — transcript in
+  [docs/evidence/gates/M11.txt](docs/evidence/gates/M11.txt); also verified from clean clones on Python 3.11.9
+  and 3.14.4 (3 runs each) with every README command run verbatim. After the audit's two remediation rounds:
+  `475 passed` (`pytest`) and `232 passed` (`pytest audit/tests`) on Python 3.11.9 and 3.14.4 —
+  [audit/evidence/stage2/R2-P7-01-suites-static.txt](audit/evidence/stage2/R2-P7-01-suites-static.txt).
 - **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)). A-01 to A-03 were
   auto-approved under the pre-approved build rules:
   - A-01: `certgen/__main__.py`, so `python -m certgen` works.

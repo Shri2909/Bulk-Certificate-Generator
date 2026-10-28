@@ -473,14 +473,14 @@ ROUND2_MUTANTS: list[tuple[str, str, str, str, str]] = [
     (
         "R17",
         "certgen/config.py",
-        "    max_requests_per_token: int = 32\n",
-        "    max_requests_per_token: int = 64\n",
+        "    max_requests_per_client: int = 32\n",
+        "    max_requests_per_client: int = 64\n",
         "R2-O1 default cap = whole limit",
     ),
     (
         "R18",
         "certgen/main.py",
-        "        max_per_client=settings.max_requests_per_token,\n",
+        "        max_per_client=settings.max_requests_per_client,\n",
         "",
         "R2-O1 cap not passed to the middleware",
     ),

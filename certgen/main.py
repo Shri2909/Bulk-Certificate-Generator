@@ -104,7 +104,7 @@ def create_app(
     app.add_middleware(
         ConcurrencyLimitMiddleware,
         max_requests=MAX_CONCURRENT_REQUESTS,
-        max_per_client=settings.max_requests_per_token,
+        max_per_client=settings.max_requests_per_client,
     )
     # Token check before a request slot is taken or a body is read (audit F-12).
     app.add_middleware(TokenAuthMiddleware, store=tokens, prefix="/v1/")

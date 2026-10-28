@@ -689,4 +689,4 @@ def test_token_slot_is_released_when_the_app_raises() -> None:
 def test_requests_per_token_default_is_half_the_request_limit() -> None:
     from certgen.config import MAX_CONCURRENT_REQUESTS, Settings
 
-    assert Settings().max_requests_per_token == 32 == MAX_CONCURRENT_REQUESTS // 2
+    assert Settings().max_requests_per_client == 32 == MAX_CONCURRENT_REQUESTS // 2

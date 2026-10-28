@@ -52,7 +52,7 @@ ENV_NAMES = {
     "min_free_disk_mb": "CERTGEN_MIN_FREE_DISK_MB",
     "max_concurrent_submissions": "CERTGEN_MAX_CONCURRENT_SUBMISSIONS",
     "api_tokens": "CERTGEN_API_TOKENS",
-    "max_requests_per_token": "CERTGEN_MAX_REQUESTS_PER_TOKEN",
+    "max_requests_per_client": "CERTGEN_MAX_REQUESTS_PER_TOKEN",
 }
 TOKEN = re.compile(r"[A-Za-z0-9._~+/-]{16,256}=*")  # RFC 6750 token68, at least 16 characters
 HOSTNAME = re.compile(
@@ -72,7 +72,7 @@ RANGES: dict[str, tuple[float, float]] = {
     "test_slow_render_ms": (0, 60_000),
     "min_free_disk_mb": (0, 1_000_000),
     "max_concurrent_submissions": (1, 64),
-    "max_requests_per_token": (1, MAX_CONCURRENT_REQUESTS),
+    "max_requests_per_client": (1, MAX_CONCURRENT_REQUESTS),
 }
 
 
@@ -102,7 +102,7 @@ class Settings:
     # Bearer tokens accepted on /v1 routes; empty = use (or create) {data_dir}/api-token (audit F-12).
     api_tokens: tuple[str, ...] = ()
     # Requests in progress per API token, of the 64 per process, so one token cannot hold them all (R2-O1).
-    max_requests_per_token: int = 32
+    max_requests_per_client: int = 32
 
     def __post_init__(self) -> None:
         for name, (low, high) in RANGES.items():

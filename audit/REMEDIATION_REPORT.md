@@ -6,7 +6,7 @@
 | Branch | `audit/remediation` in a separate git worktree (`../certgen-remediation`); the original working tree, including its uncommitted README change and untracked demo files, was not touched |
 | Approval | User reply "approved" to the Stage 1 gate (2026-10-26); four product decisions answered before any code change: F-02 "10 per row + summary", F-10 "Loopback + new setting", F-11 "In-app request limit", F-09 "Raise the budget". Round 2: user request "fix everything there should be nothing left unfixed.." (2026-10-26) with six decisions (§9) |
 | Environment | CPython 3.11.9, Linux 7.0.0-38, pins from `requirements*.txt` (after F-06: pillow 13.0.0, pypdf 6.21.2) in the worktree's `.venv` |
-| Status | FINAL (Stage 2 + round 2). Phase 8 ran under code freeze; its defects were fixed in round 2 (§9), which supersedes the statuses in §1–§8. One product decision remains open (R2-O1, §9.7). |
+| Status | FINAL (Stage 2 + round 2). Phase 8 ran under code freeze; its defects were fixed in round 2 (§9), which supersedes the statuses in §1–§8. No finding is open; documented residuals in §9.7. |
 
 Labels as in Stage 1: EXECUTED results carry their command or evidence file; nothing below is estimated unless it says so.
 
@@ -204,7 +204,7 @@ It is **not** ready for network exposure: P8-N1 (unbounded disk use across reque
 
 ## 9. Round 2 — "fix everything" (2026-10-26 → 2026-10-28)
 
-Requested by the user after the Stage 2 gate ("fix everything there should be nothing left unfixed.."). Every open item from §6.4/§7 was fixed under the same TDD rules (RED → GREEN → full gate, one fix per commit). Six product decisions were asked once and answered with the recommended option: F-12 "Token by default", P8-N1 "Row cap + free-space guard", P8-N2 "Submission limit + deadline", F-13 "Reject at startup", F-15 "Header/trailer check", F-17 "Commit demo, then merge". Statuses in §1–§8 are those at the end of round 1; this section supersedes them.
+Requested by the user after the Stage 2 gate ("fix everything there should be nothing left unfixed.."). Every open item from §6.4/§7 was fixed under the same TDD rules (RED → GREEN → full gate, one fix per commit). Six product decisions were asked once and answered with the recommended option: F-12 "Token by default", P8-N1 "Row cap + free-space guard", P8-N2 "Submission limit + deadline", F-13 "Reject at startup", F-15 "Header/trailer check", F-17 "Commit demo, then merge"; after the round-2 gate a seventh, for the residual R2-O1: "Per-token request cap" (2026-10-28). Statuses in §1–§8 are those at the end of round 1; this section supersedes them.
 
 ### 9.1 Status of every item open after round 1
 
@@ -221,6 +221,7 @@ Requested by the user after the Stage 2 gate ("fix everything there should be no
 | F-11 residual: slow uploads hold slots | — | **CLOSED** for submissions (only 2 can hold a slot); every other body bounded to 30 s | `ac6de25` | `conn_probe`: 64 stalled uploads → 62 refused at once, 2 waiting, `/healthz` 200 ×3 (round 1: 503) (`R2-conn-probe.txt`) |
 | Slow readers hold slots (round 1: NOT VERIFIED) | MEDIUM | **CONFIRMED, then FIXED & VERIFIED**: send deadline (A-18) | `3ebea3a` | 64 unread 1,500-recipient archive downloads: before (`946b267`): `/healthz` 503 at every sample for 60 s, 200 only after the readers closed (`R2-slow-reader-probe-before.txt`); after: `/healthz` 200 from t = 40 s with the readers still open, 0 tracebacks (`R2-slow-reader-probe-after.txt`) |
 | **N-02** (new, round-2 re-validation) | LOW | **FIXED & VERIFIED**: `scripts/check_live_demo.py` made its 30 checks with `assert` (vacuous PASS under `python -O`); unused `TOKEN_FILE_NAME` flagged by bandit B105 | `395bc96` | `test_runtime_checks_are_not_assert_statements` (all 21 `certgen` modules + the checker); bandit `certgen` 1 → 0 |
+| **R2-O1** (round-2 attacks) token holder occupies every request slot | LOW | **FIXED & VERIFIED**: at most `CERTGEN_MAX_REQUESTS_PER_TOKEN` (32) of the 64 slots per token; requests without a token count only towards the 64 (A-19) | `e6f7761`, `5f0d534` | `test_one_token_cannot_hold_every_request_slot`, `test_token_slot_is_released_when_the_app_raises`, default/range tests, runtime pin; R16–R19 killed (`R2-O1-mutants.tsv`); same attack on a real server: `/healthz` and a second token 200 at every sample (before: 503 at every sample) (`R2-O1-probe-after.txt`) |
 | **N-03** (new, found while preparing the merge) | LOW | **FIXED & VERIFIED**: `pytest audit/tests`, as the README described it, failed at collection on a dev install (Hypothesis in no requirements file); `audit/requirements.txt` pins the audit tools, README points to it | `a9a578b` | RED `R2-N-03-red.txt`; GREEN on the user's main `.venv` after the merge (§9.6) |
 
 ### 9.2 Code changes and justification (round 2)
@@ -238,14 +239,17 @@ Requested by the user after the Stage 2 gate ("fix everything there should be no
 | `3ebea3a` P8-N2 | `SendDeadlineMiddleware` (`SEND_TIMEOUT_SECONDS = 30`) inside the request limit; logs `slow_client_aborted` without request data | slow readers pinned every slot (§9.1) |
 | `395bc96` N-02 | `check()` helper in the demo checker (same expressions, AST-verified); unused constant removed | `-O` strips asserts |
 | `a9a578b` N-03 | `audit/requirements.txt` (Hypothesis, coverage, bandit, pip-audit + dependencies, `-r ../requirements-dev.txt`); README | reproducible audit runs |
+| `e6f7761` R2-O1 | `ConcurrencyLimitMiddleware(max_requests, max_per_client)` counts per client id (set by the token check); `CERTGEN_MAX_REQUESTS_PER_TOKEN`; per-token `SERVER_BUSY` detail | user decision "Per-token request cap" |
+| `5f0d534` R2-O1 | settings field renamed `max_requests_per_client` (env var unchanged) | bandit B105 matched the key name `…_token` (a false positive on an env var name) |
 | `f0a1e11` P8-N3 | M11 test: the planted secret is framed like a PDF; M10 test: added a link to another job's directory inside the root (both suites); `mutate.py` deselects tests failing on the unmutated copy | F-15's damage check and the root check masked the two symlink checks; a broken baseline test produced false kills |
 
-Up to this report, 18 commits follow the freeze tag (39 since the baseline). Product code (`certgen/`): since the baseline 12 files, +593 / −60 lines; round 2 alone 10 files, +351 / −28 (`git diff --shortstat`). Amendments A-13 … A-18 in `docs/BLUEPRINT_AMENDMENTS.md`, each citing the finding and the decision.
+Up to this report, 22 commits follow the freeze tag (43 since the baseline). Product code (`certgen/`): since the baseline 12 files, +619 / −60 lines; round 2 alone 10 files, +385 / −36 (`git diff --shortstat`). Amendments A-13 … A-19 in `docs/BLUEPRINT_AMENDMENTS.md`, each citing the finding and the decision.
 
 **Changes to existing tests (round 2; disclosed in full):**
 - Fixtures/config only (F-12): `tests/conftest.py` sends a fixture token; direct `TestClient` sites in `test_jobs_api`, `test_errors`, `test_rendering`, `test_smoke`, `test_crash_recovery` pass it; `audit/tests` conftest and real-server helpers send the audit token.
 - `tests/test_idempotency.py`: the stored key is now `<client_id>:<key>` (A-17); the 8-thread same-key race sets `max_concurrent_submissions=8` so it still races (assertions unchanged). `audit/tests/test_a5_stress.py` likewise (8 producers).
-- `tests/test_config.py`: slow-render range now accepts 0 and 29,999 and rejects −1, 30,000, 60,001 (A-13, approved).
+- `tests/test_config.py`: slow-render range now accepts 0 and 29,999 and rejects −1, 30,000, 60,001 (A-13, approved); a row for `CERTGEN_MAX_REQUESTS_PER_TOKEN` added (A-19).
+- `tests/test_runtime.py::test_server_limits_passed_to_uvicorn`: the in-app limit is now pinned as `{max_requests: 64, max_per_client: 32}` (A-19, approved; stricter).
 - `audit/tests/test_a7_stage2_regressions.py`: `BodySizeLimitMiddleware` gets the new `body_timeout_seconds` argument.
 - Adapted to the approved row cap (A-15): three F-02 cap tests use rows that fit the 4,500 B budget (5,000 → 300 and 3,000 → 300 unknown keys, a 1 M-character key → 4,000), so they still exercise the per-row cap instead of being refused earlier (the size bound became stricter: `< 1.2 × 4,000 + 1,000` B); `test_a1::test_overlong_email…` and `test_a1::test_unknown_field_errors_are_bounded` accept the new 422 `TOO_LONG` as well as the old 202 — their time, response-size and stored-size assertions are unchanged.
 - `audit/tests/test_a3_integration.py::test_truncated_file_on_disk_is_served_as_is` (a Stage 1 observation, not a contract) became `…_is_refused` (410), the approved F-15 behaviour.
@@ -271,28 +275,29 @@ Raw: `audit/evidence/stage2/R2-<ID>-red.txt`, `-green.txt`, `-gate.txt`.
 | P8-N2 (send deadline) | 2 × `ImportError: SendDeadlineMiddleware` | 2 passed (+1 through FastAPI `StreamingResponse`) | 452 / 231 |
 | N-02 | 1 failed: 30 assert statements in the checker | 22 passed; checker 5/5 normally and under `-O` | 474 / 231 |
 | N-03 | `ModuleNotFoundError: No module named 'hypothesis'` collecting `audit/tests` in a dev-only venv | the user's `.venv` after `pip install -r audit/requirements.txt`: 232 passed (§9.6) | — (docs + requirements only; README tests 13 passed, ruff clean) |
+| R2-O1 | 5 failed: `max_per_client` unknown (×2), no `max_requests_per_token` setting (field since renamed `max_requests_per_client`, see below), env var not range-checked, runtime pin | 6 passed | 479 / 232 |
 | P8-N3 (M10/M11) | both mutants survive `tests/` (`R2-P7-03-mutation-first-run.tsv`; reproduced by hand: the 4 symlink tests pass with either mutant) | both killed by the strengthened tests (`R2-M10-M11-mutants.tsv`) | 475 / 232 |
 
 ### 9.4 Re-validation after round 2 (Phase 7 checks, EXECUTED)
 
-Raw: `R2-P7-01-suites-static.txt` (final HEAD), `R2-P7-01-suites-static-5893f60.txt` (the run that found N-02), `R2-P7-03-mutation.tsv`, `R2-P7-04-benchmarks.txt`, `R2-demo-auto.txt`.
+Raw: `R2-P7-01-suites-static.txt` (final HEAD), `R2-P7-01-suites-static-5893f60.txt` (the run that found N-02), `R2-P7-01-suites-static-e6f7761.txt` (the run that found the B105 on the new settings key), `R2-P7-03-mutation.tsv`, `R2-P7-04-benchmarks.txt`, `R2-demo-auto.txt`.
 
-Product code (`certgen/`) is unchanged since `395bc96`; the attack, benchmark, demo and cost runs used `39327ed` (same product code), the suites below the final HEAD `a9a578b`.
+Every run below used the final product code (`certgen/` as of `e6f7761`): attacks, benchmarks, demos and cost at `e6f7761`, the mutation campaign at `e6f7761` (R16–R19 re-run after the rename, `R2-O1-rename-mutants.tsv`), the suites at the final HEAD `5f0d534`. (The A-18 slow-reader measurements in §9.1 predate A-19; with A-19 one token can no longer reach the 64 slots at all.)
 
 | Check | Result |
 |---|---|
-| `pytest tests`, 3 consecutive runs (Python 3.11.9) | **475 passed** ×3 (22.5 s, 22.0 s, 22.7 s); round 1: 324 |
+| `pytest tests`, 3 consecutive runs (Python 3.11.9) | **479 passed** ×3 (21.7 s, 21.8 s, 22.8 s); round 1: 324 |
 | `pytest tests -m slow`, 5 consecutive runs | **6 passed** ×5 |
 | `pytest audit/tests` | **232 passed** (Python 3.11.9) |
-| Python 3.14.4 (`~/.cache/certgen-audit/venv314`) | **475 + 232 passed** |
+| Python 3.14.4 (`~/.cache/certgen-audit/venv314`) | **479 + 232 passed** |
 | `ruff check .` / `ruff format --check .` / `mypy --strict certgen` | clean / 66 files formatted / no issues (21 files) |
-| `bandit -r certgen` | **0 issues** (at `5893f60`: 1 low, B105 on an unused constant → N-02) |
+| `bandit -r certgen` | **0 issues** (at `5893f60`: 1 low, B105 on an unused constant → N-02; at `e6f7761`: 1 low, B105 on the new settings key → renamed in `5f0d534`) |
 | `bandit -r scripts` | 11 low notes: subprocess calls with fixed argv (benchmark, live demo, checker) and one `urlopen` of the checker's fixed `http://127.0.0.1` base; the checker's 30 B101 asserts are gone (N-02) |
-| `pip-audit` runtime / dev / `audit/requirements.txt` | **no known vulnerabilities** in all three (dev and audit after retries: the first attempts hit pypi.org read timeouts) |
-| Coverage, project + audit suites, in-process | **97 %** line+branch (1,863 stmts, 44 missed; round 1: 97 %, 1,680 / 53) |
-| Mutation campaign (`mutate.py --with-audit --stage2 --round2`) | **60/60 killed, every one by `tests/` alone**: 34 Stage 1 (M), 11 round-1 fix (S), 15 round-2 fix (R) mutants. One test deselected because it fails on the unmutated copy (the secret scan; see the correction below). The first run (`R2-P7-03-mutation-first-run.tsv`) exposed M10/M11 → `f0a1e11` |
-| Benchmarks, baseline vs remediated, alternated in one session (`R2-P7-04`) | 1 p 85.5 → 88.2 certs/s · 2 p 149.8 → 146.6 · 4 p 168.9 → 171.9 (equal within noise); POST of 1,000 rows 112 / 111 / 114 → 118 / 119 / 120 ms: **+6–8 ms in all three** (single runs; the new per-request token hash, free-disk and queue checks and per-row size check); all acceptance checks true. The first attempt was refused with `503 STORAGE_FULL` — the new guard working: the host disk had about 1.1 GB free; after deleting the audit's own probe data (~490 MB) the runs completed with 1.5 GB free |
-| `scripts/check_live_demo.py` | **5/5 PASS**, also under `python -O` |
+| `pip-audit` runtime / dev / `audit/requirements.txt` | **no known vulnerabilities** in all three (runtime and dev at the final HEAD; `audit/requirements.txt`, unchanged since, at `a9a578b` after retries — the first attempts hit pypi.org read timeouts) |
+| Coverage, project + audit suites, in-process | **97 %** line+branch (1,876 stmts, 44 missed; round 1: 97 %, 1,680 / 53) |
+| Mutation campaign (`mutate.py --with-audit --stage2 --round2`) | **64/64 killed, every one by `tests/` alone**: 34 Stage 1 (M), 11 round-1 fix (S), 19 round-2 fix (R) mutants. One test deselected because it fails on the unmutated copy (the secret scan; see the correction below). The first run (`R2-P7-03-mutation-first-run.tsv`) exposed M10/M11 → `f0a1e11` |
+| Benchmarks, baseline vs remediated, alternated in one session (`R2-P7-04`, two runs) | per-certificate render and item medians equal in all 12 runs (≈ 4.2 / 11.3 ms); certs/s 1 p 86.1 → 87.3 and 84.3 → 84.2 · 2 p 137.6 → 100.9 and 141.3 → 137.3 · 4 p 169.1 → 175.1 and 159.3 → 166.0 — the 100.9 (wall time only, same per-item medians) did not reproduce in the repeat; POST of 1,000 rows differs by −9 … +15 ms per pair, median **+5.5 ms** (the per-request token hash, free-disk and queue checks, per-row size check); all acceptance checks true. An earlier attempt was refused with `503 STORAGE_FULL` — the new guard working — while the host disk had about 1.1 GB free; another run was discarded because the machine was busy (baseline render p50 10.2 ms instead of ~4.1) |
+| `scripts/check_live_demo.py` | **5/5 PASS** (`R2-live-demo.txt`), also under `python -O` (N-02) |
 | `scripts/demo.sh --auto` | 11 chapters, exit 0; the token does not appear in the transcript (`R2-demo-auto.txt`) |
 
 **Correction to round 1 (§4, §5, §8).** Round 1 reported the mutation campaign as 45/45 killed. Four of those kills were false: M10, M11, S10 and S11 survived `tests/`, and the audit-suite fallback marked them killed only because `audit/tests/test_a6_redteam.py::test_no_secrets_committed` runs `git ls-files`, which fails in the mutation copy (made without `.git`), so that test failed for every mutant (`P7-03-mutation.tsv`, first-failure column). The correct round-1 figure is 41 genuine kills and 4 unknown. In round 2, S10 and S11 are killed by `tests/` (`R2-mutation-fixes-tests-only.tsv`), M10 and M11 by the strengthened tests above, and `mutate.py` now runs both suites on the unmutated copy first and deselects any test that fails there, listing it in the output.
@@ -307,15 +312,16 @@ Product code (`certgen/`) is unchanged since `395bc96`; the attack, benchmark, d
 | F-12 | token appears in server logs | 0 lines, except uvicorn's access-log line for the attack URL that carried it in the query string (a client mistake; such a request is refused) |
 | P8-N1 | one row holding a 44 MB key | 422 in 0.30 s, 264 B response, database grew 0 MB (baseline: 104 MB stored per request) |
 | P8-N1 | free-disk floor above the free space | `POST` 503 `STORAGE_FULL`; dry run still 200 |
-| P8-N2 | 8 concurrent maximal dry runs (9.5 MB, 10,000 rows) | 2 × 200 (13.6 s together), 6 refused; `/healthz` 200 on all 15 polls (max 1.6 s while two validations share the GIL) |
-| P8-N2 | the 6 refused clients streamed their whole body | they saw `ECONNRESET`, not the 503 the server sent (logged): the server answers before reading the body and closes; with `Expect: 100-continue` a third submission gets the 503 in 0.31 s, body never sent. Documented for clients in the README |
-| P8-N2 | maximal real request on a full queue | 503 `CAPACITY_EXCEEDED` after 0.05 s (round 1: 7.24 s of validation first) |
+| P8-N2 | 8 concurrent maximal dry runs (9.5 MB, 10,000 rows) | 2 × 200 (15.1 s together), 6 refused; `/healthz` 200 on all 19 polls (max 1.0 s while two validations share the GIL) |
+| P8-N2 | the 6 refused clients streamed their whole body | they saw `ECONNRESET`, not the 503 the server sent (logged): the server answers before reading the body and closes; with `Expect: 100-continue` a third submission gets the 503 in 0.75 s, body never sent. Documented for clients in the README |
+| P8-N2 | maximal real request on a full queue | 503 `CAPACITY_EXCEEDED` after 0.07 s (round 1: 7.24 s of validation first) |
 | P8-N2 | body trickled at 1 B/s | 408 after 30.0 s |
 | P8-N2 | 64 stalled uploads / 64 idle sockets / 64 unfinished headers | `/healthz` 200 ×3 in each case |
 | A-18 | 64 archive downloads never read, never re-requested | `/healthz` 200 from t = 40 s, readers still open; 53 aborts logged, 0 tracebacks |
-| A-18 | same, but each stalled download renewed every 31 s (old socket kept) | 1,500-recipient archive: `/healthz` 200 from t = 40 s; **300-recipient archive: 503 at every sample** — see R2-O1 |
+| A-18 | same, but each stalled download renewed every 31 s (old socket kept) | before A-19: 1,500-recipient archive `/healthz` 200 from t = 40 s; **300-recipient archive 503 at every sample** (R2-O1) |
+| A-19 | the 300-recipient renewal attack again, plus a second token polling `GET /v1/certificate-jobs/{id}` | `/healthz` **200** and the second token **200** at every sample over 75 s; 64 aborts, 0 tracebacks |
 | F-13 | `CERTGEN_TEST_SLOW_RENDER_MS=30000` | exit 1: "must be shorter than CERTGEN_LEASE_SECONDS (30 s)" |
-| cost | 10,000 maximal valid rows | 6.64 s (baseline) vs 6.80 s (remediated): per-request validation CPU unchanged; only concurrency is bounded |
+| cost | 10,000 maximal valid rows | 7.24 s (baseline) vs 7.54 s (remediated): per-request validation CPU about the same; only concurrency is bounded |
 
 ### 9.6 Merge
 
@@ -326,13 +332,15 @@ Done 2026-10-28, local only; nothing was pushed.
 3. **Backup vs `main`.** Of the 32 stashed untracked files, 21 are byte-identical in `main`; the 11 others differ only by committed changes — 9 audit tests/tools (the Stage 1 copy, updated during remediation), `scripts/live_demo.py` (token, `609b2c8`) and `scripts/check_live_demo.py` (N-02). Of the user's 33 added README lines, all are present verbatim except one, which `609b2c8` extended with a sentence on the per-session API token.
 4. **The user's `.venv`.** `pip install -r audit/requirements.txt` → pillow 13.0.0, pypdf 6.21.2 and the audit tools; `pip check` clean (N-03 GREEN, `R2-N-03-green.txt`). Its 3 `activate` scripts and 17 console scripts (`pytest`, `mypy`, `uvicorn`, `pip`, …) still named the project's former location (`/home/abc/Desktop/bulk certificate generator/`), so `pytest` or `mypy` after activation failed (pre-existing; the gate's mypy step reported `not found`). Re-running `python -m venv .venv` in place (no `--clear`) and force-reinstalling the same pinned packages with `--no-deps` fixed every one; the installed versions are unchanged.
 5. **Checks in `main` with that venv.** 475 passed, ruff clean, 66 files formatted, mypy clean, `pytest audit/tests` 232 passed — the secret scan included, now with real git metadata (`R2-main-merged-gate.txt`); `scripts/check_live_demo.py` 5/5 PASS (`R2-main-live-demo.txt`).
-6. **Cleanup.** The worktree `../certgen-remediation` is removed after this commit is fast-forwarded into `main`; the branch `audit/remediation` and the tags `audit-baseline-stage1` and `audit-remediation-freeze` stay.
+6. **Cleanup.** The worktree `../certgen-remediation` was removed after `8d019c3` was fast-forwarded into `main`; the branch `audit/remediation` and the tags `audit-baseline-stage1` and `audit-remediation-freeze` stay.
+7. **After the R2-O1 decision (2026-10-28).** The worktree was recreated on `audit/remediation` with a fresh venv from `audit/requirements.txt`; `e6f7761`, `5f0d534` and this report were committed there and `main` was fast-forwarded again (no merge commit), then checked as in step 5 (`R2-main-merged-2-gate.txt`, recorded in the next commit).
 
 ### 9.7 Remaining items and residual risks
 
 | ID | Sev | Status | What remains | Needs |
 |---|---|---|---|---|
-| **R2-O1** token holder can keep every request slot busy | LOW | **OPEN — product decision** | a client with a valid token that renews downloads it never reads every 30 s occupies all 64 slots; measured with a 300-recipient archive. With the default single token, that client is the only client | decision: per-token concurrency quota (e.g. 16 per token, more tokens for more clients), and/or exempt `/healthz` from the limit, or accept as documented (trusted token holders) |
+| R2-O1 token holder can keep every request slot busy | — | **FIXED** (A-19, §9.1) | — | — |
+| R2-O5 clients sharing one token share its 32 slots; the 2 submission slots are shared by all tokens | INFO | DOCUMENTED (README Limitations) | a token holder can keep its own 32 slots busy, which affects every client using the same token, and two slow uploads by one token can hold both submission slots (each up to 30 s, renewable) | separate tokens per client; a per-token submission share would be a further product decision |
 | R2-O2 aborted connection keeps its file descriptor | INFO | DOCUMENTED (README Limitations) | uvicorn's `transport.close()` waits for the unread buffer; fd freed when the client closes (server fds 350 → 158 when the probe closed its sockets) | OS/proxy limits, as for idle sockets |
 | R2-O3 reset instead of 503 on a refused submission | INFO | DOCUMENTED (README) | uvicorn has no lingering close | clients send `Expect: 100-continue` or retry on reset |
 | R2-O4 a nearly full queue still validates first | INFO | DOCUMENTED (by design) | the pre-check refuses only when the queue is already full; a request that would overflow it is refused after validation (≤ 2 at once) | — |
@@ -342,6 +350,6 @@ Done 2026-10-28, local only; nothing was pushed.
 
 ### 9.8 Release-readiness verdict (round 2)
 
-**PASS for the documented deployment** (single host, loopback bind, clients holding the API token); **CONDITIONAL for wider exposure.** Every finding from Stage 1, Phase 8 and the round-2 re-validation (N-02, N-03) is FIXED & VERIFIED (§9.1); no bypass of a round-2 fix was found, and the round-2 attacks left one item that needs a product decision (R2-O1, §9.5, §9.7); all gates pass at the final HEAD (475 + 232 tests on Python 3.11 and 3.14, 97 % coverage, 60/60 mutants killed by `tests/` alone, clean ruff/mypy/bandit/pip-audit); throughput is unchanged and job submission is 6–8 ms slower per 1,000-row request.
+**PASS for the documented deployment** (single host, loopback bind, clients holding the API token); **CONDITIONAL for wider exposure.** Every finding from Stage 1, Phase 8, the round-2 re-validation (N-02, N-03) and the round-2 attacks (R2-O1) is FIXED & VERIFIED (§9.1); no bypass of a round-2 fix was found (§9.5); all gates pass at the final HEAD (479 + 232 tests on Python 3.11 and 3.14, 97 % coverage, 64/64 mutants killed by `tests/` alone, clean ruff/mypy/bandit/pip-audit); throughput is unchanged and a 1,000-row job submission is about 5.5 ms slower (median).
 
-Before exposing the API to clients that are not trusted: decide R2-O1 (per-token quotas — a token holder can still occupy every request slot), and front it with a proxy that limits idle and aborted connections (R2-O2). Not verifiable here: a Windows run and the human legibility sign-off / live walkthrough (P2).
+Before exposing the API to clients that are not trusted: give each client its own token (R2-O5) and front the API with a proxy that limits idle and aborted connections (R2-O2). Not verifiable here: a Windows run and the human legibility sign-off / live walkthrough (P2).

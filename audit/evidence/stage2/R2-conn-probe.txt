@@ -1,4 +1,4 @@
-# conn_probe (EXECUTED) 2026-10-27T13:26:21Z on remediated HEAD 39327ed
+# conn_probe (EXECUTED) 2026-10-28T03:11:05Z on remediated HEAD e6f7761
 server from certgen-remediation: healthy=True
 idle sockets (no bytes): /healthz x3 = [200, 200, 200]; the 64 sockets: {'waiting': 64}
 stalled uploads, all connected first: /healthz x3 = [200, 200, 200]; the 64 sockets: {'waiting': 2, 'HTTP/1.1 503 Service Unavailable': 62}

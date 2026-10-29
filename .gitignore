@@ -8,3 +8,11 @@ data/
 *.db
 *.db-wal
 *.db-shm
+
+# Internal planning and prompt files
+/docs/PLAN.md
+/docs/RESEARCH.md
+/docs/BUILD_LOG.md
+/docs/COMMIT_DESCRIPTIONS.md
+*[Pp][Rr][Oo][Mm][Pp][Tt]*
+*[Ii][Nn][Tt][Ee][Rr][Vv][Ii][Ee][Ww]*

@@ -1,8 +1,0 @@
-# N-01 (NEWLY DISCOVERED, pre-existing): standalone worker installs SIGINT/SIGTERM handlers after schema creation.
-# tests/test_runtime.py::test_standalone_worker_starts_on_empty_data_dir_and_stops_on_sigterm sends SIGTERM as soon as the
-# DB file exists; certgen/worker.py:main creates the DB (line 373) before signal.signal (lines 380-381), so an early
-# SIGTERM takes the default action and the process exits -15.
-baseline (audit-baseline-stage1 = 261108d), 20 runs: 18 passed, 2 failed   (host load average ~3.9 after reboot)
-remediation branch (F-10 in progress), 20 runs: 15 passed, 5 failed
-failure on baseline: AssertionError: assert -15 == 0   (tests/test_runtime.py:90)
-Not fixed in Stage 2 (not an approved finding). Proposed fix: install the signal handlers before create_engines/create_schema.

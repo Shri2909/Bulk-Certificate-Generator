@@ -1,2 +1,0 @@
-E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
-1 failed in 0.33s

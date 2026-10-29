@@ -1,2 +1,0 @@
-E   AssertionError: 50000 errors returned for one row
-1 failed in 1.84s

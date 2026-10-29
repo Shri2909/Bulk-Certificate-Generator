@@ -1,2 +1,0 @@
-E   AssertionError: text layer has 'Zoë  Smith'
-1 failed in 0.47s

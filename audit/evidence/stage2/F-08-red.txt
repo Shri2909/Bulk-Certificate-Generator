@@ -1,7 +1,0 @@
-E   assert 1.0 < 1.0
-E   assert 1.0 < 1.0
-2 failed, 19 deselected in 0.11s
-E   AssertionError: assert 'processing' in ('completed', 'completed_with_errors', 'failed')
-         'failed': 0},
-/home/abc/Desktop/Resume Projects/certgen-remediation/audit/tests/test_a2_unit_property.py:298: AssertionError: assert 'processing' in ('completed', 'completed_with_errors', 'failed')
-1 failed in 0.11s

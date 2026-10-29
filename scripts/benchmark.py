@@ -1,6 +1,8 @@
-"""Benchmark -> docs/evidence/benchmark-*.json (§17, §24.14). README numbers come only from these files.
+"""Benchmark -> tests/fixtures/benchmarks/benchmark-*.json (§17, §24.14).
 
-    python scripts/benchmark.py --recipients 1000 --processes 1 --output docs/evidence/benchmark-1p.json
+README numbers come only from these files. Defaults: 1,000 recipients, one process.
+
+    python scripts/benchmark.py --output tests/fixtures/benchmarks/benchmark-1p.json
 
 Two phases on fresh temporary data directories:
   A. Per-item cost: one in-process worker drains the corpus single-threaded; each item's full

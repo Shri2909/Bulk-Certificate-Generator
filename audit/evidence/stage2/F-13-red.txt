@@ -1,2 +1,0 @@
-      1 3 failed, 4 passed, 57 deselected in 0.11s
-      3 E   Failed: DID NOT RAISE ValueError

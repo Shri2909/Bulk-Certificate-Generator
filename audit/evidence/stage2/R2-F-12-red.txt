@@ -1,5 +1,0 @@
-      1 12 failed, 28 deselected in 0.54s
-      1 E   AttributeError: 'Settings' object has no attribute 'api_tokens'
-      4 E   Failed: DID NOT RAISE ValueError
-      1 E   FileNotFoundError: [Errno 2] No such file or directory: '/tmp/pytest-of-abc/pytest-269/test_a_token_file_is_created_o0/data/api-token'
-      6 E   TypeError: Settings.__init__() got an unexpected keyword argument 'api_tokens'

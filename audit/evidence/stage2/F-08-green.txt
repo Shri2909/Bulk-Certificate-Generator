@@ -1,2 +1,0 @@
-2 passed, 19 deselected in 0.11s
-32 passed in 5.67s

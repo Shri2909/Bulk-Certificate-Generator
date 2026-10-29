@@ -56,7 +56,7 @@ injects an error for one sample recipient; the crash chapter terminates a real c
 
 Use `./scripts/demo-live.sh --no-browser` to open the URL yourself, or `--port 8011` if 8010 is occupied.
 Press **Ctrl+C** in the terminal to stop the server and its worker. Generated files remain available
-on disk. The [presenter's guide](docs/DEMO.md) includes a five-minute script and troubleshooting.
+on disk.
 
 Verify the complete demo, including crash recovery, over real localhost HTTP:
 
@@ -124,7 +124,7 @@ ruff check . && ruff format --check . && mypy --strict certgen
 
 Every test carries `@pytest.mark.req("R#")` linking it to a requirement in
 [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md); [tests/test_spec_traceability.py](tests/test_spec_traceability.py)
-fails if any requirement has no test. The PDF's minimum test areas map to:
+fails if any requirement has no test. The problem statement's minimum test areas map to:
 creating a job → `tests/test_jobs_api.py`; input validation → `tests/test_validation.py`, `tests/test_limits.py`;
 generation → `tests/test_rendering.py`, `tests/test_worker.py`; status/progress → `tests/test_job_status.py`;
 individual failure → `tests/test_failure_isolation.py`; retrieval → `tests/test_retrieval.py`.
@@ -286,8 +286,8 @@ Two optional helpers for large submissions (differentiator D3):
 
 ## Design decisions
 
-The full specification is [docs/BLUEPRINT.md](docs/BLUEPRINT.md); the ADRs record the reasoning at the
-time each decision was made (where they differ, the blueprint is authoritative).
+The [requirements](docs/REQUIREMENTS.md) map the [problem statement](docs/problem_statement.md) to the
+implementation. The architecture decision records below explain the main design choices.
 
 **Background processing, not synchronous** ([ADR-003](docs/decisions/ADR-003-sync-vs-background.md)).
 A request may carry 10,000 recipients. Rendering them inside the POST would hold the connection for the
@@ -355,9 +355,8 @@ Testing approach: [ADR-012](docs/decisions/ADR-012-test-strategy.md).
   is **not** claimed.
 - **Crash-safe:** a worker process killed with SIGKILL mid-job loses nothing and duplicates nothing; a
   second worker finishes the job with one PDF per item and the killed item at 2 attempts
-  (`tests/test_crash_recovery.py` `test_kill_mid_job_no_duplicates`, a real subprocess; passed 5
-  consecutive runs). A hand-run transcript with a real server, `curl` and `kill -9` is in
-  [docs/evidence/kill-demo.txt](docs/evidence/kill-demo.txt).
+  ([tests/test_crash_recovery.py](tests/test_crash_recovery.py) `test_kill_mid_job_no_duplicates`,
+  a real subprocess). The browser demo also exercises real worker termination and lease recovery.
 - **No duplicates under concurrency:** two workers never process the same item
   (`tests/test_worker.py` `test_two_concurrent_workers_never_double_process`,
   `tests/test_crash_recovery.py` `test_two_worker_processes_never_double_process`); a stale worker's late
@@ -369,8 +368,9 @@ Testing approach: [ADR-012](docs/decisions/ADR-012-test-strategy.md).
 - **Atomic job creation:** the job and all its items are inserted in one transaction
   (`tests/test_jobs_api.py` `test_job_and_items_are_atomic`).
 - **Byte-identical output** for identical inputs (`tests/test_rendering.py` `test_render_is_byte_deterministic`).
-- The proofs above were checked against deliberately broken code: each test fails when its guarantee is
-  removed ([docs/evidence/mutation-checks.txt](docs/evidence/mutation-checks.txt)).
+- Regression coverage for request limits, authentication, file handling and worker fencing is included
+  in [tests/test_audit_regressions.py](tests/test_audit_regressions.py) and
+  [tests/test_hardening.py](tests/test_hardening.py).
 
 Not claimed: exactly-once rendering; lease renewal (a render or stall longer than the lease is treated
 like a crash, see [Limitations](#limitations)); recovery when no worker runs at all (an expired item then stays
@@ -498,9 +498,9 @@ The data directory was on the local disk (ext4), so every commit and PDF write p
 
 | Processes | Recipients | Wall (s) | Throughput (certs/s) | Render p50 (ms) | Per item p50 (ms) | Per item max (ms) | POST latency (ms) | Evidence |
 |---|---|---|---|---|---|---|---|---|
-| 1 | 1000 | 11.95 | 83.7 | 4.2 | 10.8 | 38.2 | 114 | [benchmark-1p.json](docs/evidence/benchmark-1p.json) |
-| 2 | 1000 | 7.18 | 139.3 | 4.1 | 11.3 | 35.0 | 119 | [benchmark-2p.json](docs/evidence/benchmark-2p.json) |
-| 4 | 1000 | 5.97 | 167.6 | 4.1 | 11.3 | 33.4 | 113 | [benchmark-4p.json](docs/evidence/benchmark-4p.json) |
+| 1 | 1000 | 11.95 | 83.7 | 4.2 | 10.8 | 38.2 | 114 | [benchmark-1p.json](tests/fixtures/benchmarks/benchmark-1p.json) |
+| 2 | 1000 | 7.18 | 139.3 | 4.1 | 11.3 | 35.0 | 119 | [benchmark-2p.json](tests/fixtures/benchmarks/benchmark-2p.json) |
+| 4 | 1000 | 5.97 | 167.6 | 4.1 | 11.3 | 33.4 | 113 | [benchmark-4p.json](tests/fixtures/benchmarks/benchmark-4p.json) |
 
 `serial_estimate_ms` in each file (recipients × median per-item time) is what a synchronous POST would
 have to take at minimum; it is an estimate, not a measured synchronous latency. Rendering is CPU-bound
@@ -536,7 +536,8 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
   name or listed in `CERTGEN_ALLOWED_HOSTS`, so a web page cannot reach it through DNS rebinding.
 - **Idempotency keys never expire**; a key used once by a token is bound to that body forever.
 - **SQLite is a single writer.** Fine for one machine: every write is a short single-row transaction. Larger scale would
-  move to PostgreSQL with `FOR UPDATE SKIP LOCKED` (see BLUEPRINT §22).
+  move to PostgreSQL with `FOR UPDATE SKIP LOCKED` (see
+  [ADR-002](docs/decisions/ADR-002-database-and-schema.md)).
 - **FIFO claiming:** a very large job delays smaller jobs submitted after it.
 - **Scripts:** Latin, Greek, Cyrillic and the other left-to-right BMP characters the font covers; no CJK,
   right-to-left scripts or characters above U+FFFF (see [Supported names](#supported-names)).
@@ -569,51 +570,26 @@ write is `fsync`ed, so adding processes helps less each time (compare the 1-, 2-
 - Emails are printed on certificates by default, which puts contact details on a document that may be
   shared; set `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` to opt out.
 
-## Blueprint conformance
+## Requirements coverage
 
-Built from the frozen [docs/BLUEPRINT.md](docs/BLUEPRINT.md) (sha256 in
-[docs/BLUEPRINT.sha256](docs/BLUEPRINT.sha256), tag `blueprint-locked`).
+The [requirements](docs/REQUIREMENTS.md) map the [problem statement](docs/problem_statement.md) to
+implementation modules and tests. [Architecture decisions](docs/decisions/) explain the storage,
+worker, validation and retrieval choices. The traceability tests fail when a requirement has no test
+or a test refers to an unknown requirement.
 
-- **Build status:** complete (milestones M1–M11). M11 gate: `324 passed in 12.11s` — transcript in
-  [docs/evidence/gates/M11.txt](docs/evidence/gates/M11.txt); also verified from clean clones on Python 3.11.9
-  and 3.14.4 (3 runs each) with every README command run verbatim. After the audit's two remediation rounds:
-  `475 passed` (`pytest`) and `232 passed` (`pytest audit/tests`) on Python 3.11.9 and 3.14.4 —
-  [audit/evidence/stage2/R2-P7-01-suites-static.txt](audit/evidence/stage2/R2-P7-01-suites-static.txt).
-- **Amendments** ([docs/BLUEPRINT_AMENDMENTS.md](docs/BLUEPRINT_AMENDMENTS.md)). A-01 to A-03 were
-  auto-approved under the pre-approved build rules:
-  - A-01: `certgen/__main__.py`, so `python -m certgen` works.
-  - A-02: a test for the per-job email snapshot.
-  - A-03: the D3/D4 error codes live in `errors.py`.
+- **Bulk generation:** validate recipient rows, generate PDFs in background workers, report per-item
+  progress and failures, and retrieve individual files or a ZIP with a manifest.
+- **Crash recovery:** lease expiry and fencing let another worker finish interrupted jobs without
+  publishing duplicate output. The subprocess tests and browser demo exercise real worker termination.
+- **Dry run and retry:** validate without creating a job, then explicitly retry failed certificates
+  while retaining their IDs and download links.
+- **Safe request replay:** Idempotency-Key headers prevent duplicate jobs when a client resubmits the
+  same request after a lost response.
+- **Public certificate verification:** a QR code and public verification endpoint are not included in
+  this version; certificate downloads require the API token.
 
-  A-04 to A-12 come from the forensic audit ([audit/AUDIT_REPORT.md](audit/AUDIT_REPORT.md)) and were
-  approved for its remediation ([audit/REMEDIATION_REPORT.md](audit/REMEDIATION_REPORT.md)): email length
-  pre-check and bounded unknown-field errors (A-04), unpaired surrogates rejected (A-05), bounded `after`
-  (A-06), `Host` allowlist (A-07), in-app request limit (A-08), BMP-only text (A-09), dependency bumps
-  (A-10), progress never 1.0 early (A-11), body budget for decomposed input (A-12). Its second round added
-  A-13 to A-19: slow-render delay below the lease (A-13), damaged certificate files refused (A-14), row cap
-  and free-disk guard (A-15), submission limit and body deadline (A-16), bearer-token authentication
-  (A-17), response send deadline (A-18), per-token request cap (A-19). The audit's own tests need its
-  extra tools
-  (`pip install -r audit/requirements.txt`, which includes the dev requirements) and run with
-  `pytest audit/tests` (separately from `pytest`, which runs `tests/`).
-- **Interpretations** where the blueprint was silent or a library behaved differently than it assumed (no
-  behavior added):
-  - email-validator accepts internationalized domains even with SMTPUTF8 off, so emails are checked to be
-    ASCII explicitly;
-  - the widest ASCII glyph is `@`, not `W`, and it still fits;
-  - the first concurrent boot of several processes needed a bounded wait for SQLite's WAL switch.
-- **Required before optional:** required scope was tagged `v1.0-required` before any differentiator; every
-  later tag contains it.
-- **Differentiators (BLUEPRINT §18):**
-  - D1 verifiable certificates (QR code + public verify endpoint): **omitted (dropped).** Its kill criterion,
-    "any required test regresses", tripped: embedding the job's verify URL changes every worker-rendered PDF,
-    which breaks the required test `tests/test_rendering.py` `test_generated_file_matches_direct_render`.
-    The implementation is kept, unmerged, on branch `dropped/d1-verify`.
-  - D2 crash-safety proof: **included.** 2- and 4-process benchmarks and the kill-demo transcript; the slow
-    crash tests passed 5 consecutive runs.
-  - D3 fix-and-retry (`?dry_run=true`, `POST …/retry`): **included** (`tests/test_dry_run.py`, `tests/test_retry.py`).
-  - D4 Idempotency-Key: **included** (`tests/test_idempotency.py`).
-- **Not demonstrated / pending human review:** the visual check of the certificate layout was automated
-  (rasterized and inspected, `docs/evidence/visual-check/`); a human sign-off on legibility is still
-  pending. One mutation proof (/retry not clearing the lease token) is an equivalent mutant that no test
-  can detect; [docs/evidence/mutation-checks.txt](docs/evidence/mutation-checks.txt) explains why.
+Run the documented test commands to verify the current checkout. Regression checks for validation,
+authentication, concurrency, file handling and worker recovery are part of the default test suite.
+The [benchmark fixtures](tests/fixtures/benchmarks/) back the figures in the Benchmarks section;
+measurements depend on the machine and local disk. Automated PDF checks cover text content and layout
+bounds; human visual approval and verification on Windows remain separate checks.

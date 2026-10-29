@@ -1,6 +1,0 @@
-# deselected, failing on the unmutated copy: audit/tests/test_a6_redteam.py::test_no_secrets_committed
-id	file	description	verdict	seconds	first_failure
-R16	certgen/middleware.py	R2-O1 per-token cap not enforced	KILLED (tests)	16.6	tests/test_hardening.py::test_one_token_cannot_hold_every_request_slot
-R17	certgen/config.py	R2-O1 default cap = whole limit	KILLED (tests)	11.7	tests/test_hardening.py::test_requests_per_token_default_is_half_the_request_limit
-R18	certgen/main.py	R2-O1 cap not passed to the middleware	KILLED (tests)	16.8	tests/test_runtime.py::test_server_limits_passed_to_uvicorn - Assertio...
-R19	certgen/middleware.py	R2-O1 finished token entries never removed	KILLED (tests)	11.9	tests/test_hardening.py::test_one_token_cannot_hold_every_request_slot

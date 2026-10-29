@@ -1,4 +1,0 @@
-  File "/home/abc/Desktop/Resume Projects/certgen-remediation/scripts/check_live_demo.py", line 136, in main
-    assert status == 200 and json.loads(raw)["counts"] == {"total": 4, "valid": 2, "rejected": 2}
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError

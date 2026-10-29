@@ -1,3 +1,0 @@
-E   ImportError: cannot import name 'SendDeadlineMiddleware' from 'certgen.middleware' (/home/abc/Desktop/Resume Projects/certgen-remediation/certgen/middleware.py)
-E   ImportError: cannot import name 'SendDeadlineMiddleware' from 'certgen.middleware' (/home/abc/Desktop/Resume Projects/certgen-remediation/certgen/middleware.py)
-2 failed, 42 deselected in 0.20s

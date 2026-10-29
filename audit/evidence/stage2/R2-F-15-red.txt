@@ -1,3 +1,0 @@
-      1 6 failed, 1 passed, 10 deselected in 0.28s
-      5 E   assert 200 == 410
-      1 E   AssertionError: assert ['certificate...4b9cd031.pdf'] == []

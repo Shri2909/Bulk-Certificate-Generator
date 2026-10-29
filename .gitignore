@@ -9,10 +9,13 @@ data/
 *.db-wal
 *.db-shm
 
-# Internal planning and prompt files
-/docs/PLAN.md
-/docs/RESEARCH.md
-/docs/BUILD_LOG.md
-/docs/COMMIT_DESCRIPTIONS.md
+# Publish only the selected requirements and architecture documents.
+/audit/
+/docs/*
+!/docs/decisions/
+!/docs/REQUIREMENTS.md
+!/docs/problem_statement.md
+
+# Internal prompt and interview files at any directory depth.
 *[Pp][Rr][Oo][Mm][Pp][Tt]*
 *[Ii][Nn][Tt][Ee][Rr][Vv][Ii][Ee][Ww]*

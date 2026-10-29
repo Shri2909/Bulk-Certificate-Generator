@@ -1,8 +1,8 @@
 # Problem statement (verbatim transcription)
 
-> **The PDF is authoritative:** [`docs/problem_statement.pdf`](problem_statement.pdf). This file is a
-> plain-text transcription kept for grep and diff. If the two ever disagree, the PDF wins. Checked
-> word-for-word against `pdftotext` output on 2026-10-11. Requirement IDs in `docs/REQUIREMENTS.md` quote this text.
+> **This file is the published source of truth for the assignment.** The original PDF is kept locally.
+> This transcription was checked word-for-word against `pdftotext` output on 2026-10-11.
+> Requirement IDs in [REQUIREMENTS.md](REQUIREMENTS.md) quote this text.
 
 ## Bulk Certificate Generator
 

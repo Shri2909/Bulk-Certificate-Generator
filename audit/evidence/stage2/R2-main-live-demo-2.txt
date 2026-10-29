@@ -1,6 +1,0 @@
-# check_live_demo.py in main with the user's .venv (EXECUTED 2026-10-28T03:43:56Z) HEAD 52aa001
-PASS: assets, API docs, isolated empty session, same-origin controls
-PASS: dry run, partial acceptance, PDF, ZIP + manifest, safe replay
-PASS: real worker kill, lease recovery, same ID, exactly six PDFs
-PASS: isolated failure, attempt limit, explicit retry, stable certificate IDs
-PASS: demo end-to-end checks complete; temporary data and owned processes cleaned up

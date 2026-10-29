@@ -1,9 +1,0 @@
-# Benchmarks (EXECUTED), same machine and session, run alternately: baseline (261108d, pillow 12.3.0) vs remediated (HEAD)
-# scripts/benchmark.py --recipients 1000 --processes N; work dir on ext4 (deleted afterwards)
-variant     proc   wall s  certs/s  POST ms render p50 item p50 item max  RSS MB  accept
-baseline       1    15.54     64.4      141       4.67    12.00     21.4      88  True
-remediated     1    14.63     68.3      143       5.27    13.02     36.6      89  True
-baseline       2     9.23    108.4      146       5.17    12.84     24.6      87  True
-remediated     2     9.02    110.9      149       5.70    13.26     22.5      89  True
-baseline       4     7.31    136.8      168       6.02    13.79     26.3      88  True
-remediated     4     7.16    139.6      197       5.47    13.14     23.9      89  True

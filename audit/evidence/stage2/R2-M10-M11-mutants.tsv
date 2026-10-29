@@ -1,4 +1,0 @@
-# deselected, failing on the unmutated copy: audit/tests/test_a6_redteam.py::test_no_secrets_committed
-id	file	description	verdict	seconds	first_failure
-M10	certgen/storage.py	job-dir symlink check removed	KILLED (tests)	8.2	tests/test_audit_regressions.py::test_symlinked_job_dir_is_refused_on_write[another job's directory]
-M11	certgen/storage.py	file symlink lstat check removed (O_NOFOLLOW remains)	KILLED (tests)	8.2	tests/test_audit_regressions.py::test_symlinked_file_is_refused_even_without_o_nofollow

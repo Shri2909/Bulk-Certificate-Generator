@@ -1,4 +1,0 @@
-      1 9 failed, 3 passed, 10 deselected in 0.33s
-      9 E   AssertionError: 500: {"type":"about:blank","title":"Internal server error","status":500,"code":"INTERNAL_ERROR","detail":"Internal server error"}
-E   UnicodeEncodeError: 'utf-8' codec can't encode character '\ud800' in position 6: surrogates not allowed
-1 failed in 0.11s

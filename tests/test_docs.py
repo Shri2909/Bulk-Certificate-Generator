@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 README = ROOT / "README.md"
-EVIDENCE = ROOT / "docs" / "evidence"
+EVIDENCE = ROOT / "tests" / "fixtures" / "benchmarks"
 REQUIRED_HEADINGS = [
     "## Setup",
     "## Run",
@@ -23,7 +23,7 @@ REQUIRED_HEADINGS = [
     "## Design decisions",
     "## Error codes",
     "## Limitations",
-    "## Blueprint conformance",
+    "## Requirements coverage",
     "## Supported names",
     "## Configuration",
     "## Benchmarks",
@@ -96,7 +96,7 @@ def benchmark_row(data: dict[str, Any], name: str) -> str:
         f"{data['per_item_ms']['p50']:.1f}",
         f"{data['per_item_ms']['max']:.1f}",
         f"{data['post_latency_ms']:.0f}",
-        f"[{name}](docs/evidence/{name})",
+        f"[{name}](tests/fixtures/benchmarks/{name})",
     ]
     return "| " + " | ".join(cells) + " |"
 

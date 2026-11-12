@@ -19,3 +19,6 @@ data/
 # Internal prompt and interview files at any directory depth.
 *[Pp][Rr][Oo][Mm][Pp][Tt]*
 *[Ii][Nn][Tt][Ee][Rr][Vv][Ii][Ee][Ww]*
+
+# Local analysis file
+/PROJECT_PROFILE.md

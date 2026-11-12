@@ -1,8 +1,7 @@
 # Problem statement (verbatim transcription)
 
-> **This file is the published source of truth for the assignment.** The original PDF is kept locally.
-> This transcription was checked word-for-word against `pdftotext` output on 2026-10-11.
-> Requirement IDs in [REQUIREMENTS.md](REQUIREMENTS.md) quote this text.
+> The assignment this project implements, transcribed word for word. Requirement IDs in
+> [REQUIREMENTS.md](REQUIREMENTS.md) quote this text.
 
 ## Bulk Certificate Generator
 

@@ -1,9 +1,9 @@
 # ADR-001: Web framework — FastAPI
 
-Status: Accepted · Requirements: R1, R2, R13 · Evidence: RESEARCH §4, §3
+Status: Accepted · Requirements: R1, R2, R13
 
 ## Context
-The PDF allows FastAPI, Django+DRF, or Flask. The API is small: 8 endpoints (ADR-009) and JSON in/out. The hard part is bulk validation and background processing, not CRUD.
+The assignment allows FastAPI, Django+DRF, or Flask. The API is small: seven endpoints (ADR-009) and JSON in/out. The hard part is bulk validation and background processing, not CRUD.
 
 ## Options
 | | Flask (simplest) | Django + DRF | FastAPI |
@@ -18,11 +18,12 @@ The PDF allows FastAPI, Django+DRF, or Flask. The API is small: 8 endpoints (ADR
 Correctness (validation strictness), failure isolation (not framework-driven), ease to run/explain (fewest concepts), testability.
 
 ## Decision
-**FastAPI**. Pydantic gives per-field structural validation with types, and that code also serves as the API contract. `/docs` gives reviewers an interactive console at zero cost. `lifespan` is a documented place to start and stop the embedded worker. Django's main advantages (ORM migrations, admin) don't help here, and its row-locking abstraction is a no-op on SQLite ([Django docs](https://docs.djangoproject.com/en/5.2/ref/models/querysets/)).
+**FastAPI**. Pydantic gives per-field structural validation with types, and that code also serves as the API contract. `/docs` gives reviewers an interactive console at zero cost. `lifespan` is the documented place to start and stop the embedded workers. Django's main advantages (ORM migrations, admin) don't help here, and its row-locking abstraction is a no-op on SQLite ([Django docs](https://docs.djangoproject.com/en/5.2/ref/models/querysets/)).
 
 ## Consequences
 - Pydantic's default 422 body shape is overridden by an exception handler so all errors use one model (ADR-010).
+- Authentication, the Host check and request limits are small ASGI middleware (ADR-011), not framework features.
 - Endpoints are sync `def`, not `async`. All work is blocking (SQLite, ReportLab), and FastAPI runs sync endpoints in a threadpool. That avoids "async function doing blocking I/O" bugs.
 
 ## At 100× scale
-The framework is not the bottleneck. API pods stay stateless; workers move out of process (ADR-003/004).
+The framework is not the bottleneck. API instances stay stateless; workers already run as separate processes (ADR-003/004).

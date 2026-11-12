@@ -1,14 +1,13 @@
-# Requirements (spec lock)
+# Requirements
 
-Source of truth: [problem_statement.md](problem_statement.md), the published transcription of the
-original assignment. The original PDF is kept locally. **If anything in this repo conflicts with the
-assignment text, the assignment text wins.** Quoted excerpts below come from that text.
+Source of truth: [problem_statement.md](problem_statement.md), a transcription of the original
+assignment. **If anything in this repo conflicts with the assignment text, the assignment text wins.**
+Quoted excerpts below come from that text.
 
 Rules:
 - Every `R#` must be covered by at least one test decorated `@pytest.mark.req("R#")`.
   `tests/test_spec_traceability.py` fails the build otherwise, and also fails if a test cites an unknown ID.
-- `P#` rows are process constraints. A gate review checks them, not pytest.
-- The traceability table records the milestone at which the listed code and tests were implemented.
+- `P#` rows are process constraints, not enforced by pytest.
 
 ## 1. Functional requirements
 
@@ -18,7 +17,7 @@ Rules:
 | R2  | Recipient data is validated server-side. Invalid recipients are reported individually: row index, field, and machine-readable code. | "Validate the provided recipient data"; "handle invalid recipient data appropriately" |
 | R3  | Exactly one certificate is generated for each **valid** recipient. | "Generate a certificate for each valid recipient" |
 | R4  | All certificates use one predefined template. There is no template editor and no multiple designs. | "Use a single predefined certificate template" |
-| R5  | Each generated certificate contains the recipient-specific information from the request (see interpretation A3: name always; email when `PRINT_EMAIL_ON_CERTIFICATE=true`). | "should contain the recipient-specific information provided in the request" |
+| R5  | Each generated certificate contains the recipient-specific information from the request (see interpretation A3: name always; email when `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=true`, the default). | "should contain the recipient-specific information provided in the request" |
 | R6  | Generation status is persisted per job and per recipient (item). | "Track the generation status" |
 | R7  | The client can query a job's progress (counts/percentage) and its result. | "check the progress/result of the request" |
 | R8  | The client can retrieve generated certificates (single certificate and whole job). | "Allow generated certificates to be retrieved" |
@@ -41,7 +40,7 @@ Rules:
 
 ## 3. Mandatory README content (assignment "Documentation")
 
-`tests/test_docs.py` checks that each section exists and that linked ADRs exist. That the commands actually work is verified by running them verbatim in a clean virtual environment; the documentation tests alone do not verify their execution.
+`tests/test_docs.py` checks that the README has the matching sections, stays within 200 lines, that every relative link in the README, ARCHITECTURE.md and METHODOLOGY.md resolves, and that the curl example is accepted by the API. It does not execute the setup commands; run them in a clean virtual environment to verify them.
 
 | ID  | README must explain |
 |-----|---------------------|
@@ -52,59 +51,57 @@ Rules:
 | R24 | How to retrieve generated certificates |
 | R25 | Important implementation/design decisions |
 
-## 4. Process constraints (not pytest-enforced)
+## 4. Process constraints
 
-| ID | Constraint | How it is enforced |
-|----|-----------|--------------------|
-| P1 | Optional features must not cost required functionality. | `v1.0-required` git tag before any differentiator branch, with the full suite green at that tag. |
-| P2 | Author can explain and modify every line. | Human walkthrough and one live modification before tagging `v1.0`; automated tests cannot certify understanding. |
+| ID | Constraint | How it is checked |
+|----|-----------|-------------------|
+| P1 | Optional features must not cost required functionality. | Required behaviour is covered by the `R#` tests, which run in the same default suite as the optional features. |
+| P2 | The author can explain and modify every line. | Not testable; a human responsibility. |
 | P3 | Default setup is `pip install` + one run command, with no Docker/Redis/broker. | Run the README setup and launch commands verbatim in a clean virtual environment. |
 
-## 5. Ambiguities and interpretations (decided at Gate 1, 2026-10-11)
+## 5. Ambiguities and interpretations
 
-| #  | Ambiguity | Interpretation (binding) | Decided in |
-|----|-----------|-------------------------|-----------|
-| A1 | "Validate" + "each **valid** recipient": should one bad row reject the whole request? | **No.** The job is accepted (`202`): invalid rows are stored as items with status `rejected` + error codes, and valid rows are generated. Whole-request `422` **only** when the request is structurally malformed (bad JSON, missing/invalid required top-level fields, empty `recipients`, over `MAX_RECIPIENTS`) or **every** row is invalid (the 422 then lists every row's errors). | ADR-005 · Gate 1 Q1 |
+| #  | Ambiguity | Interpretation (binding) | Decision record |
+|----|-----------|-------------------------|-----------------|
+| A1 | "Validate" + "each **valid** recipient": should one bad row reject the whole request? | **No.** The job is accepted (`202`): invalid rows are stored as items with status `rejected` + error codes, and valid rows are generated. Whole-request `422` **only** when the request is structurally malformed (bad JSON, missing/invalid required top-level fields, empty `recipients`, over `CERTGEN_MAX_RECIPIENTS`) or **every** row is invalid (the 422 then lists every row's errors). | ADR-005 |
 | A2 | What is "recipient data"? | `name` (required, printed) and `email` (required, used for de-duplication, **printed by default**; see A3). Job-level "certificate information": `title` (course/event), `issued_on` (date), `issuer` (organization). | ADR-005 |
-| A3 | Does "recipient-specific information" require printing the email? | **Yes, by default** (Gate 3 decision 1): name and email are printed. `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` is an explicit privacy opt-out. The setting is snapshotted onto each job at creation, so it never changes already-accepted jobs. Both modes tested (R5). *Superseded the Gate 1 default of "not printed".* | ADR-007 |
-| A4 | Duplicate recipients in one request. | Same email (`strip()` + case-insensitive) twice **in one job** → the later row is `rejected` with `DUPLICATE_RECIPIENT`; the error message names the first occurrence's row index (and carries `duplicate_of_row_index`). Duplicates **across** jobs are allowed. | ADR-005 · Gate 1 Q2 |
+| A3 | Does "recipient-specific information" require printing the email? | **Yes, by default:** name and email are printed. `CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` is an explicit privacy opt-out. The setting is snapshotted onto each job at creation, so it never changes already-accepted jobs. Both modes are tested (R5). | ADR-007 |
+| A4 | Duplicate recipients in one request. | Same email (`strip()` + case-insensitive) twice **in one job** → the later row is `rejected` with `DUPLICATE_RECIPIENT`; the error message names the first occurrence's row index (and carries `duplicate_of_row_index`). Duplicates **across** jobs are allowed. | ADR-005 |
 | A5 | "Retrieve generated certificates": one or all? | Both: `GET /v1/certificates/{certificate_id}` (single PDF) and `GET /v1/certificate-jobs/{id}/archive` (ZIP of all succeeded + `manifest.csv`). | ADR-009 |
 | A6 | "Progress/result": what shape? | Job resource with `status`, `counts` per item status, `progress` (0–1 over valid items), plus a paginated, status-filterable item list. | ADR-009 |
 | A7 | "Failure while generating" vs "invalid data". | Two distinct failure classes: `rejected` (input invalid, never attempted) and `failed` (attempted, generation error). Both are visible in job status (R10). | ADR-010 |
-| A8 | "Unnecessarily prevent": is retry expected? | Any renderer exception is retried up to `MAX_ATTEMPTS` (3) after a fixed `RETRY_DELAY_SECONDS`. No transient/permanent classification at runtime, because inputs that are deterministically unrenderable (missing glyphs, RTL) are rejected at validation (A9) and never reach the renderer. Exhausted → `failed` with `GENERATION_FAILED`; a crash-looping item → `failed` with `WORKER_LOST`. | ADR-004 |
-| A9 | Unicode names. | Allowed when every character is renderable by the bundled font (Latin/Greek/Cyrillic). Characters the font lacks (e.g. CJK) or right-to-left scripts that ReportLab cannot shape → `rejected` with `UNSUPPORTED_CHARACTERS`. A certificate never silently renders blank boxes (verified: Helvetica draws CJK without raising). | ADR-007 |
-| A10 | "Efficiently". | Background processing with single-item atomic claims (~1 ms each vs ~20 ms render). Measured target: 1,000 recipients complete in under 60 s on a laptop with one worker (measured ~20 ms/PDF in Phase 1). | ADR-003 |
+| A8 | "Unnecessarily prevent": is retry expected? | Any renderer exception is retried up to `CERTGEN_MAX_ATTEMPTS` (3) times with a fixed `CERTGEN_RETRY_DELAY_SECONDS` (2 s). No transient/permanent classification at runtime, because inputs that are deterministically unrenderable (missing glyphs, RTL) are rejected at validation (A9) and never reach the renderer. Exhausted → `failed` with `GENERATION_FAILED`; a crash-looping item → `failed` with `WORKER_LOST`. | ADR-004 |
+| A9 | Unicode names. | Allowed when every character is renderable by the bundled font (Latin/Greek/Cyrillic). Characters the font lacks (e.g. CJK) or right-to-left scripts that ReportLab cannot shape → `rejected` with `UNSUPPORTED_CHARACTERS`. A certificate never silently renders blank boxes (a standard PDF font draws CJK as missing glyphs without raising). | ADR-007 |
+| A10 | "Efficiently". | Background processing with short single-item atomic claims; rendering happens outside any transaction. 1,000 recipients complete in about 12 s with one worker process (see the README benchmark table). | ADR-003 |
 
 ## 6. Traceability (Requirement → code → test → README)
 
-"Status" is the implementation milestone at which the listed tests were green.
+| ID  | Code | Tests | README section |
+|-----|---------------------|-------|----------------|
+| R1  | `api.py:create_job`, `service.py:create_job`, `models.py:CreateJobRequest` | `test_jobs_api.py` | Quick start |
+| R2  | `validation.py`, `errors.py` | `test_validation.py`, `test_errors.py` | Quick start |
+| R3  | `worker.py:Worker.process`, `service.py:create_job` | `test_worker.py` | Key design decisions |
+| R4  | `rendering.py:render_certificate` | `test_rendering.py` | Key design decisions |
+| R5  | `rendering.py`, `layout.py` | `test_rendering.py`, `test_layout.py` | Key design decisions |
+| R6  | `tables.py`, `worker.py`, `status.py` | `test_jobs_api.py`, `test_worker.py`, `test_job_status.py` | Key design decisions |
+| R7  | `api.py:get_job`, `service.py:get_job`, `status.py` | `test_jobs_api.py` | Quick start, API |
+| R8  | `api.py:download_certificate`, `api.py:download_archive`, `archive.py`, `storage.py` | `test_retrieval.py` | Quick start, API |
+| R9  | `worker.py:Worker.process` | `test_failure_isolation.py`, `test_crash_recovery.py`, `test_worker.py` | Key design decisions, Known limitations |
+| R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates |
+| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Key design decisions |
+| R12 | `README.md` | `test_docs.py` | Key design decisions |
+| R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py`, `test_runtime.py` | Quick start |
+| R14 | — | `test_jobs_api.py` | Tests and benchmarks |
+| R15 | — | `test_validation.py`, `test_limits.py` | Tests and benchmarks |
+| R16 | — | `test_rendering.py`, `test_worker.py` | Tests and benchmarks |
+| R17 | — | `test_jobs_api.py`, `test_job_status.py` | Tests and benchmarks |
+| R18 | — | `test_failure_isolation.py` | Tests and benchmarks |
+| R19 | — | `test_retrieval.py` | Tests and benchmarks |
+| R20–R25 | `README.md` | `test_docs.py` | each section |
 
-| ID  | Code | Tests | README section | Status |
-|-----|---------------------|-------|----------------|--------|
-| R1  | `api.py:create_job`, `service.py:create_job`, `models.py:CreateJobRequest` | `test_jobs_api.py` | Submit a certificate generation request | M1 |
-| R2  | `validation.py`, `errors.py` | `test_validation.py`, `test_errors.py` | Submit a certificate generation request | M2 |
-| R3  | `worker.py:Worker.process`, `service.py:create_job` | `test_worker.py` | Design decisions | M4 |
-| R4  | `rendering.py:render_certificate` | `test_rendering.py` | Design decisions | M3 |
-| R5  | `rendering.py`, `layout.py` | `test_rendering.py`, `test_layout.py` | Design decisions | M3 |
-| R6  | `tables.py`, `worker.py`, `status.py` | `test_jobs_api.py`, `test_worker.py`, `test_job_status.py` | Design decisions | M4 |
-| R7  | `api.py:get_job`, `service.py:get_job`, `status.py` | `test_jobs_api.py` | Retrieve generated certificates | M1 |
-| R8  | `api.py:download_certificate`, `api.py:download_archive`, `archive.py`, `storage.py` | `test_retrieval.py` | Retrieve generated certificates | M5 |
-| R9  | `worker.py:Worker.process` | `test_failure_isolation.py`, `test_crash_recovery.py`, `test_worker.py` | Recovery and guarantees | M4 |
-| R10 | `service.py:list_items`, `status.py`, `archive.py` | `test_failure_isolation.py`, `test_retrieval.py` | Retrieve generated certificates | M5 |
-| R11 | `worker.py`, `middleware.py`, `config.py`, `service.py` | `test_limits.py`, `test_jobs_api.py`, `test_config.py` | Design decisions | M5 |
-| R12 | `README.md` | `test_docs.py` | Design decisions | M6 |
-| R13 | `main.py`, `db.py` | `test_db.py`, `test_docs.py`, `test_runtime.py` | Setup | M6 |
-| R14 | — | `test_jobs_api.py` | Run tests | M1 |
-| R15 | — | `test_validation.py`, `test_limits.py` | Run tests | M2 |
-| R16 | — | `test_rendering.py`, `test_worker.py` | Run tests | M4 |
-| R17 | — | `test_jobs_api.py`, `test_job_status.py` | Run tests | M4 |
-| R18 | — | `test_failure_isolation.py` | Run tests | M4 |
-| R19 | — | `test_retrieval.py` | Run tests | M5 |
-| R20–R25 | `README.md` | `test_docs.py` | each section | M6 |
+## 7. Obligations
 
-## 7. Obligations (one heading per requirement)
-
-Each heading names the obligation; the rows above quote the assignment and the traceability table lists code and tests.
+One heading per requirement (checked by `tests/test_spec_traceability.py`).
 
 ### R1 — Accept a bulk request: a list of recipients plus certificate information in one call
 

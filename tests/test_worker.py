@@ -1,4 +1,4 @@
-"""Worker: claiming, processing, fenced transitions, loops, supervision and file handling (§7, §11, §24.2)."""
+"""Worker: claiming, processing, loops, supervision and file handling."""
 
 from __future__ import annotations
 
@@ -18,7 +18,9 @@ from conftest import (
     FakeClock,
     blocking,
     fail_n_times,
+    item_rows,
     job_payload,
+    only_job_id,
     post_job,
     recipient,
     wait_until,
@@ -32,11 +34,6 @@ from sqlalchemy.exc import OperationalError
 from certgen.config import Settings
 from certgen.rendering import CertificateData, render_certificate
 from certgen.worker import Worker, WorkerPool
-
-
-def items(app: FastAPI) -> list[Any]:
-    with app.state.engines.read.connect() as conn:
-        return list(conn.execute(text("SELECT * FROM items ORDER BY row_index")).mappings())
 
 
 def write_lock_is_free(db_path: Path) -> bool:
@@ -58,7 +55,7 @@ def test_drain_creates_one_pdf_per_valid_item_and_none_for_rejected(
     rows = [recipient(0), recipient(1, email="bad"), recipient(2), recipient(3, name="")]
     post_job(client, job_payload(recipients=rows))
     assert len(drain()) == 2
-    stored = items(app)
+    stored = item_rows(app)
     files = sorted(p.name for p in settings.certificates_dir.rglob("*") if p.is_file())
     expected = sorted(f"{r['certificate_id']}.pdf" for r in stored if r["status"] == "succeeded")
     assert files == expected
@@ -74,13 +71,13 @@ def test_item_transitions_are_recorded(
     worker = make_worker(worker_id="w-1")
     claim = worker.claim_next()
     assert claim is not None and claim.attempts == 1
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["lease_owner"], row["lease_token"]) == ("processing", "w-1", claim.token)
     assert row["lease_expires_at"] == START_MS + 30_000
     assert row["attempts"] == 1
     fake_clock.advance(250)
     worker.process(claim)
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert row["status"] == "succeeded"
     assert (row["lease_owner"], row["lease_token"], row["lease_expires_at"]) == (None, None, None)
     assert (row["errors"], row["available_at"]) == (None, None)
@@ -88,7 +85,7 @@ def test_item_transitions_are_recorded(
 
 
 @pytest.mark.req("R6")
-def test_claim_returns_none_when_empty(client: TestClient, make_worker: Any) -> None:
+def test_claim_returns_none_when_empty(make_worker: Any) -> None:
     worker = make_worker()
     assert worker.claim_next() is None
     assert worker.run_once() is None
@@ -108,7 +105,7 @@ def test_render_runs_outside_write_transaction(
 
     make_worker(probing).run_until_idle()
     assert observed == [True, True]
-    assert {r["status"] for r in items(app)} == {"succeeded"}
+    assert {r["status"] for r in item_rows(app)} == {"succeeded"}
 
 
 @pytest.mark.req("R3", "R9")
@@ -127,11 +124,11 @@ def test_two_concurrent_workers_never_double_process(
 
         return render
 
-    # Rendezvous right after the claim's SELECT: if the SELECT and UPDATE were separate
-    # transactions, both workers would pass here together and pick the same item.
+    # Both workers meet right after the claim's SELECT; separate SELECT/UPDATE transactions would let them
+    # pick the same item.
     rendezvous = threading.Barrier(2, timeout=1.0)
 
-    def after_select(conn: Any, cursor: Any, statement: str, *_args: Any) -> None:
+    def after_select(_conn: Any, _cursor: Any, statement: str, *_args: Any) -> None:
         if statement.startswith("SELECT id FROM items WHERE status = 'pending'"):
             with contextlib.suppress(threading.BrokenBarrierError):
                 rendezvous.wait()
@@ -161,7 +158,7 @@ def test_two_concurrent_workers_never_double_process(
         event.remove(engine, "after_cursor_execute", after_select)
     worker_a.run_until_idle()
     worker_b.run_until_idle()
-    stored = items(app)
+    stored = item_rows(app)
     assert [r["status"] for r in stored] == ["succeeded"] * 4
     assert [r["attempts"] for r in stored] == [1] * 4  # every item claimed exactly once
     assert sorted(rendered) == sorted(r["certificate_id"] for r in stored)
@@ -187,7 +184,7 @@ def test_clock_read_after_lock(
     worker.run_once()  # claim + success
     worker.run_once()  # claim + failure
     worker.run_once()  # empty claim (the failed item waits out its retry delay)
-    # Every clock read (claim, success, failure) happened while this worker held the write lock.
+    # Every clock read (claim, success, failure) happens while this worker holds the write lock.
     assert len(lock_free_at_clock_read) >= 5
     assert not any(lock_free_at_clock_read)
 
@@ -199,27 +196,26 @@ def test_retry_after_transient_failure_needs_delay(
     post_job(client, job_payload(n=1))
     worker = make_worker(fail_n_times(1))
     assert worker.run_once() is not None
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["attempts"], row["available_at"]) == ("pending", 1, START_MS + 2_000)
     assert worker.run_once() is None
     fake_clock.advance(1_999)
     assert worker.run_once() is None
     fake_clock.advance(1)
     assert worker.run_once() is not None
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["attempts"], row["errors"]) == ("succeeded", 2, None)
 
 
 @pytest.mark.req("R9")
-def test_atomic_write_no_partial_file(
-    app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.mark.usefixtures("client")
+def test_atomic_write_no_partial_file(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     storage = app.state.storage
     job_id, cert = "a" * 32, "b" * 32
     storage.save_atomic(job_id, cert, b"%PDF-old complete file")
     final = storage.path_for(job_id, cert)
 
-    def failing_fsync(fd: int) -> None:
+    def failing_fsync(_fd: int) -> None:
         raise OSError("disk full")
 
     monkeypatch.setattr(os, "fsync", failing_fsync)
@@ -235,9 +231,8 @@ def test_atomic_write_no_partial_file(
 
 
 @pytest.mark.req("R9")
-def test_orphan_tmp_sweep_age_rule(
-    app: FastAPI, client: TestClient, caplog: pytest.LogCaptureFixture
-) -> None:
+@pytest.mark.usefixtures("client")
+def test_orphan_tmp_sweep_age_rule(app: FastAPI, caplog: pytest.LogCaptureFixture) -> None:
     storage = app.state.storage
     job_dir = storage.root / ("a" * 32)
     job_dir.mkdir()
@@ -258,7 +253,7 @@ def test_orphan_tmp_sweep_age_rule(
 
 
 @pytest.mark.req("R9")
-def test_run_forever_sweeps_orphans_at_start(app: FastAPI, client: TestClient, make_worker: Any) -> None:
+def test_run_forever_sweeps_orphans_at_start(app: FastAPI, make_worker: Any) -> None:
     job_dir = app.state.storage.root / ("a" * 32)
     job_dir.mkdir()
     orphan = job_dir / f"{'b' * 32}.{'1' * 32}.tmp"
@@ -298,7 +293,7 @@ def test_loop_survives_db_error(
     thread.join(timeout=10)
     assert not thread.is_alive()
     assert calls["n"] >= 2
-    assert items(app)[0]["status"] == "succeeded"
+    assert item_rows(app)[0]["status"] == "succeeded"
 
 
 @pytest.mark.req("R6")
@@ -313,7 +308,7 @@ def test_graceful_shutdown_costs_no_attempts(client: TestClient, app: FastAPI, m
     release.set()
     thread.join(timeout=10)
     assert not thread.is_alive()
-    stored = items(app)
+    stored = item_rows(app)
     assert [(r["status"], r["attempts"]) for r in stored] == [
         ("succeeded", 1),
         ("pending", 0),
@@ -325,25 +320,19 @@ def test_graceful_shutdown_costs_no_attempts(client: TestClient, app: FastAPI, m
 def test_job_snapshot_ignores_worker_settings(
     client: TestClient, app: FastAPI, settings: Settings, fake_clock: FakeClock
 ) -> None:
-    # The job was accepted with print_email=true; a worker started with the opposite setting
-    # (e.g. after a redeploy) must still render what the job promised.
+    # The job was accepted with print_email=true; a worker configured otherwise must still honour it.
     post_job(client, job_payload(recipients=[recipient(0, email="snap@example.com")]))
     flipped = Settings(data_dir=settings.data_dir, embedded_worker=False, print_email=False)
     Worker(app.state.engines, app.state.storage, flipped, fake_clock, render_certificate).run_until_idle()
-    row = items(app)[0]
-    pdf = app.state.storage.read(_job_id(app), row["certificate_id"])
+    row = item_rows(app)[0]
+    pdf = app.state.storage.read(only_job_id(app), row["certificate_id"])
     text_content = PdfReader(io.BytesIO(pdf)).pages[0].extract_text()
     assert "snap@example.com" in text_content
 
 
-def _job_id(app: FastAPI) -> str:
-    with app.state.engines.read.connect() as conn:
-        return str(conn.execute(text("SELECT id FROM jobs")).scalar_one())
-
-
 @pytest.mark.req("R9")
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX permissions")
-def test_created_files_are_private(client: TestClient, app: FastAPI, drain: Any, settings: Settings) -> None:
+def test_created_files_are_private(client: TestClient, drain: Any, settings: Settings) -> None:
     post_job(client, job_payload(n=2))
     drain()
     root = settings.certificates_dir
@@ -358,7 +347,7 @@ def test_created_files_are_private(client: TestClient, app: FastAPI, drain: Any,
     assert stat.S_IMODE(settings.db_path.stat().st_mode) == 0o600
 
 
-# --- Embedded supervision (§24.2) ---------------------------------------------------------------
+# --- Embedded supervision ------------------------------------------------------------------------
 
 
 class FakeTime:
@@ -380,7 +369,7 @@ class DyingWorker:
 
     started = 0
 
-    def run_forever(self, stop: threading.Event) -> None:
+    def run_forever(self, _stop: threading.Event) -> None:
         DyingWorker.started += 1
 
 
@@ -400,9 +389,8 @@ def make_pool(
 
 
 @pytest.mark.req("R9")
-def test_monitor_restarts_dead_thread(
-    client: TestClient, app: FastAPI, settings: Settings, fake_clock: FakeClock
-) -> None:
+@pytest.mark.usefixtures("client")
+def test_monitor_restarts_dead_thread(app: FastAPI, settings: Settings, fake_clock: FakeClock) -> None:
     fake_time = FakeTime()
     pool = make_pool(app, settings, fake_clock, fake_time, size=2)
     pool.start_workers()
@@ -415,8 +403,8 @@ def test_monitor_restarts_dead_thread(
 
 
 @pytest.mark.req("R9")
+@pytest.mark.usefixtures("client")
 def test_restart_budget_is_bounded(
-    client: TestClient,
     app: FastAPI,
     settings: Settings,
     fake_clock: FakeClock,
@@ -456,7 +444,7 @@ def test_monitor_retires_exhausted_lease_without_claims(
         )
     pool = make_pool(app, settings, fake_clock, FakeTime(), size=0)
     pool.supervise_once()
-    stored = items(app)
+    stored = item_rows(app)
     assert stored[0]["status"] == "failed"
     assert '"code":"WORKER_LOST"' in stored[0]["errors"]
     assert stored[0]["completed_at"] == fake_clock()
@@ -468,10 +456,9 @@ def test_monitor_retires_exhausted_lease_without_claims(
 def test_many_threads_claim_each_item_exactly_once(
     client: TestClient, app: FastAPI, make_worker: Any
 ) -> None:
-    # Stress complement to the barrier test: 8 real threads race over 400 items with a trivial
-    # renderer, so claims dominate. A claim that is not one atomic transaction claims some item twice.
+    # Stress complement to the barrier test: claims dominate, so a non-atomic claim takes an item twice.
     post_job(client, job_payload(n=400))
-    workers = [make_worker(lambda data: b"%PDF-1.4 stub", worker_id=f"w{i}") for i in range(8)]
+    workers = [make_worker(lambda _data: b"%PDF-1.4 stub", worker_id=f"w{i}") for i in range(8)]
     start = threading.Barrier(len(workers))
 
     def run(worker: Worker) -> None:
@@ -483,6 +470,6 @@ def test_many_threads_claim_each_item_exactly_once(
         t.start()
     for t in threads:
         t.join(timeout=60)
-    stored = items(app)
+    stored = item_rows(app)
     assert {r["status"] for r in stored} == {"succeeded"}
     assert [r["attempts"] for r in stored] == [1] * 400

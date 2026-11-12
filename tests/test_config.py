@@ -1,4 +1,4 @@
-"""Settings.from_env: §15 defaults and ranges, §24.1 capacity floor, §24.6 public base URL rules."""
+"""Settings.from_env: defaults, ranges, the capacity floor and public base URL rules."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from certgen.config import Settings
 
 
 @pytest.mark.req("R11", "R13")
-def test_defaults_match_blueprint() -> None:
+def test_defaults() -> None:
     s = Settings.from_env({})
     assert s.data_dir == Path("data").resolve()
     assert (s.host, s.port) == ("127.0.0.1", 8000)
@@ -22,7 +22,6 @@ def test_defaults_match_blueprint() -> None:
     assert s.max_recipients == 10_000
     assert s.max_active_items == 50_000
     assert s.print_email is True
-    assert s.public_base_url == "http://localhost:8000"
     assert s.log_level == "INFO"
     assert s.test_slow_render_ms == 0
 
@@ -30,7 +29,7 @@ def test_defaults_match_blueprint() -> None:
 @pytest.mark.req("R11")
 def test_derived_values() -> None:
     s = Settings.from_env({})
-    assert s.max_body_bytes == 45_065_536  # 10,000 x 4,500 + 64 KiB (amendment A-12, audit F-09)
+    assert s.max_body_bytes == 45_065_536  # 10,000 x 4,500 + 64 KiB
     assert s.lease_ms == 30_000
     assert s.retry_delay_ms == 2_000
     assert Settings.from_env({"CERTGEN_MAX_RECIPIENTS": "100"}).max_body_bytes == 100 * 4_500 + 65_536
@@ -56,12 +55,12 @@ def test_data_dir_is_resolved_to_absolute_path(tmp_path: Path) -> None:
         ("CERTGEN_POLL_INTERVAL_SECONDS", ["0.05", "10"], ["0.04", "10.1"]),
         ("CERTGEN_MAX_RECIPIENTS", ["1", "10000"], ["0", "100001"]),
         ("CERTGEN_LOG_LEVEL", ["DEBUG", "info", "WARNING", "ERROR"], ["TRACE", ""]),
-        # Must also stay below the lease (30 s by default; amendment A-13, audit F-13).
+        # Must also stay below the lease (30 s by default).
         ("CERTGEN_TEST_SLOW_RENDER_MS", ["0", "29999"], ["-1", "30000", "60001"]),
         ("CERTGEN_EMBEDDED_WORKER", ["1", "0", "TRUE", "false"], ["yes", "2", ""]),
         ("CERTGEN_PRINT_EMAIL_ON_CERTIFICATE", ["1", "0", "True", "FALSE"], ["on", "no"]),
         ("CERTGEN_HOST", ["127.0.0.1", "0.0.0.0", "::1"], ["localhost", "999.1.1.1"]),
-        ("CERTGEN_MAX_REQUESTS_PER_TOKEN", ["1", "64"], ["0", "65", "x"]),  # R2-O1, amendment A-19
+        ("CERTGEN_MAX_REQUESTS_PER_TOKEN", ["1", "64"], ["0", "65", "x"]),
     ],
 )
 def test_every_variable_is_range_checked(var: str, good: list[str], bad: list[str]) -> None:
@@ -94,42 +93,3 @@ def test_max_active_items_range_and_floor() -> None:
 def test_direct_construction_is_validated_too(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="CERTGEN_WORKER_THREADS"):
         Settings(data_dir=tmp_path, worker_threads=0)
-
-
-REJECT = None
-
-
-@pytest.mark.req("R11")
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        ("http://localhost:8000", "http://localhost:8000"),
-        ("http://localhost:8000/", "http://localhost:8000"),
-        ("http://127.0.0.1", "http://127.0.0.1"),
-        ("http://[::1]:8000", "http://[::1]:8000"),
-        ("https://certs.example.org", "https://certs.example.org"),
-        ("https://example.org/certgen/", "https://example.org/certgen"),
-        ("HTTPS://Example.org", "HTTPS://Example.org"),
-        ("https://e.org/" + "a" * 86 + "/", "https://e.org/" + "a" * 86),  # 100 chars after strip
-        ("", REJECT),
-        ("localhost:8000", REJECT),  # no scheme
-        ("ftp://example.org", REJECT),  # scheme
-        ("http://example.org", REJECT),  # http only for loopback hosts
-        ("http://localhost.evil.org", REJECT),  # loopback lookalike still needs https
-        ("https://", REJECT),  # no host
-        ("https://user:pw@example.org", REJECT),  # userinfo
-        ("https://example.org/?q=1", REJECT),  # query
-        ("https://example.org/?", REJECT),  # empty query marker
-        ("https://example.org/#frag", REJECT),  # fragment
-        ("https://ex\u00e4mple.org", REJECT),  # non-ASCII
-        ("https://exa mple.org", REJECT),  # space
-        ("https://e.org/" + "a" * 87, REJECT),  # 101 chars
-        ("https://example.org:99999", REJECT),  # invalid port
-    ],
-)
-def test_public_base_url_rules(value: str, expected: str | None) -> None:
-    if expected is REJECT:
-        with pytest.raises(ValueError, match="CERTGEN_PUBLIC_BASE_URL"):
-            Settings.from_env({"CERTGEN_PUBLIC_BASE_URL": value})
-    else:
-        assert Settings.from_env({"CERTGEN_PUBLIC_BASE_URL": value}).public_base_url == expected

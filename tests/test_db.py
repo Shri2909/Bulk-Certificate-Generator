@@ -1,4 +1,4 @@
-"""SQLite engines, pragmas, BEGIN modes, schema creation and versioning (§4, §24.9)."""
+"""SQLite engines, pragmas, BEGIN modes, schema creation and versioning."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from certgen import service, worker
 from certgen.db import check_sqlite_version, create_engines, create_schema
 from certgen.tables import items
 
-# Every hot query, taken from the modules that run it, so the plan check covers the real SQL (§24.13).
+# Every hot query, taken from the modules that run it, so the plan check covers the real SQL.
 QUERIES = {
     "retire": worker.RETIRE_SQL,
     "reclaim": worker.RECLAIM_SQL,
@@ -170,9 +170,9 @@ def test_check_constraints_reject_invalid_rows(tmp_path: Path, overrides: dict[s
         with engines.write.begin() as conn:
             conn.execute(
                 text(
-                    "INSERT INTO jobs (id, title, issuer, issued_on, print_email, verify_base_url, "
+                    "INSERT INTO jobs (id, title, issuer, issued_on, print_email, "
                     "request_json, created_at) "
-                    "VALUES (:id, 't', 'i', '2026-10-01', 1, 'http://localhost:8000', '{}', 0)"
+                    "VALUES (:id, 't', 'i', '2026-10-01', 1, '{}', 0)"
                 ),
                 {"id": "a" * 32},
             )

@@ -1,7 +1,8 @@
-"""End to end with the real embedded worker threads and the real clock (§16.1: the only threaded test)."""
+"""End to end with the real embedded worker threads and the real clock."""
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -50,8 +51,6 @@ def test_end_to_end_embedded_worker(tmp_path: Path) -> None:
         assert job["status"] == "completed_with_errors"  # the rejected row is reported, not lost
         assert job["counts"]["succeeded"] == 5 and job["counts"]["rejected"] == 1
         assert job_url.startswith(JOBS)
-        import sqlite3
-
         conn = sqlite3.connect(settings.db_path)
         certs = [r[0] for r in conn.execute("SELECT certificate_id FROM items WHERE status = 'succeeded'")]
         conn.close()

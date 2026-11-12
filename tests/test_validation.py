@@ -1,4 +1,4 @@
-"""Validation rules (§9), strict JSON body parsing (§24.5) and error ordering (§24.11)."""
+"""Validation rules, strict JSON body parsing and error ordering."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any
 
 import pytest
-from conftest import JOBS, certificate_info, job_payload, post_job, recipient
+from conftest import certificate_info, job_payload, post_job, post_raw, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -35,10 +35,6 @@ def codes(result: ValidatedRequest, row: int) -> list[tuple[str | None, str]]:
 
 def request_codes(result: ValidatedRequest) -> list[tuple[str | None, str]]:
     return [(e.field, e.code.value) for e in result.request_errors]
-
-
-def post_raw(client: TestClient, raw: bytes) -> Any:
-    return client.post(JOBS, content=raw, headers={"Content-Type": "application/json"})
 
 
 def flat_codes(resp: Any) -> list[tuple[int | None, str | None, str]]:

@@ -1,7 +1,6 @@
-"""One error shape everywhere: RFC 9457 problem+json with machine-readable codes (§6.1).
+"""One error shape everywhere: RFC 9457 problem+json with machine-readable codes.
 
-Handlers are plain functions (Starlette runs them in its threadpool); bodies never carry exception
-text or tracebacks, which go to the log only.
+Bodies never carry exception text or tracebacks; those go to the log only.
 """
 
 from __future__ import annotations
@@ -140,7 +139,7 @@ def problem_response(
     return JSONResponse(body, status_code=status, headers=out_headers, media_type=PROBLEM_MEDIA_TYPE)
 
 
-# Pydantic error type -> FieldCode (§6.1); anything not listed maps to INVALID_VALUE.
+# Pydantic error type -> FieldCode; anything not listed maps to INVALID_VALUE.
 PYDANTIC_CODES = {
     "json_invalid": FieldCode.INVALID_JSON,
     "missing": FieldCode.REQUIRED,
@@ -154,7 +153,7 @@ PYDANTIC_CODES = {
 
 
 def body_errors_from_pydantic(errors: Sequence[Mapping[str, Any]]) -> list[FieldError]:
-    """Map Pydantic errors for the request body; locs are relative to the body (§24.5 step 5)."""
+    """Map Pydantic errors for the request body; locs are relative to the body."""
     out = []
     for err in errors:
         loc = tuple(err["loc"])
@@ -177,7 +176,7 @@ def api_error_handler(_request: Request, exc: Exception) -> JSONResponse:
 
 
 def request_validation_handler(_request: Request, exc: Exception) -> JSONResponse:
-    """Query and path parameter errors: `field` is the parameter name (§6.5)."""
+    """Query and path parameter errors: `field` is the parameter name."""
     exc = cast(RequestValidationError, exc)  # registered for this type only
     errors = []
     for err in exc.errors():

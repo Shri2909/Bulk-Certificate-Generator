@@ -1,4 +1,4 @@
-"""HTTP <-> service mapping (§6). Routes are plain `def`, so FastAPI runs them in its threadpool."""
+"""HTTP routes. Plain `def`, so FastAPI runs them in its threadpool."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ health_router = APIRouter()  # open: no token
 
 JOBS_PATH = "/v1/certificate-jobs"
 ItemStatus = Literal["rejected", "pending", "processing", "succeeded", "failed"]
-SQLITE_MAX_INTEGER = 2**63 - 1  # a larger bound parameter raises OverflowError in sqlite3 (audit F-04)
+SQLITE_MAX_INTEGER = 2**63 - 1  # a larger bound parameter raises OverflowError in sqlite3
 
 
 def iso_ms(epoch_ms: int) -> str:
@@ -72,7 +72,7 @@ def invalid(errors: list[FieldError], detail: str = "Request is invalid.") -> Ap
 
 
 def is_json_media_type(content_type: str | None) -> bool:
-    """application/json, optionally with charset=utf-8, case-insensitive (§24.5 step 1)."""
+    """application/json, optionally with charset=utf-8, case-insensitive."""
     if content_type is None:
         return False
     media_type, *params = (part.strip().lower() for part in content_type.split(";"))
@@ -80,16 +80,18 @@ def is_json_media_type(content_type: str | None) -> bool:
 
 
 def raw_body(request: Request) -> bytes:
-    # Request.body() is async; this sync route runs in a worker thread, which may call into the loop.
+    # Request.body() is async; sync routes run in a worker thread, which may call into the loop.
     body: bytes = anyio.from_thread.run(request.body)
     return body
 
 
-def parse_json(request: Request, raw: bytes) -> Any:
-    """§24.5: the body is parsed here instead of by FastAPI, so duplicate keys, NaN and deep nesting
-    are rejected rather than silently accepted."""
+def require_json_media_type(request: Request) -> None:
     if not is_json_media_type(request.headers.get("content-type")):
         raise ApiError(ProblemCode.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json.")
+
+
+def parse_json(raw: bytes) -> Any:
+    """Parsed here, not by FastAPI, so duplicate keys, NaN and deep nesting are rejected."""
     try:
         return decode_json_body(raw)
     except JsonBodyError as exc:
@@ -97,19 +99,18 @@ def parse_json(request: Request, raw: bytes) -> Any:
 
 
 def read_json_body(request: Request) -> Any:
-    if not is_json_media_type(request.headers.get("content-type")):
-        raise ApiError(ProblemCode.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json.")
+    require_json_media_type(request)
     raw = raw_body(request)
     if not raw:
         raise invalid([FieldError(None, FieldCode.REQUIRED, "A JSON request body is required.")])
-    return parse_json(request, raw)
+    return parse_json(raw)
 
 
 IDEMPOTENCY_KEY = re.compile(r"[\x21-\x7e]{1,255}")
 
 
 def idempotency_key(request: Request) -> str | None:
-    """D4: optional header, 1-255 printable ASCII characters (§12)."""
+    """The optional Idempotency-Key header: 1-255 printable ASCII characters."""
     raw = request.headers.get("idempotency-key")
     if raw is None:
         return None
@@ -141,15 +142,13 @@ def create_job(
 ) -> JobCreated | JSONResponse:
     state = request.app.state
     obj = read_json_body(request)
-    # D4: a dry run ignores the header completely; it neither reads nor stores a key.
-    key = None if dry_run else idempotency_key(request)
-    if key is not None:  # keys are per client (audit F-12): another token's key is a different key
-        key = f"{request.state.client_id}:{key}"
+    key = None if dry_run else idempotency_key(request)  # a dry run neither reads nor stores a key
     if key is not None:
+        key = f"{request.state.client_id}:{key}"  # keys are per client
         replay = service.find_replay(state.engines, key, service.request_hash(canonical_json(obj)))
-        if replay is not None:  # same key, same body: answer with the job's current state, no re-validation
+        if replay is not None:  # same key, same body: the job's current state, no re-validation
             return replayed(state, replay)
-    if not dry_run and service.queue_is_full(state.engines, state.settings):  # audit P8-N2: before validating
+    if not dry_run and service.queue_is_full(state.engines, state.settings):  # before validating
         raise ApiError(ProblemCode.CAPACITY_EXCEEDED, "The queue is full; retry later.")
     try:
         body = CreateJobRequest.model_validate(obj)
@@ -164,7 +163,7 @@ def create_job(
     )
     if validated.request_errors:
         raise invalid(validated.all_errors)
-    if dry_run:  # D3: the same admission decision as a real submission, reported instead of stored
+    if dry_run:  # the same admission decision as a real submission, reported instead of stored
         report = DryRunReport(
             dry_run=True,
             would_create_job=validated.valid_count > 0,
@@ -231,7 +230,7 @@ def healthz(request: Request) -> Health:
     pool = state.workers
     expected = pool.size if pool is not None else 0
     alive = pool.alive() if pool is not None else 0
-    # Degraded still answers 200: the API serves reads and accepts jobs; work waits for a worker.
+    # Degraded still answers 200: reads and submissions work; jobs wait for a worker.
     return Health(
         status="ok" if alive >= expected else "degraded",
         db="ok",
@@ -282,7 +281,7 @@ def download_archive(request: Request, job_id: str) -> StreamingResponse:
     state = request.app.state
     if not HEX32.fullmatch(job_id):
         raise not_found()
-    # Non-blocking: a third concurrent build is refused instead of queueing (a 10,000-PDF ZIP is ~440 MB).
+    # Non-blocking: excess builds are refused instead of queueing (a 10,000-PDF ZIP is ~440 MB).
     if not state.archive_slots.acquire(blocking=False):
         raise ApiError(ProblemCode.ARCHIVE_BUSY, "Too many archives are being built; retry shortly.")
     try:
@@ -301,11 +300,12 @@ def download_archive(request: Request, job_id: str) -> StreamingResponse:
 
 @router.post(JOBS_PATH + "/{job_id}/retry", status_code=202, response_model=JobResource)
 def retry_job(request: Request, job_id: str) -> dict[str, Any]:
-    """D3: re-queue every failed item of the job (T9). No request fields; an empty body or {}."""
+    """Re-queue every failed item of the job. No request fields; an empty body or {}."""
     state = request.app.state
     raw = raw_body(request)
     if raw:
-        body = parse_json(request, raw)
+        require_json_media_type(request)
+        body = parse_json(raw)
         if not isinstance(body, dict):
             raise invalid(
                 [FieldError(None, FieldCode.INVALID_TYPE, "The request body must be a JSON object.")]
@@ -314,11 +314,7 @@ def retry_job(request: Request, job_id: str) -> dict[str, Any]:
             raise invalid(
                 [FieldError(key, FieldCode.UNKNOWN_FIELD, f"Unknown field {key!r}.") for key in sorted(body)]
             )
-    view = (
-        service.retry_failed(state.engines, state.settings, state.clock, job_id)
-        if HEX32.fullmatch(job_id)
-        else None
-    )
+    view = service.retry_failed(state.engines, state.settings, job_id) if HEX32.fullmatch(job_id) else None
     if view is None:
         raise not_found()
     return job_resource(view)

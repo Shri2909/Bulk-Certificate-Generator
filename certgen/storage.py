@@ -1,4 +1,4 @@
-"""Certificate files on disk (§11, §24.8). Every path component is a server-generated 32-hex ID.
+"""Certificate files on disk. Every path component is a server-generated 32-hex ID.
 
 Files are created private (dirs 0700, files 0600) and are never read through a symlink, so nothing
 placed in the data directory by someone else can make a download serve a file from elsewhere.
@@ -18,13 +18,13 @@ log = logging.getLogger("certgen.storage")
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
 # O_NOFOLLOW makes open() itself refuse a symlink, closing the gap between the lstat check and open.
 O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
-MAX_PDF_BYTES = 2_097_152  # §24.3: bounds worker memory, disk use and download size
+MAX_PDF_BYTES = 2_097_152  # bounds worker memory, disk use and download size
 PDF_HEADER = b"%PDF-"
 PDF_TRAILER = b"%%EOF"
 
 
 def prepare_data_dir(data_dir: Path, certificates_dir: Path) -> None:
-    """Private by default (§24.8): the DB and PDFs hold names and emails. Called at process start."""
+    """Private by default: the DB and PDFs hold names and emails. Called at process start."""
     os.umask(0o077)
     data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     certificates_dir.mkdir(mode=0o700, exist_ok=True)
@@ -109,7 +109,7 @@ class Storage:
         """The PDF bytes, or None if the file is missing, not a plain file inside the root, or damaged.
 
         Damaged = larger than any certificate the worker writes, or not framed by the PDF header and
-        end-of-file marker; such a file is reported like a missing one instead of served (audit F-15).
+        end-of-file marker; such a file is reported like a missing one instead of served.
         """
         path = self._safe_file(job_id, certificate_id)
         if path is None:

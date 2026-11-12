@@ -1,4 +1,4 @@
-"""Shared fixtures: fake clock, per-test data dir, app without embedded workers, synchronous drain."""
+"""Shared fixtures and helpers: fake clock, app without embedded workers, synchronous drain, ASGI drivers."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from certgen.config import Settings
 from certgen.main import create_app
@@ -25,9 +26,9 @@ from certgen.worker import Worker
 ROOT = Path(__file__).resolve().parent.parent
 START_MS = int(datetime(2026, 10, 11, 8, 0, tzinfo=UTC).timestamp() * 1000)
 JOBS = "/v1/certificate-jobs"
-# Host header sent by Starlette's TestClient; the app only serves allowed hosts (audit F-10).
+# The Host header Starlette's TestClient sends; the app only serves allowed hosts.
 TESTCLIENT_HOSTS = ("testserver",)
-# Every /v1 route needs a bearer token (audit F-12); tests use this one.
+# Every /v1 route needs a bearer token; the client fixture sends this one.
 TEST_API_TOKEN = "test-token-0123456789abcdef"
 AUTH_HEADERS = {"Authorization": f"Bearer {TEST_API_TOKEN}"}
 
@@ -35,7 +36,7 @@ Renderer = Callable[[CertificateData], bytes]
 
 
 class FakeClock:
-    """Epoch-ms clock that only moves when a test says so; lease boundaries are tested without sleeping."""
+    """Epoch-ms clock that only moves when advanced, so lease boundaries are tested without sleeping."""
 
     def __init__(self, start_ms: int = START_MS) -> None:
         self.now_ms = start_ms
@@ -82,8 +83,13 @@ def client(app: FastAPI) -> Iterator[TestClient]:
 
 
 @pytest.fixture
-def make_worker(app: FastAPI, client: TestClient, settings: Settings, fake_clock: FakeClock) -> Any:
-    """Build a Worker on the app's engines (the client fixture has run lifespan, so engines exist)."""
+def make_worker(
+    app: FastAPI,
+    client: TestClient,  # starts the lifespan, which creates the engines
+    settings: Settings,
+    fake_clock: FakeClock,
+) -> Any:
+    """Build a Worker on the app's engines."""
 
     def _make(renderer: Renderer = render_certificate, worker_id: str | None = None) -> Worker:
         return Worker(
@@ -133,7 +139,28 @@ def post_job(client: TestClient, payload: Any, **kwargs: Any) -> Any:
     return client.post(JOBS, json=payload, **kwargs)
 
 
-# --- Fault injection through the renderer parameter (§16.1) -------------------------------------
+def post_raw(client: TestClient, body: bytes, headers: dict[str, str] | None = None, path: str = JOBS) -> Any:
+    """POST raw bytes as application/json."""
+    return client.post(path, content=body, headers={"Content-Type": "application/json", **(headers or {})})
+
+
+def item_rows(app: FastAPI) -> list[Any]:
+    """Every items row, in row order, as mappings."""
+    with app.state.engines.read.connect() as conn:
+        return list(conn.execute(text("SELECT * FROM items ORDER BY row_index")).mappings())
+
+
+def job_count(app: FastAPI) -> int:
+    with app.state.engines.read.connect() as conn:
+        return int(conn.execute(text("SELECT COUNT(*) FROM jobs")).scalar_one())
+
+
+def only_job_id(app: FastAPI) -> str:
+    with app.state.engines.read.connect() as conn:
+        return str(conn.execute(text("SELECT id FROM jobs")).scalar_one())
+
+
+# --- Renderer fault injection -------------------------------------------------------------------
 
 
 def failing_for(names: set[str]) -> Renderer:
@@ -205,3 +232,46 @@ def wait_until(predicate: Callable[[], bool], timeout: float = 10.0, step: float
             return True
         time.sleep(step)
     return predicate()
+
+
+# --- ASGI drivers for middleware tests ----------------------------------------------------------
+
+Message = dict[str, Any]
+Receive = Callable[[], Awaitable[Message]]
+
+
+def http_scope(
+    method: str = "GET", path: str = "/", headers: list[tuple[bytes, bytes]] | None = None, **extra: Any
+) -> dict[str, Any]:
+    return {
+        "type": "http",
+        "method": method,
+        "path": path,
+        "headers": headers or [],
+        "query_string": b"",
+        **extra,
+    }
+
+
+async def empty_body() -> Message:
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+async def unreachable_app(_scope: Any, _receive: Any, _send: Any) -> None:
+    raise AssertionError("the request reached the wrapped app")
+
+
+async def asgi_call(
+    app: Any,
+    scope: dict[str, Any],
+    receive: Receive = empty_body,
+    send: Callable[[Message], Awaitable[None]] | None = None,
+) -> list[Message]:
+    """Run one request through an ASGI app and return the messages it sent."""
+    sent: list[Message] = []
+
+    async def collect(message: Message) -> None:
+        sent.append(message)
+
+    await app(scope, receive, send or collect)
+    return sent

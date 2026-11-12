@@ -1,21 +1,25 @@
-"""POST/GET job endpoints: creation, atomicity, IDs, status and progress (§6.3, §6.4, §24.4, §24.10)."""
+"""POST/GET job endpoints: creation, atomicity, IDs, status, progress, health and item listing."""
 
 from __future__ import annotations
 
 import json
 import re
+import sqlite3
+from dataclasses import replace
 from itertools import count
 from typing import Any
 
 import pytest
-from conftest import AUTH_HEADERS, JOBS, FakeClock, job_payload, post_job, recipient, wait_until
+from conftest import AUTH_HEADERS, JOBS, FakeClock, job_payload, post_job, post_raw, recipient, wait_until
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 
 from certgen import service
 from certgen.main import create_app
 from certgen.rendering import CertificateData, render_certificate
+from certgen.worker import Worker
 
 HEX32 = re.compile(r"^[0-9a-f]{32}$")
 
@@ -121,17 +125,17 @@ def test_original_request_is_stored_canonically(client: TestClient, app: FastAPI
         '  "certificate": {"title": "Python  for Data Engineering", "issuer": "Acme Academy",'
         ' "issued_on": "2026-10-01"} }'
     )
-    resp = client.post(JOBS, content=raw.encode(), headers={"Content-Type": "application/json"})
+    resp = post_raw(client, raw.encode())
     assert resp.status_code == 202
     job = _rows(app, "SELECT request_json, title FROM jobs")[0]
     item = _rows(app, "SELECT input_json, name, email FROM items")[0]
-    # Canonical form of the parsed body *before* normalization: sorted keys, compact, UTF-8 kept.
+    # Canonical form of the parsed body before normalization: sorted keys, compact, UTF-8 kept.
     assert job["request_json"] == json.dumps(
         json.loads(raw), sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     assert '"name":"  Zoë   Łukasz "' in job["request_json"]
     assert item["input_json"] == '{"email":" Zoe@Example.com ","name":"  Zoë   Łukasz "}'
-    # The working columns hold normalized values; the audit columns keep the original.
+    # The working columns hold normalized values; the request columns keep the original.
     assert job["title"] == "Python for Data Engineering"
     assert (item["name"], item["email"]) == ("Zoë Łukasz", "Zoe@Example.com")
     assert "request_json" not in resp.text and "input_json" not in resp.text
@@ -236,14 +240,9 @@ def test_healthz_ok_without_embedded_workers(client: TestClient) -> None:
 
 
 @pytest.mark.req("R7")
-# The crashes are deliberate; pytest would otherwise report each dead thread as a warning.
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
 def test_healthz_degraded(settings: Any, fake_clock: FakeClock, monkeypatch: pytest.MonkeyPatch) -> None:
-    from dataclasses import replace
-
-    from certgen.worker import Worker
-
-    def crash(self: Worker, stop: Any) -> None:
+    def crash(_self: Worker, _stop: Any) -> None:
         raise SystemExit("worker thread crashed")  # BaseException: escapes the loop's except Exception
 
     monkeypatch.setattr(Worker, "run_forever", crash)
@@ -261,11 +260,7 @@ def test_healthz_degraded(settings: Any, fake_clock: FakeClock, monkeypatch: pyt
 
 
 @pytest.mark.req("R7")
-def test_healthz_db_failure_503(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
-    import sqlite3
-
-    from sqlalchemy.exc import OperationalError
-
+def test_healthz_db_failure_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def broken(*_args: Any) -> None:
         raise OperationalError("SELECT 1", {}, sqlite3.OperationalError("unable to open database file"))
 
@@ -301,7 +296,7 @@ def test_items_keyset_pagination(client: TestClient) -> None:
 
 
 @pytest.mark.req("R10")
-def test_items_status_filter(client: TestClient, drain: Any, make_worker: Any) -> None:
+def test_items_status_filter(client: TestClient, make_worker: Any) -> None:
     rows = [recipient(0), recipient(1, email="bad"), recipient(2), recipient(3, name="")]
     job_id = post_job(client, job_payload(recipients=rows)).json()["id"]
     make_worker().run_once()  # row 0 succeeds, row 2 stays pending

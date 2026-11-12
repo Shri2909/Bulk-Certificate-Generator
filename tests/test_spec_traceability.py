@@ -1,8 +1,4 @@
-"""Fails the build if any requirement in docs/REQUIREMENTS.md has no test, or a test cites an unknown ID.
-
-Static AST scan rather than a pytest collection hook, so the check is independent of which tests
-were selected with -k / a file path: running one file can't make coverage look complete.
-"""
+"""Every requirement in docs/REQUIREMENTS.md has a test and no test cites an unknown one (static AST scan)."""
 
 from __future__ import annotations
 
@@ -34,27 +30,24 @@ def _is_req_marker(func: ast.expr) -> bool:
     )
 
 
-def req_markers() -> list[tuple[str, int, list[object]]]:
+def req_markers() -> list[tuple[str, int, list[ast.expr]]]:
     """Every @pytest.mark.req(...) call in the tests: (file name, line, positional args)."""
     found = []
     for path in sorted(TESTS_DIR.rglob("test_*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and _is_req_marker(node.func):
-                found.append((path.name, node.lineno, list(node.args)))
+                found.append((path.name, node.lineno, node.args))
     return found
 
 
 def covered_requirements() -> dict[str, list[str]]:
     """Map requirement ID -> test files citing it."""
     covered: dict[str, list[str]] = {}
-    for path in sorted(TESTS_DIR.rglob("test_*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and _is_req_marker(node.func):
-                for arg in node.args:
-                    if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
-                        covered.setdefault(arg.value, []).append(path.name)
+    for name, _line, args in req_markers():
+        for arg in args:
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                covered.setdefault(arg.value, []).append(name)
     return covered
 
 
@@ -74,7 +67,7 @@ def test_no_test_cites_unknown_requirement() -> None:
 
 
 def test_no_empty_or_non_literal_markers() -> None:
-    # §24.16: an empty marker, or one whose IDs are not string literals, declares nothing.
+    # An empty marker, or one whose IDs are not string literals, declares nothing.
     bad = [
         f"{name}:{line}"
         for name, line, args in req_markers()
@@ -84,7 +77,7 @@ def test_no_empty_or_non_literal_markers() -> None:
 
 
 def test_every_requirement_has_a_heading() -> None:
-    # §24.16: REQUIREMENTS.md has one "### R<n> — <obligation>" heading per requirement row.
+    # REQUIREMENTS.md has one "### R<n> — <obligation>" heading per requirement row.
     text = REQUIREMENTS_FILE.read_text(encoding="utf-8")
     headings = set(re.findall(r"^### (R\d+) — \S", text, flags=re.MULTILINE))
     missing = sorted(declared_requirements() - headings, key=lambda r: int(r[1:]))

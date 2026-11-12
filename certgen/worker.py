@@ -1,4 +1,4 @@
-"""Background worker: claim one item, render outside any transaction, publish with a fenced update (§7).
+"""Background worker: claim one item, render outside any transaction, publish with a fenced update.
 
 Guarantee: at-least-once execution with an idempotent effect. A crashed worker's item is reclaimed
 after its lease expires and rendered again; the same item always yields the same file at the same
@@ -44,7 +44,7 @@ WORKER_LOST_JSON = dump_errors(
     ]
 )
 
-# T8: a lease expired on the last allowed attempt. Repeated crashes on one item end here.
+# A lease expired on the last allowed attempt: repeated crashes on one item end here.
 RETIRE_SQL = (
     "UPDATE items SET status = 'failed', errors = :worker_lost, lease_owner = NULL, lease_token = NULL, "
     "lease_expires_at = NULL, completed_at = :now "
@@ -63,8 +63,8 @@ CLAIM_SQL = (
     "lease_expires_at = :now + :lease_ms, attempts = attempts + 1 "
     "WHERE id = :id RETURNING id, attempts"
 )
-# T5/T6/T7 share one fence: the claim's token. A reclaim (T4) or retirement (T8) replaces or clears
-# the token, so a worker that lost its lease matches 0 rows and changes nothing.
+# Outcome updates share one fence: the claim's token. A reclaim or retirement replaces or clears it,
+# so a worker that lost its lease matches 0 rows and changes nothing.
 SUCCEED_SQL = (
     "UPDATE items SET status = 'succeeded', lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, "
     "errors = NULL, available_at = NULL, completed_at = :now "
@@ -90,7 +90,7 @@ class Claim:
 
 
 def retire_exhausted(conn: Connection, now: int, max_attempts: int) -> int:
-    """Run T8 inside the caller's write transaction; returns the number of items retired."""
+    """Fail items whose lease expired on their last attempt, inside the caller's write transaction."""
     result = conn.execute(
         text(RETIRE_SQL), {"worker_lost": WORKER_LOST_JSON, "now": now, "max_attempts": max_attempts}
     )
@@ -100,7 +100,7 @@ def retire_exhausted(conn: Connection, now: int, max_attempts: int) -> int:
 
 
 def with_slow_render(renderer: Renderer, delay_ms: int) -> Renderer:
-    """Test-only (CERTGEN_TEST_SLOW_RENDER_MS): widens the render window so a kill lands mid-item."""
+    """Test-only: widens the render window so a kill lands mid-item."""
     if delay_ms <= 0:
         return renderer
 
@@ -140,7 +140,7 @@ class Worker:
                 stop.wait(self.settings.poll_interval_seconds)
 
     def run_until_idle(self) -> list[int]:
-        """Process until nothing is claimable. Used by tests and the benchmark: no sleeping."""
+        """Process until nothing is claimable, without sleeping (tests and benchmark)."""
         processed = []
         while (item_id := self.run_once()) is not None:
             processed.append(item_id)
@@ -160,7 +160,7 @@ class Worker:
             if len(pdf) > MAX_PDF_BYTES:
                 raise ValueError(f"rendered PDF is {len(pdf)} bytes; limit is {MAX_PDF_BYTES}")
             self.storage.save_atomic(data.job_id, data.certificate_id, pdf)
-        except Exception as exc:  # per item: one bad certificate never stops the others (R9)
+        except Exception as exc:  # one bad certificate never stops the others
             self.record_failure(claim, exc)
             return
         self.record_success(claim)
@@ -191,7 +191,7 @@ class Worker:
         return Claim(item_id=row.id, token=token, attempts=row.attempts)
 
     def load_certificate_data(self, item_id: int) -> CertificateData:
-        """Render inputs come only from the DB rows, never from this process's settings (§10.4)."""
+        """Render inputs come only from the DB rows, never from this process's settings."""
         with self.engines.read.begin() as conn:
             row = (
                 conn.execute(
@@ -215,7 +215,6 @@ class Worker:
         )
 
     def record_success(self, claim: Claim) -> None:
-        """T5."""
         with self.engines.write.begin() as conn:
             result = conn.execute(
                 text(SUCCEED_SQL), {"now": self.clock(), "id": claim.item_id, "token": claim.token}
@@ -223,7 +222,7 @@ class Worker:
         self._check_fence(claim, result.rowcount)
 
     def record_failure(self, claim: Claim, exc: Exception) -> None:
-        """T6 (retry after a delay) or T7 (attempts exhausted). Details go to the log, never the API."""
+        """Retry after a delay, or fail once attempts are exhausted. Details go to the log, never the API."""
         # Exception text may quote recipient data, so the log gets the type and the stack frames only.
         log.error(
             "generation_failed item_id=%s attempt=%s worker_id=%s error=%s\n%s",
@@ -251,7 +250,7 @@ class Worker:
             log.warning("lease_lost item_id=%s worker_id=%s", claim.item_id, self.worker_id)
 
 
-# --- Embedded workers and their monitor (§24.2) -------------------------------------------------
+# --- Embedded workers and their monitor ---------------------------------------------------------
 
 RESTART_BACKOFF_SECONDS = (0.25, 0.5, 1.0)
 RESTART_WINDOW_SECONDS = 60.0
@@ -373,8 +372,7 @@ def main() -> None:
         log.info("worker_stopping signal=%s", signum)
         stop.set()
 
-    # Before any database work: a SIGTERM during startup must stop the loop, not kill the process
-    # with the default action (audit N-01).
+    # Before any database work: a SIGTERM during startup must stop the loop, not kill the process.
     signal.signal(signal.SIGINT, request_stop)
     signal.signal(signal.SIGTERM, request_stop)
     check_sqlite_version()

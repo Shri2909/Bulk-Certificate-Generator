@@ -1,4 +1,4 @@
-"""Pydantic models: the JSON shape of requests and responses only (§6). Rules live in validation.py."""
+"""Pydantic models: the JSON shape of requests and responses only. Rules live in validation.py."""
 
 from __future__ import annotations
 
@@ -19,8 +19,7 @@ class CreateJobRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     certificate: CertificateIn
-    # Rows stay plain dicts so a row with bad field values becomes a rejected item, not a whole-request
-    # 422. A row that is not a JSON object at all is still a structural 422 (§6.3).
+    # Plain dicts: a row with bad values becomes a rejected item, not a whole-request 422.
     recipients: list[dict[str, Any]]
 
 
@@ -58,7 +57,7 @@ class JobResource(BaseModel):
 
 
 class JobCreated(JobResource):
-    # Flat row errors of rejected rows; dicts because `duplicate_of_row_index` appears only on duplicates.
+    # Dicts because `duplicate_of_row_index` appears only on duplicates.
     errors: list[dict[str, Any]]
 
 
@@ -94,7 +93,7 @@ class DryRunCounts(BaseModel):
 
 
 class DryRunReport(BaseModel):
-    """D3: what a real submission would do; nothing is stored."""
+    """What a real submission would do; nothing is stored."""
 
     dry_run: bool
     would_create_job: bool

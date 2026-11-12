@@ -1,7 +1,6 @@
-"""The only async code in certgen (§3): pure ASGI middleware and the lifespan adapter.
+"""The only async code in certgen: pure ASGI middleware and the lifespan adapter.
 
-Everything else is synchronous so FastAPI runs it in its threadpool and CPU-heavy validation or
-SQLite waits never stall the event loop.
+Everything else is synchronous, so CPU-heavy validation and SQLite waits never stall the event loop.
 """
 
 from __future__ import annotations
@@ -36,12 +35,7 @@ def async_lifespan(sync_lifespan: SyncLifespan) -> Callable[[Any], Any]:
 
 
 class HostAllowlistMiddleware:
-    """Refuse requests whose Host header is not an allowed name, with 400 INVALID_HOST.
-
-    The API has no authentication and trusts its loopback bind. A web page can defeat that with DNS
-    rebinding (its own name resolving to 127.0.0.1), but the browser then sends that name as Host,
-    which this check rejects (audit F-10).
-    """
+    """Refuse requests whose Host is not an allowed name, with 400 INVALID_HOST (DNS-rebinding defence)."""
 
     def __init__(self, app: ASGIApp, allowed_hosts: frozenset[str]) -> None:
         self.app = app
@@ -75,10 +69,9 @@ def _strip_port(host: str) -> str:
 
 
 class TokenAuthMiddleware:
-    """Require `Authorization: Bearer <token>` on routes under `prefix`, with 401 UNAUTHORIZED (audit F-12).
+    """Require `Authorization: Bearer <token>` on routes under `prefix`, with 401 UNAUTHORIZED.
 
-    Runs before any request slot is taken or body is buffered, so unauthenticated clients cost almost
-    nothing. A valid token's client id is put in the request state; it scopes Idempotency-Keys.
+    A valid token's client id is put in the request state; it scopes Idempotency-Keys.
     """
 
     def __init__(self, app: ASGIApp, store: TokenStore, prefix: str) -> None:
@@ -110,12 +103,10 @@ class _ClientTooSlow(Exception):
 
 
 class SendDeadlineMiddleware:
-    """Abort a response that the client stops reading: every send must finish within the deadline.
+    """Abort a response the client stops reading: every send must finish within the deadline.
 
-    A send blocks while the client's receive window is full. Without a deadline, a client that never
-    reads a large download held its request slot forever, and 64 of them locked everyone out.
-    Clients that keep reading, however slowly, are unaffected (audit, round 2). The server then closes
-    the connection, which frees the slot (StreamingResponse re-raises the error out of its task group).
+    Without it, clients that never read a large download would hold their request slots forever.
+    Slow but steady readers are unaffected.
     """
 
     def __init__(self, app: ASGIApp, send_timeout_seconds: float) -> None:
@@ -140,14 +131,10 @@ class SendDeadlineMiddleware:
 
 
 class ConcurrencyLimitMiddleware:
-    """At most `max_requests` HTTP requests in progress, and at most `max_per_client` of them for one API
-    token; more get 503 SERVER_BUSY (problem+json).
+    """At most `max_requests` requests in progress, `max_per_client` per API token; more get 503 SERVER_BUSY.
 
-    Counts requests, not connections: a TCP connection that never completes its request headers holds
-    no slot, so idle sockets cannot lock other clients out (audit F-11). A request whose body is still
-    arriving does hold one, which keeps the memory spent on buffered bodies bounded. The per-token share
-    means one token holder cannot take every slot; requests without a token (/healthz) count only
-    towards the total (audit R2-O1).
+    Counts requests, not connections, so idle sockets hold no slot; a request still uploading does,
+    which bounds buffered-body memory. Requests without a token (/healthz) count only towards the total.
     """
 
     def __init__(self, app: ASGIApp, max_requests: int, max_per_client: int | None = None) -> None:
@@ -193,7 +180,7 @@ class ConcurrencyLimitMiddleware:
 
 
 class NoStoreMiddleware:
-    """Adds Cache-Control: no-store to every response (§6.1): job state changes; certificates are private."""
+    """Adds Cache-Control: no-store to every response: job state changes and certificates are private."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -214,12 +201,10 @@ class NoStoreMiddleware:
 
 
 class BodySizeLimitMiddleware:
-    """Reject bodies over `max_body_bytes` with 413 before anything parses them (§7.1 step 1).
+    """Reject bodies over `max_body_bytes` with 413, and bodies that arrive too slowly with 408.
 
-    Content-Length is checked first; chunked bodies are counted while buffering, so a client cannot
-    bypass the limit by omitting the header. The whole body must arrive within `body_timeout_seconds`,
-    else 408: a client trickling its upload cannot hold its request slot indefinitely (audit P8-N2).
-    The buffered body is then replayed to the app.
+    Content-Length is checked first; chunked bodies are counted while buffering. The buffered body
+    is then replayed to the app.
     """
 
     def __init__(self, app: ASGIApp, max_body_bytes: int, body_timeout_seconds: float) -> None:
@@ -283,11 +268,10 @@ class BodySizeLimitMiddleware:
 
 
 class SubmissionLimitMiddleware:
-    """At most `max_submissions` job submissions (POST /v1/certificate-jobs, dry runs included) at once.
+    """At most `max_submissions` job submissions (dry runs included) at once; excess ones get 503 SERVER_BUSY.
 
-    A submission is the expensive request: its body is buffered, parsed and validated (seconds of CPU
-    and up to ~1 GB of memory at the body limit). Excess ones get 503 SERVER_BUSY before their body is
-    read, so polling and downloads stay responsive (audit P8-N2).
+    Submissions are the expensive requests (seconds of CPU, up to ~1 GB of memory at the body limit);
+    refusing them before their body is read keeps polling and downloads responsive.
     """
 
     def __init__(self, app: ASGIApp, path: str, max_submissions: int) -> None:

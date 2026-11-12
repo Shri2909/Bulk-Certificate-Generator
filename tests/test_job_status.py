@@ -1,4 +1,4 @@
-"""Job status derived from item counts (§5.2)."""
+"""Job status and progress derived from item counts."""
 
 from __future__ import annotations
 

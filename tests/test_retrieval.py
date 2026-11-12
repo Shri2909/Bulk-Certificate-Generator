@@ -1,4 +1,4 @@
-"""Certificate downloads and the job archive (§6.6, §6.7, §11.3)."""
+"""Certificate downloads and the job archive."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import FakeClock, failing_for, job_payload, post_job, recipient
+from conftest import FakeClock, failing_for, job_payload, only_job_id, post_job, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -28,11 +28,6 @@ def _certificate_ids(app: FastAPI) -> list[str]:
             .scalars()
             .all()
         )
-
-
-def _job_id(app: FastAPI) -> str:
-    with app.state.engines.read.connect() as conn:
-        return str(conn.execute(text("SELECT id FROM jobs")).scalar_one())
 
 
 @pytest.mark.req("R8", "R19")
@@ -57,7 +52,7 @@ def test_symlinked_certificate_refused(
     post_job(client, job_payload(n=1))
     drain()
     cert = _certificate_ids(app)[0]
-    pdf = app.state.storage.path_for(_job_id(app), cert)
+    pdf = app.state.storage.path_for(only_job_id(app), cert)
     secret = tmp_path / "outside" / f"{cert}.pdf"
     secret.parent.mkdir()
     secret.write_bytes(b"%PDF-1.4 secret bytes outside the data dir")
@@ -121,7 +116,7 @@ def test_missing_file_410(client: TestClient, app: FastAPI, drain: Any) -> None:
     post_job(client, job_payload(n=1))
     drain()
     cert = _certificate_ids(app)[0]
-    app.state.storage.path_for(_job_id(app), cert).unlink()
+    app.state.storage.path_for(only_job_id(app), cert).unlink()
     resp = client.get(f"/v1/certificates/{cert}")
     assert resp.status_code == 410
     assert resp.json()["code"] == "CERTIFICATE_FILE_MISSING"
@@ -197,7 +192,7 @@ def test_manifest_neutralizes_formula_cells(client: TestClient, drain: Any) -> N
     manifest = _manifest(_archive(client, job_id)[1])
     assert [m["name"] for m in manifest[:6]] == ["'" + n for n in names[:5]] + ["Plain Name"]
     assert manifest[6]["email"] == "'-dash@example.com"
-    # The full-width row is rejected (the font lacks U+FF1D), yet its stored name is still guarded.
+    # The full-width row is rejected (the font lacks U+FF1D), yet its stored name is still neutralized.
     assert [m["status"] for m in manifest] == ["succeeded"] * 4 + ["rejected", "succeeded", "succeeded"]
 
 
@@ -217,7 +212,7 @@ def test_archive_marks_missing_file(client: TestClient, app: FastAPI, drain: Any
 
 @pytest.mark.req("R19")
 def test_archive_while_running_is_snapshot(
-    client: TestClient, app: FastAPI, make_worker: Any, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, make_worker: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     job_id = post_job(client, job_payload(n=3)).json()["id"]
     worker = make_worker()

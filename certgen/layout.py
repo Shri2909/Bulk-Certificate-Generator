@@ -1,4 +1,4 @@
-"""Pure text fitting shared by validation and rendering (§10.3).
+"""Pure text fitting shared by validation and rendering.
 
 Validation calls the same function the renderer uses, so a row is accepted only if it will be drawn
 inside its box, and the renderer never has to truncate or overflow.
@@ -78,7 +78,7 @@ def _wrap(units: list[str], widths: list[float], space: float, limit: float) -> 
 
 
 def baselines(fit: Fit, center_y: float) -> list[float]:
-    """Baseline y of each line so the block is vertically centered on center_y (§10.3)."""
+    """Baseline y of each line so the block is vertically centered on center_y."""
     leading = LINE_HEIGHT * fit.size
     n = len(fit.lines)
     return [center_y + (n - 1) * leading / 2 - i * leading - BASELINE_DROP * fit.size for i in range(n)]

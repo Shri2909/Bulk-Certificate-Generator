@@ -1,4 +1,4 @@
-"""Schema (§4, §24.4). CHECK constraints make invalid row shapes impossible rather than merely untested."""
+"""Schema. CHECK constraints make invalid row shapes impossible rather than merely untested."""
 
 from __future__ import annotations
 
@@ -25,7 +25,6 @@ jobs = Table(
     Column("issued_on", Text, nullable=False),
     # Snapshots taken at creation, so changing the deployment's settings never alters accepted jobs.
     Column("print_email", Integer, CheckConstraint("print_email IN (0, 1)"), nullable=False),
-    Column("verify_base_url", Text, nullable=False),
     Column("idempotency_key", Text, unique=True),
     Column("request_hash", Text),
     Column("request_json", Text, CheckConstraint("json_valid(request_json)"), nullable=False),

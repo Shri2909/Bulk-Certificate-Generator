@@ -1,4 +1,4 @@
-"""Crash recovery: leases, reclaim, fencing tokens, retirement, and real killed processes (§7.3, §8)."""
+"""Crash recovery: lease reclaim, fencing tokens, retirement of exhausted items, and killed processes."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from conftest import (
     TESTCLIENT_HOSTS,
     FakeClock,
     db_rows,
+    item_rows,
     job_payload,
     post_job,
     spawn_worker,
@@ -23,18 +24,12 @@ from conftest import (
 )
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 
 from certgen.clock import system_clock
 from certgen.config import Settings
 from certgen.main import create_app
 
 POSIX_ONLY = pytest.mark.skipif(os.name != "posix", reason="requires POSIX signals")
-
-
-def items(app: FastAPI) -> list[Any]:
-    with app.state.engines.read.connect() as conn:
-        return list(conn.execute(text("SELECT * FROM items ORDER BY row_index")).mappings())
 
 
 @pytest.mark.req("R6", "R9")
@@ -51,7 +46,7 @@ def test_expired_lease_is_reclaimed(
     assert rescuer.run_once() is None
     fake_clock.advance(1)
     assert rescuer.run_once() is not None
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["attempts"], row["lease_owner"]) == ("succeeded", 2, None)
 
 
@@ -60,8 +55,7 @@ def test_expired_lease_is_reclaimed(
 def test_stale_worker_done_write_rejected_by_fencing(
     client: TestClient, app: FastAPI, make_worker: Any, fake_clock: FakeClock, ids: tuple[str, str]
 ) -> None:
-    # A worker id is a log label, not an identity: a restarted process may reuse one. Only the
-    # per-claim token decides who may finish an item.
+    # A worker id is only a log label (a restarted process may reuse one); the claim token decides.
     post_job(client, job_payload(n=1))
     stale, current = make_worker(worker_id=ids[0]), make_worker(worker_id=ids[1])
     old_claim = stale.claim_next()
@@ -71,10 +65,10 @@ def test_stale_worker_done_write_rejected_by_fencing(
     assert old_claim.item_id == new_claim.item_id and old_claim.token != new_claim.token
     stale.record_success(old_claim)  # late completion after losing the lease
     stale.record_failure(old_claim, RuntimeError("late"))
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["lease_token"], row["attempts"]) == ("processing", new_claim.token, 2)
     current.process(new_claim)
-    assert items(app)[0]["status"] == "succeeded"
+    assert item_rows(app)[0]["status"] == "succeeded"
 
 
 @pytest.mark.req("R9")
@@ -93,10 +87,10 @@ def test_same_worker_reclaim_is_fenced(
     assert first is not None and second is not None and first.token != second.token
     worker.record_success(first)
     assert "lease_lost" in caplog.text
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["lease_token"]) == ("processing", second.token)
     worker.record_success(second)
-    assert items(app)[0]["status"] == "succeeded"
+    assert item_rows(app)[0]["status"] == "succeeded"
 
 
 @pytest.mark.req("R9", "R18")
@@ -110,7 +104,7 @@ def test_crash_loop_ends_failed_after_max_attempts(
         assert claim is not None and claim.attempts == attempt
         fake_clock.advance(30_001)
     assert worker.claim_next() is None  # the claim's retire step ends the item instead
-    row = items(app)[0]
+    row = item_rows(app)[0]
     assert (row["status"], row["attempts"], row["lease_token"]) == ("failed", 3, None)
     assert json.loads(row["errors"]) == [
         {"field": None, "code": "WORKER_LOST", "message": "The worker processing this certificate stopped."}

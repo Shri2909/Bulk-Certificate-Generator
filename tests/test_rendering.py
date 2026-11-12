@@ -1,4 +1,4 @@
-"""The single predefined template (§10): content, Unicode, layout limits and byte determinism."""
+"""The single predefined template: content, Unicode, layout limits and byte determinism."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from conftest import (
     AUTH_HEADERS,
+    ROOT,
     TEST_API_TOKEN,
     TESTCLIENT_HOSTS,
     FakeClock,
@@ -30,8 +31,8 @@ from sqlalchemy import text
 from certgen.config import Settings
 from certgen.main import create_app
 from certgen.rendering import CertificateData, render_certificate
+from certgen.worker import Worker
 
-ROOT = Path(__file__).resolve().parent.parent
 NAME_120 = (
     "Quintanilla Wadsworth Anna Quintanilla Wolfgang Hohenberg Montgomery Wadsworth "
     "Konstantin Whitmore Oluwaseun Worthington"
@@ -54,7 +55,7 @@ def pdf_text(data: bytes) -> str:
 
 
 def flat(text_value: str) -> str:
-    """Line breaks from wrapping become spaces, so wrapped fields can be searched as one string."""
+    """Collapse wrapping line breaks so a wrapped field can be searched as one string."""
     return " ".join(text_value.split())
 
 
@@ -108,8 +109,6 @@ def test_email_printed_by_default_and_opt_out(tmp_path: Path, fake_clock: FakeCl
         with TestClient(app, headers=AUTH_HEADERS) as client:
             job = post_job(client, job_payload(recipients=[recipient(0, email="opt@example.com")])).json()
             assert job["print_email"] is (print_email is not False)
-            from certgen.worker import Worker
-
             Worker(
                 app.state.engines, app.state.storage, settings, fake_clock, render_certificate
             ).run_until_idle()
@@ -170,7 +169,7 @@ def test_unfittable_text_raises_instead_of_overflowing() -> None:
 
 
 @pytest.mark.req("R16")
-def test_render_is_byte_deterministic(tmp_path: Path) -> None:
+def test_render_is_byte_deterministic() -> None:
     first = render_certificate(SAMPLE)
     assert render_certificate(SAMPLE) == first
     assert render_certificate(replace(SAMPLE, name="Other")) != first

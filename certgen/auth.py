@@ -1,8 +1,6 @@
-"""API tokens (audit F-12). Every /v1 route needs `Authorization: Bearer <token>`.
+"""API tokens: from CERTGEN_API_TOKENS, or generated on first start into `{data_dir}/api-token` (0600).
 
-Tokens come from CERTGEN_API_TOKENS, or one is generated on first start into `{data_dir}/api-token`
-(mode 0600) and reused afterwards. Only SHA-256 digests are kept in memory; a request's client id
-(the first 16 hex digits of its token's digest) scopes its Idempotency-Keys.
+Only SHA-256 digests are kept in memory; a client id is the first 16 hex digits of a token's digest.
 """
 
 from __future__ import annotations

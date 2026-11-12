@@ -1,4 +1,4 @@
-"""D3: ?dry_run=true validates exactly like a real submission and stores nothing (§6.3, §7.1)."""
+"""?dry_run=true validates exactly like a real submission and stores nothing."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from conftest import JOBS, certificate_info, job_payload, post_job, recipient
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+
+from certgen import service
 
 ROWS = [
     recipient(0),
@@ -84,9 +86,7 @@ def test_dry_run_false_and_invalid_values(client: TestClient) -> None:
 
 
 @pytest.mark.req("R2")
-def test_dry_run_bypasses_capacity(client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
-    from certgen import service
-
-    monkeypatch.setattr(service, "count_active_items", lambda conn: 10**9)  # queue "full"
+def test_dry_run_bypasses_capacity(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "count_active_items", lambda _conn: 10**9)  # queue "full"
     assert post_job(client, job_payload(n=1)).status_code == 503
     assert client.post(JOBS, params={"dry_run": "true"}, json=job_payload(n=1)).status_code == 200

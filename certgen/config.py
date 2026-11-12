@@ -1,36 +1,30 @@
-"""Settings: the only place that reads environment variables (§15, §24.1, §24.6).
+"""Settings: the only place that reads environment variables.
 
-Every value is validated when a Settings object is built, whether from the environment or directly
-in tests, so an invalid deployment fails at startup with the variable named instead of misbehaving later.
+Every value is validated when a Settings object is built, so an invalid deployment fails at startup
+with the variable named.
 """
 
 from __future__ import annotations
 
 import ipaddress
-import logging
 import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
-from urllib.parse import urlsplit
 
-# Worst legal row: a 120-character name sent decomposed (NFD; up to 4 code points per accepted
-# character) with every code point \uXXXX-escaped = 2,880 B, a 254-character email fully escaped =
-# 1,524 B, keys and punctuation escaped = 71 B: 4,475 B (amendment A-12, audit F-09). 4,500 per row
-# plus 64 KiB of envelope means a request within field limits is never 413'd (§12).
+# Worst legal row (decomposed, fully \uXXXX-escaped 120-character name and 254-character email) is
+# 4,475 B; with 64 KiB of envelope, a request within field limits is never 413'd.
 BODY_BYTES_PER_RECIPIENT = 4_500
 BODY_BYTES_ENVELOPE = 65_536
-ARCHIVE_CONCURRENCY = 2  # archive builds per process (§6.7); fixed, not an env var
-# Requests in progress per process (§24.12, amended A-08): counted in the app, not as uvicorn connections.
-MAX_CONCURRENT_REQUESTS = 64
-# A request body must arrive completely within this time, else 408 (audit P8-N2).
+ARCHIVE_CONCURRENCY = 2  # archive builds per process; fixed, not an env var
+MAX_CONCURRENT_REQUESTS = 64  # requests in progress per process
+# A request body must arrive completely within this time, else 408.
 BODY_TIMEOUT_SECONDS = 30
 # Every piece of a response must be accepted by the client within this time, else it is aborted.
 SEND_TIMEOUT_SECONDS = 30
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR")
-MAX_BASE_URL_LENGTH = 100
 
 ENV_NAMES = {
     "data_dir": "CERTGEN_DATA_DIR",
@@ -45,7 +39,6 @@ ENV_NAMES = {
     "max_recipients": "CERTGEN_MAX_RECIPIENTS",
     "max_active_items": "CERTGEN_MAX_ACTIVE_ITEMS",
     "print_email": "CERTGEN_PRINT_EMAIL_ON_CERTIFICATE",
-    "public_base_url": "CERTGEN_PUBLIC_BASE_URL",
     "log_level": "CERTGEN_LOG_LEVEL",
     "test_slow_render_ms": "CERTGEN_TEST_SLOW_RENDER_MS",
     "allowed_hosts": "CERTGEN_ALLOWED_HOSTS",
@@ -59,7 +52,7 @@ HOSTNAME = re.compile(
     r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*"
 )
 
-# Inclusive numeric ranges from §15 (max_active_items' floor depends on max_recipients; see below).
+# Inclusive numeric ranges (max_active_items' floor also depends on max_recipients; see __post_init__).
 RANGES: dict[str, tuple[float, float]] = {
     "port": (1, 65_535),
     "worker_threads": (1, 16),
@@ -90,18 +83,17 @@ class Settings:
     max_recipients: int = 10_000
     max_active_items: int = 50_000
     print_email: bool = True
-    public_base_url: str = "http://localhost:8000"
     log_level: str = "INFO"
     test_slow_render_ms: int = 0
-    # Host header names accepted in addition to the loopback names (DNS-rebinding defence, audit F-10).
+    # Host header names accepted in addition to the loopback names (DNS-rebinding defence).
     allowed_hosts: tuple[str, ...] = ()
-    # New jobs and retries are refused below this much free disk on the data dir; 0 disables (audit P8-N1).
+    # New jobs and retries are refused below this much free disk on the data dir; 0 disables.
     min_free_disk_mb: int = 1024
-    # Job submissions (incl. dry runs) parsed and validated at once per process (audit P8-N2).
+    # Job submissions (incl. dry runs) parsed and validated at once per process.
     max_concurrent_submissions: int = 2
-    # Bearer tokens accepted on /v1 routes; empty = use (or create) {data_dir}/api-token (audit F-12).
+    # Bearer tokens accepted on /v1 routes; empty = use (or create) {data_dir}/api-token.
     api_tokens: tuple[str, ...] = ()
-    # Requests in progress per API token, of the 64 per process, so one token cannot hold them all (R2-O1).
+    # Requests in progress per API token, so one token cannot hold every slot.
     max_requests_per_client: int = 32
 
     def __post_init__(self) -> None:
@@ -115,7 +107,7 @@ class Settings:
                 f"CERTGEN_MAX_RECIPIENTS ({self.max_recipients}); else a maximal request is never admitted"
             )
         if self.test_slow_render_ms >= self.lease_seconds * 1000:
-            # Every render would outlive its lease and end as WORKER_LOST (audit F-13).
+            # Every render would outlive its lease and end as WORKER_LOST.
             raise ValueError(
                 f"CERTGEN_TEST_SLOW_RENDER_MS ({self.test_slow_render_ms}) must be shorter than "
                 f"CERTGEN_LEASE_SECONDS ({self.lease_seconds} s)"
@@ -128,11 +120,10 @@ class Settings:
             raise ValueError(
                 f"CERTGEN_LOG_LEVEL must be one of {', '.join(LOG_LEVELS)}, got {self.log_level!r}"
             )
-        # Frozen dataclass: normalized values are written once here, never mutated afterwards.
-        # The data dir is resolved once so later chdir calls or relative paths cannot move it (§24.8).
+        # Frozen dataclass: normalized values are written once here. The data dir is resolved once so
+        # a later chdir cannot move it.
         object.__setattr__(self, "data_dir", Path(self.data_dir).resolve())
         object.__setattr__(self, "log_level", self.log_level.upper())
-        object.__setattr__(self, "public_base_url", _validate_base_url(self.public_base_url))
         object.__setattr__(self, "allowed_hosts", tuple(_validate_host(h) for h in self.allowed_hosts))
         object.__setattr__(self, "api_tokens", tuple(validate_token(t) for t in self.api_tokens))
 
@@ -168,10 +159,6 @@ class Settings:
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> Settings:
         env = os.environ if environ is None else environ
-        if environ is None and ENV_NAMES["public_base_url"] not in env:
-            logging.getLogger("certgen.config").warning(
-                "CERTGEN_PUBLIC_BASE_URL is not set; certificate links will use http://localhost:8000"
-            )
         kwargs: dict[str, object] = {}
         for field in fields(cls):
             raw = env.get(ENV_NAMES[field.name])
@@ -229,28 +216,3 @@ def _validate_host(value: str) -> str:
             var = ENV_NAMES["allowed_hosts"]
             raise ValueError(f"{var} must list host names or IP addresses, got {value!r}") from None
     return host
-
-
-def _validate_base_url(value: str) -> str:
-    """§24.6: output-only URL printed on certificates; never fetched, so only its shape matters."""
-    var = ENV_NAMES["public_base_url"]
-    url = value[:-1] if value.endswith("/") else value
-    if not url.isascii() or any(not ("!" <= ch <= "~") for ch in url):
-        raise ValueError(f"{var} must be printable ASCII without spaces")
-    if len(url) > MAX_BASE_URL_LENGTH:
-        raise ValueError(f"{var} must be at most {MAX_BASE_URL_LENGTH} characters")
-    if "?" in url or "#" in url:
-        raise ValueError(f"{var} must not contain a query or fragment")
-    parts = urlsplit(url)
-    scheme = parts.scheme.lower()
-    if scheme not in ("http", "https") or not parts.hostname:
-        raise ValueError(f"{var} must be an absolute http(s) URL with a host")
-    if "@" in parts.netloc:
-        raise ValueError(f"{var} must not contain user information")
-    try:
-        parts.port  # noqa: B018 - property access validates the port number
-    except ValueError:
-        raise ValueError(f"{var} has an invalid port") from None
-    if scheme == "http" and parts.hostname not in LOOPBACK_HOSTS:
-        raise ValueError(f"{var} must use https for non-loopback hosts")
-    return url

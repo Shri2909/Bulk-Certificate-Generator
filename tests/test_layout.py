@@ -1,4 +1,4 @@
-"""Text fitting shared by validation and rendering (§10.3), measured with the real vendored font metrics."""
+"""Text fitting shared by validation and rendering, measured with the real vendored font metrics."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pytest
 from certgen.fonts import FONT_REGULAR, SUPPORTED_CHARS
 from certgen.layout import EMAIL, ISSUER, MAX_WIDTH, NAME, TITLE, Block, Fit, baselines, fit_text
 
-# Strings of the lengths named in §10.3, chosen so they reproduce the blueprint's probe outcomes.
+# Strings of known lengths whose fitted size and line count are pinned below.
 NAME_25 = "Alexandra Maria Rodriguez"
 NAME_61 = "Wolfgang Nguyen Hohenberg Bartholomew Montgomery Mohammed Lee"
 NAME_120 = (
@@ -41,7 +41,7 @@ EMAIL_48 = "alexandra.rodriguez.montenegro@example-group.org"
         (EMAIL_48, EMAIL, 48, 13, 1),
     ],
 )
-def test_fit_outcomes_match_blueprint(text: str, block: Block, length: int, size: int, lines: int) -> None:
+def test_fit_outcomes_for_known_strings(text: str, block: Block, length: int, size: int, lines: int) -> None:
     assert len(text) == length
     fit = fit_text(text, block)
     assert fit is not None
@@ -77,7 +77,7 @@ def test_lines_respect_width_height_and_count_limits() -> None:
 
 @pytest.mark.req("R5")
 def test_baseline_formula() -> None:
-    # L = 1.2 * size; baseline_i = center + (n - 1) * L / 2 - i * L - 0.35 * size
+    # With L = 1.2 * size: baseline_i = center + (n - 1) * L / 2 - i * L - 0.35 * size.
     assert baselines(Fit(size=20, lines=("a", "b")), center_y=405) == pytest.approx([410.0, 386.0])
     assert baselines(Fit(size=40, lines=("a",)), center_y=405) == pytest.approx([391.0])
     assert baselines(Fit(size=10, lines=("a", "b", "c")), center_y=100) == pytest.approx([108.5, 96.5, 84.5])
@@ -85,9 +85,8 @@ def test_baseline_formula() -> None:
 
 @pytest.mark.req("R5")
 def test_worst_case_email_fits() -> None:
-    # §10.3: a valid email is never rejected for layout. The blueprint's case is 254 x "W"; the
-    # widest printable ASCII glyph in DejaVu Sans is actually "@" (1.000 em vs 0.989 em for "W"), so
-    # 254 x "@" is checked too: a strictly wider bound than any real address, which has one "@".
+    # A valid email is never rejected for layout. "@" is the widest printable ASCII glyph in DejaVu Sans
+    # (1.000 em vs 0.989 em for "W"), so 254 x "@" bounds any real address.
     widest = max((chr(c) for c in range(0x21, 0x7F)), key=lambda ch: EMAIL.line_width(ch, 1))
     for text in ("W" * 254, widest * 254):
         fit = fit_text(text, EMAIL)

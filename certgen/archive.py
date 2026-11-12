@@ -1,4 +1,4 @@
-"""Job archive (§11.3): a ZIP of every generated PDF plus manifest.csv with one line per submitted row.
+"""Job archive: a ZIP of every generated PDF plus manifest.csv with one line per submitted row.
 
 Built from rows the caller already loaded, so no DB connection is held while files are read.
 """

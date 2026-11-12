@@ -87,7 +87,6 @@ def create_app(
     app = FastAPI(title="certgen", version=__version__, lifespan=async_lifespan(lifespan))
     app.state.settings = settings
     app.state.clock = clock
-    app.state.renderer = renderer
     app.state.archive_slots = threading.BoundedSemaphore(ARCHIVE_CONCURRENCY)
     app.add_middleware(
         BodySizeLimitMiddleware,
@@ -106,7 +105,7 @@ def create_app(
         max_requests=MAX_CONCURRENT_REQUESTS,
         max_per_client=settings.max_requests_per_client,
     )
-    # Token check before a request slot is taken or a body is read (audit F-12).
+    # Token check before a request slot is taken or a body is read.
     app.add_middleware(TokenAuthMiddleware, store=tokens, prefix="/v1/")
     # Host check before any body is read: a rebinding page cannot even get its upload buffered.
     app.add_middleware(HostAllowlistMiddleware, allowed_hosts=settings.trusted_hosts)
@@ -122,15 +121,15 @@ def create_app(
 
 
 def serve() -> None:
-    """`python -m certgen`: one command, embedded workers included (§15, §24.12)."""
+    """`python -m certgen`: one command, embedded workers included."""
     settings: Settings = get_app().state.settings  # the same app uvicorn loads as "certgen.main:app"
     logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     uvicorn.run(
         "certgen.main:app",
         host=settings.host,
         port=settings.port,
-        # No limit_concurrency: uvicorn counts open connections, so 64 idle sockets locked every client
-        # out (audit F-11). Requests in progress are limited by ConcurrencyLimitMiddleware instead.
+        # No limit_concurrency: uvicorn counts connections, so idle sockets could lock clients out;
+        # ConcurrencyLimitMiddleware limits requests in progress instead.
         timeout_keep_alive=5,
     )
 
@@ -139,7 +138,7 @@ _app: FastAPI | None = None
 
 
 def get_app() -> FastAPI:
-    """The process's app, built from the environment on first use rather than at import (audit F-14)."""
+    """The process's app, built from the environment on first use rather than at import."""
     global _app
     if _app is None:
         _app = create_app(Settings.from_env())

@@ -1,4 +1,4 @@
-"""Pure validation and normalization of a create-job request (§9, §24.5, §24.11).
+"""Pure validation and normalization of a create-job request.
 
 No DB, HTTP, files or clock: "today" and settings are passed in, so every rule is unit-testable.
 Policy: accept exactly what will render correctly, and reject the rest with a reason instead of
@@ -42,12 +42,12 @@ class JsonBodyError(ValueError):
 
 
 def canonical_json(value: Any) -> str:
-    """One canonical form for the audit copy and the idempotency hash (§24.4)."""
+    """One canonical form for the stored request copy and the idempotency hash."""
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def decode_json_body(raw: bytes) -> Any:
-    """Strict JSON (§24.5): UTF-8 only, no duplicate keys, no NaN/Infinity, depth <= 8."""
+    """Strict JSON: UTF-8 only, no duplicate keys, no NaN/Infinity, depth <= 8."""
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -68,8 +68,8 @@ def decode_json_body(raw: bytes) -> Any:
         raise JsonBodyError(f"The request body is not valid JSON: {exc.msg}.") from None
     if _depth_exceeds(value, MAX_JSON_DEPTH):
         raise JsonBodyError(f"The request body is nested deeper than {MAX_JSON_DEPTH} levels.")
-    # Valid JSON syntax, but "\ud800"-style escapes decode to strings that cannot be encoded as UTF-8,
-    # so they could be neither stored, hashed nor echoed back (audit F-03). I-JSON (RFC 7493) forbids them.
+    # "\ud800"-style escapes decode to strings that cannot be encoded as UTF-8, so they could be
+    # neither stored, hashed nor echoed back (I-JSON, RFC 7493, forbids them too).
     if _has_lone_surrogate(value):
         raise JsonBodyError("The request body contains an unpaired UTF-16 surrogate escape.")
     return value
@@ -130,7 +130,7 @@ def norm(value: str) -> str:
 
 
 def _charset_error(field: str, value: str) -> FieldError | None:
-    """C1 then C2 (§9); the message names the first offending character."""
+    """Invalid characters first, then unsupported ones; the message names the first offending character."""
     for ch in value:
         category = unicodedata.category(ch)
         if category[0] == "C" or (category[0] == "Z" and ch != " "):
@@ -198,7 +198,7 @@ class ValidatedRequest:
 
     @property
     def all_errors(self) -> list[FieldError]:
-        """§24.11 order: request-level first, then rows ascending (each row's errors already ordered)."""
+        """Request-level errors first, then rows ascending (each row's errors already ordered)."""
         return [*self.request_errors, *self.row_errors]
 
 
@@ -260,8 +260,8 @@ def _validate_rows(
 ) -> tuple[tuple[ValidatedRow, ...], list[FieldError]]:
     """Validated rows, plus a request-level error for each row larger than any legal row could be.
 
-    A recipient whose canonical JSON exceeds BODY_BYTES_PER_RECIPIENT cannot be a valid row; storing it
-    would let one request persist several times its size (audit P8-N1), so the whole request fails.
+    A recipient whose canonical JSON exceeds BODY_BYTES_PER_RECIPIENT cannot be valid; storing it would
+    let one request persist several times its size, so the whole request fails.
     """
     rows = []
     oversized: list[FieldError] = []
@@ -309,8 +309,7 @@ def _validate_rows(
 def _unknown_field_errors(raw: dict[str, Any]) -> list[FieldError]:
     """The first MAX_UNKNOWN_FIELD_ERRORS unknown keys (sorted), then one summary error for the rest.
 
-    Bounded so that a row with millions of keys cannot turn into a response, a stored error list and
-    a replay many times larger than the request (audit F-02).
+    Bounded so a row with millions of keys cannot become a response far larger than the request.
     """
     unknown = [key for key in raw if key not in ROW_FIELDS]
     errors = [
@@ -347,19 +346,18 @@ def _check_email(raw: dict[str, Any], print_email: bool) -> tuple[str | None, Fi
     email = value.strip(" ")
     if not email:
         return email, FieldError("email", FieldCode.REQUIRED, "email is required.")
-    # Checked before email-validator, whose syntax pass is quadratic in the input length (audit F-01).
+    # Checked before email-validator, whose syntax pass is quadratic in the input length.
     if len(email) > MAX_EMAIL_LENGTH:
         message = f"The email address must be at most {MAX_EMAIL_LENGTH} characters."
         return email, FieldError("email", FieldCode.INVALID_EMAIL, message)
-    # allow_smtputf8=False still admits internationalized domains; ASCII-only is checked explicitly
-    # so every accepted address is renderable and comparable byte-for-byte.
+    # allow_smtputf8=False still admits internationalized domains, so check ASCII explicitly.
     if not email.isascii():
         return email, FieldError("email", FieldCode.INVALID_EMAIL, "The email address must be ASCII only.")
     try:
         validate_email(email, check_deliverability=False, allow_smtputf8=False)
     except EmailNotValidError as exc:
         return email, FieldError("email", FieldCode.INVALID_EMAIL, str(exc))
-    # Unreachable: 254 copies of the widest ASCII glyph ("@") fit at 8 pt (§10.3); kept as a guard.
+    # Defensive: even 254 of the widest ASCII glyph fit at 8 pt.
     if print_email and fit_text(email, EMAIL) is None:
         return email, FieldError("email", FieldCode.DOES_NOT_FIT, "email does not fit on the certificate.")
     return email, None

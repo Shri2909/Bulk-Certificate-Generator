@@ -2,19 +2,18 @@
 name = "certgen"
 version = "1.0.0"
 description = "Bulk certificate generator API"
-requires-python = ">=3.11"  # enum.StrEnum (ADR-010); Phase 6 verifies on 3.11 and 3.14
+requires-python = ">=3.11"  # enum.StrEnum
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-# --strict-markers turns a typo like @pytest.mark.reqs into an error instead of a silent no-op,
-# which would otherwise hide a requirement from the traceability check.
+# A typo like @pytest.mark.reqs becomes an error instead of silently hiding a requirement.
 addopts = ["--strict-markers"]
 markers = [
     "req(*ids): links a test to requirement IDs in docs/REQUIREMENTS.md",
     "slow: subprocess tests (run by default; deselect with -m 'not slow' for the fast loop)",
 ]
-# A hung subprocess or deadlocked thread fails the test instead of hanging the suite (§16.1).
+# A hung subprocess or deadlocked thread fails the test instead of hanging the suite.
 timeout = 60
 
 [tool.ruff]

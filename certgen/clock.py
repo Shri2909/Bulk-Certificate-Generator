@@ -1,4 +1,4 @@
-"""Time source. Injected everywhere so tests drive lease expiry with a fake clock instead of sleeping."""
+"""Time source, injected so tests can drive lease expiry with a fake clock."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Database use cases (§7.1). No FastAPI, no rendering: callers get plain dataclasses back."""
+"""Database use cases. No FastAPI, no rendering: callers get plain dataclasses back."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from certgen.tables import items, jobs
 from certgen.validation import ValidatedRequest, ValidatedRow
 
 ITEM_STATUSES = ("rejected", "pending", "processing", "succeeded", "failed")
-MAX_ID_ATTEMPTS = 5  # §24.10: collisions are practically unreachable at 128 bits; this bounds the loop
+MAX_ID_ATTEMPTS = 5  # ID collisions are practically unreachable; this only bounds the retry loop
 
 
 def new_job_id() -> str:
@@ -78,7 +78,7 @@ def queue_is_full(engines: Engines, settings: Settings) -> bool:
 
 
 def check_free_disk(settings: Settings) -> None:
-    """Refuse new work when the data dir's disk is nearly full (audit P8-N1); 0 MB disables the check."""
+    """Refuse new work when the data dir's disk is nearly full; 0 MB disables the check."""
     minimum = settings.min_free_disk_mb * 1024 * 1024
     if minimum and shutil.disk_usage(settings.data_dir).free < minimum:
         raise ApiError(
@@ -94,7 +94,7 @@ def ping(engines: Engines) -> None:
 
 
 def request_hash(request_json: str) -> str:
-    """D4 fingerprint of the canonical request (§24.4): the audit copy and the key check agree."""
+    """Fingerprint of the canonical request, used to tell an idempotent replay from key reuse."""
     return hashlib.sha256(request_json.encode("utf-8")).hexdigest()
 
 
@@ -108,7 +108,7 @@ def key_reused() -> ApiError:
 def violates_unique(exc: IntegrityError, column: str) -> bool:
     """True if `exc` is SQLite's UNIQUE violation on exactly `column` ("table.column").
 
-    Exact, not a substring test: "jobs.id" is a prefix of "jobs.idempotency_key" (audit F-07).
+    Exact, not a substring test: "jobs.id" is a prefix of "jobs.idempotency_key".
     """
     return str(exc.orig) == f"UNIQUE constraint failed: {column}"
 
@@ -126,7 +126,7 @@ def _job_for_key(conn: Connection, key: str, fingerprint: str) -> str | None:
 
 
 def find_replay(engines: Engines, key: str, fingerprint: str) -> JobView | None:
-    """D4 fast path before validation: an earlier job created with this key and body."""
+    """Fast path before validation: an earlier job created with this key and body."""
     with engines.read.begin() as conn:
         job_id = _job_for_key(conn, key, fingerprint)
         return _load_job(conn, job_id) if job_id is not None else None
@@ -153,10 +153,10 @@ def create_job(
     request_json: str,
     idempotency_key: str | None = None,
 ) -> tuple[JobView, bool]:
-    """Insert the job and all its items in one write transaction; any exception rolls everything back.
+    """Insert the job and all its items in one write transaction. Returns (job, replayed).
 
-    Returns (job, replayed). With a key, the lookup is repeated under the write lock, so concurrent
-    requests with the same key create exactly one job; the others become replays.
+    With a key, the lookup is repeated under the write lock, so concurrent requests with the same
+    key create exactly one job; the others become replays.
     """
     fingerprint = request_hash(request_json) if idempotency_key is not None else None
     try:
@@ -187,17 +187,21 @@ def _create_job(
                 return _load_existing_job(conn, existing), True
         check_free_disk(settings)
         now = clock()  # read after BEGIN IMMEDIATE holds the lock, so timestamps follow commit order
-        active = count_active_items(conn)
-        if active + validated.valid_count > settings.max_active_items:
-            raise ApiError(
-                ProblemCode.CAPACITY_EXCEEDED,
-                f"The queue holds {active} unfinished certificates; accepting {validated.valid_count} more "
-                f"would exceed the limit of {settings.max_active_items}. Retry later.",
-            )
+        _ensure_capacity(conn, settings, validated.valid_count, "accepting")
         job_id = _insert_job(conn, settings, validated, request_json, now, idempotency_key, fingerprint)
         _insert_items(conn, job_id, validated.rows)
         view = _load_existing_job(conn, job_id)
     return view, False
+
+
+def _ensure_capacity(conn: Connection, settings: Settings, incoming: int, action: str) -> None:
+    active = count_active_items(conn)
+    if active + incoming > settings.max_active_items:
+        raise ApiError(
+            ProblemCode.CAPACITY_EXCEEDED,
+            f"The queue holds {active} unfinished certificates; {action} {incoming} more "
+            f"would exceed the limit of {settings.max_active_items}. Retry later.",
+        )
 
 
 def _insert_job(
@@ -220,7 +224,6 @@ def _insert_job(
                         issuer=validated.issuer,
                         issued_on=validated.issued_on,
                         print_email=int(validated.print_email),
-                        verify_base_url=settings.public_base_url,
                         request_json=request_json,
                         idempotency_key=idempotency_key,
                         request_hash=fingerprint,
@@ -236,8 +239,7 @@ def _insert_job(
 
 def _insert_items(conn: Connection, job_id: str, rows: tuple[ValidatedRow, ...]) -> None:
     for _ in range(MAX_ID_ATTEMPTS):
-        # IDs are drawn fresh on every attempt; none has been shown to anyone yet, so redrawing the
-        # whole batch is equivalent to redrawing only the colliding one and needs no per-row lookup.
+        # Redraw the whole batch on collision: no ID has been shown to anyone yet.
         values = [_item_values(job_id, row) for row in rows]
         try:
             with conn.begin_nested():
@@ -396,8 +398,8 @@ def archive_rows(engines: Engines, job_id: str) -> list[ArchiveRow] | None:
         return [ArchiveRow(**r) for r in conn.execute(text(ARCHIVE_ROWS_SQL), {"job_id": job_id}).mappings()]
 
 
-# T9 (D3): every failed item of the job back to pending, with a clean slate. A stale worker that still
-# holds an old claim is fenced out: failed rows carry no token, and the next claim issues a new one.
+# Failed items go back to pending with a clean slate. A stale worker is fenced out: failed rows
+# carry no token, and the next claim issues a new one.
 RETRY_FAILED_SQL = (
     "UPDATE items SET status = 'pending', attempts = 0, errors = NULL, available_at = NULL, "
     "lease_owner = NULL, lease_token = NULL, lease_expires_at = NULL, completed_at = NULL "
@@ -405,8 +407,8 @@ RETRY_FAILED_SQL = (
 )
 
 
-def retry_failed(engines: Engines, settings: Settings, clock: Clock, job_id: str) -> JobView | None:
-    """D3: re-queue the job's failed items in one write transaction; None if the job does not exist."""
+def retry_failed(engines: Engines, settings: Settings, job_id: str) -> JobView | None:
+    """Re-queue the job's failed items in one write transaction; None if the job does not exist."""
     with engines.write.begin() as conn:
         if not _job_exists(conn, job_id):
             return None
@@ -419,13 +421,7 @@ def retry_failed(engines: Engines, settings: Settings, clock: Clock, job_id: str
         if failed == 0:
             raise ApiError(ProblemCode.NOTHING_TO_RETRY, "The job has no failed certificates to retry.")
         check_free_disk(settings)
-        active = count_active_items(conn)
-        if active + failed > settings.max_active_items:  # same admission rule as a new job (§24.1)
-            raise ApiError(
-                ProblemCode.CAPACITY_EXCEEDED,
-                f"The queue holds {active} unfinished certificates; re-queuing {failed} more "
-                f"would exceed the limit of {settings.max_active_items}. Retry later.",
-            )
+        _ensure_capacity(conn, settings, failed, "re-queuing")
         conn.execute(text(RETRY_FAILED_SQL), {"job_id": job_id})
         view = _load_existing_job(conn, job_id)
     return view

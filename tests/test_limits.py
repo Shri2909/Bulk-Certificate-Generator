@@ -1,4 +1,4 @@
-"""Request limits: global queue capacity (§24.1), body size (§12), media type (§24.5)."""
+"""Request limits: queue capacity, body size, media type and Idempotency-Key format."""
 
 from __future__ import annotations
 
@@ -9,10 +9,9 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from conftest import JOBS, job_payload, post_job
+from conftest import JOBS, job_count, job_payload, post_job, post_raw
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
 from certgen import service
@@ -23,11 +22,6 @@ def settings_overrides() -> dict[str, Any]:
     return {"max_recipients": 3, "max_active_items": 4}
 
 
-def _job_count(app: FastAPI) -> int:
-    with app.state.engines.read.connect() as conn:
-        return int(conn.execute(text("SELECT COUNT(*) FROM jobs")).scalar_one())
-
-
 @pytest.mark.req("R11", "R15")
 def test_global_capacity_503(client: TestClient, app: FastAPI, drain: Any) -> None:
     assert post_job(client, job_payload(n=3)).status_code == 202
@@ -36,7 +30,7 @@ def test_global_capacity_503(client: TestClient, app: FastAPI, drain: Any) -> No
     assert resp.headers["retry-after"] == "1"
     assert resp.headers["content-type"] == "application/problem+json"
     assert resp.json()["code"] == "CAPACITY_EXCEEDED"
-    assert _job_count(app) == 1  # nothing stored
+    assert job_count(app) == 1  # nothing stored
     assert post_job(client, job_payload(n=1)).status_code == 202  # exactly at the cap
     drain()  # finished items no longer count as active
     assert post_job(client, job_payload(n=3)).status_code == 202
@@ -46,9 +40,8 @@ def test_global_capacity_503(client: TestClient, app: FastAPI, drain: Any) -> No
 def test_capacity_check_is_atomic_under_concurrent_posts(
     client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # If the count ran outside the write lock, both requests would reach it together, pass the
-    # barrier, see 0 active items and both insert. Under BEGIN IMMEDIATE the second request cannot
-    # count until the first commits, so the first one's barrier wait times out instead.
+    # Outside the write lock both requests would pass the barrier together, see 0 active items and both
+    # insert. Under BEGIN IMMEDIATE the second cannot count until the first commits, so the barrier times out.
     barrier = threading.Barrier(2, timeout=1.0)
     real_count = service.count_active_items
 
@@ -72,7 +65,7 @@ def test_capacity_check_is_atomic_under_concurrent_posts(
     for t in threads:
         t.join(timeout=30)
     assert sorted(statuses) == [202, 503]
-    assert _job_count(app) == 1
+    assert job_count(app) == 1
 
 
 def worst_case_row(i: int) -> dict[str, str]:
@@ -91,13 +84,13 @@ def test_too_many_recipients_422(client: TestClient, app: FastAPI) -> None:
     assert [(e["row_index"], e["field"], e["code"]) for e in resp.json()["errors"]] == [
         (None, "recipients", "TOO_MANY_RECIPIENTS")
     ]
-    assert _job_count(app) == 0
+    assert job_count(app) == 0
 
 
 @pytest.mark.req("R11")
 def test_body_over_limit_413(client: TestClient, settings: Any) -> None:
     body = b'{"x": "' + b"a" * settings.max_body_bytes + b'"}'
-    resp = client.post(JOBS, content=body, headers={"Content-Type": "application/json"})
+    resp = post_raw(client, body)
     assert resp.status_code == 413
     assert resp.headers["content-type"] == "application/problem+json"
     assert resp.json()["code"] == "PAYLOAD_TOO_LARGE"
@@ -130,7 +123,7 @@ def test_worst_case_body_at_limit_accepted(client: TestClient, settings: Any) ->
     )
     raw = json.dumps(payload).encode()  # ensure_ascii=True: the escaped (largest) encoding
     assert len(raw) <= settings.max_body_bytes
-    resp = client.post(JOBS, content=raw, headers={"Content-Type": "application/json"})
+    resp = post_raw(client, raw)
     assert resp.status_code == 202, resp.text
     assert resp.json()["errors"] == []
 
@@ -159,10 +152,10 @@ def test_wrong_media_type_415(client: TestClient, content_type: str | None, stat
 
 @pytest.mark.req("R11")
 @pytest.mark.parametrize("key", ["k" * 256, "has space", "tab\tkey", "café", ""])
-def test_idempotency_key_too_long_422(client: TestClient, app: FastAPI, key: str) -> None:
-    # 1-255 printable ASCII characters (0x21-0x7E): bounds header abuse and log injection (§12).
+def test_invalid_idempotency_key_422(client: TestClient, app: FastAPI, key: str) -> None:
+    # 1-255 printable ASCII characters (0x21-0x7E): bounds header abuse and log injection.
     resp = client.post(JOBS, json=job_payload(n=1), headers={"Idempotency-Key": key.encode("utf-8")})
     assert resp.status_code == 422
     assert [(e["field"], e["code"]) for e in resp.json()["errors"]] == [("Idempotency-Key", "INVALID_VALUE")]
-    assert _job_count(app) == 0
+    assert job_count(app) == 0
     assert client.post(JOBS, json=job_payload(n=1), headers={"Idempotency-Key": "k" * 255}).status_code == 202

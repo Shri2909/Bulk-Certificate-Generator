@@ -1,4 +1,4 @@
-"""The single predefined certificate template (§10): CertificateData -> PDF bytes.
+"""The single predefined certificate template: CertificateData -> PDF bytes.
 
 No DB, files, environment or clock: the output depends only on CertificateData, and ReportLab's
 invariant mode removes timestamps and random IDs, so equal inputs give byte-identical PDFs.
@@ -31,7 +31,7 @@ MONTH_NAMES = (
 
 @dataclass(frozen=True)
 class CertificateData:
-    """Everything that can influence the output bytes; built only from the job and item rows (§10.4)."""
+    """Everything that can influence the output bytes; built only from the job and item rows."""
 
     job_id: str
     certificate_id: str
@@ -40,7 +40,6 @@ class CertificateData:
     title: str
     issuer: str
     issued_on: str  # YYYY-MM-DD
-    verify_url: str | None = None
 
 
 def format_date(iso_date: str) -> str:

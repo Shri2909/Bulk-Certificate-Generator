@@ -1,4 +1,4 @@
-"""SQLite engines (§4). Two engines over one file: writers take the write lock at BEGIN, readers never do.
+"""SQLite engines: two over one file. Writers take the write lock at BEGIN, readers never do.
 
 SQLite has a single write lock. A transaction that reads first and writes later (deferred BEGIN) can
 fail with "database is locked" when it tries to upgrade; BEGIN IMMEDIATE takes the lock up front and
@@ -90,7 +90,7 @@ def create_engines(db_path: Path) -> Engines:
 
 
 def create_schema(engines: Engines) -> None:
-    """Create tables once; refuse databases from another schema version (§24.9).
+    """Create tables once; refuse databases from another schema version.
 
     Runs inside BEGIN IMMEDIATE, so N processes booting at once serialize: the first creates,
     the rest see user_version = 1 and return.

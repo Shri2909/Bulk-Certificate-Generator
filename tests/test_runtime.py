@@ -1,7 +1,8 @@
-"""Process entry points: `python -m certgen` server limits (§24.12) and the standalone worker."""
+"""Process entry points: `python -m certgen` and the standalone worker."""
 
 from __future__ import annotations
 
+import json
 import os
 import signal
 import socket
@@ -32,11 +33,11 @@ def test_server_limits_passed_to_uvicorn(monkeypatch: pytest.MonkeyPatch) -> Non
     main.serve()
     assert captured["app"] == "certgen.main:app"
     assert (captured["host"], captured["port"]) == ("127.0.0.1", 8123)
-    # §24.12 as amended (A-08, audit F-11): uvicorn's limit_concurrency counted open connections, so 64
-    # idle sockets locked every client out. The 64-request limit now lives in the app.
+    # uvicorn's limit_concurrency counts open connections, so idle sockets would lock clients out;
+    # the request limit lives in the app instead.
     assert "limit_concurrency" not in captured
     limits = [m.kwargs for m in main.app.user_middleware if m.cls is ConcurrencyLimitMiddleware]
-    assert limits == [{"max_requests": 64, "max_per_client": 32}]  # 32 per API token (A-19)
+    assert limits == [{"max_requests": 64, "max_per_client": 32}]  # 32 per API token
     assert captured["timeout_keep_alive"] == 5
 
 
@@ -47,8 +48,6 @@ def _free_port() -> int:
 
 
 def _healthz(port: int) -> dict[str, Any] | None:
-    import json
-
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=1) as resp:
             return dict(json.loads(resp.read()))

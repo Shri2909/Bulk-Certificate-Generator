@@ -12,6 +12,8 @@ const sample = () => [
   ["Ngọc Trần", "ngoc@example.vn"], ["Lars Øvergaard", "lars@example.no"],
 ].map(([name, email]) => ({ name, email }));
 
+const today = () => new Date().toISOString().slice(0, 10);
+
 const chapters = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4];
 const steps = [
   {
@@ -93,6 +95,25 @@ const steps = [
   },
 ];
 
+const SCENARIOS = {
+  crash: {
+    title: "Building Resilient Systems",
+    label: "Queue the crash recovery batch",
+    recipients: ["Ada Lovelace", "Alan Turing", "Katherine Johnson", "Margaret Hamilton", "Donald Knuth", "Barbara Liskov"]
+      .map((name, i) => ({ name, email: `recovery${i + 1}@example.org` })),
+  },
+  failure: {
+    title: "Reliable Software Engineering",
+    label: "Queue the failure isolation batch",
+    recipients: [
+      { name: "Grace Hopper", email: "grace@example.org" },
+      { name: "James Gosling", email: "james@example.org" },
+      { name: "Radia Perlman", email: "radia@example.org" },
+      { name: "Tim Berners-Lee", email: "tim@example.org" },
+    ],
+  },
+};
+
 let state = {};
 let busy = false;
 let server = null;
@@ -108,7 +129,7 @@ let storageAvailable = true;
 let restored = false;
 
 function fresh() {
-  return { stage: 0, recipients: sample(), course: "Python for Data Engineering", issuer: "Acme Academy", key: crypto.randomUUID(), jobId: null, originalJobId: null, dry: null, payload: null, crashJobId: null, failureJobId: null, retryIds: null };
+  return { stage: 0, recipients: sample(), course: "Python for Data Engineering", issuer: "Acme Academy", key: crypto.randomUUID(), jobId: null, originalJobId: null, dry: null, payload: null, retryIds: null };
 }
 function save() {
   try { sessionStorage.setItem(storageKey, JSON.stringify(state)); storageAvailable = true; }
@@ -126,7 +147,7 @@ function renderSession() {
     : "This browser has blocked session storage, so this tab cannot restore its walkthrough after a reload.";
   $("restored-state").classList.toggle("hidden", !restored);
 }
-function escape(value) {
+function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 function announce(message) { $("announcement").textContent = message; }
@@ -144,7 +165,7 @@ function record(call) {
 }
 function renderCalls() {
   $("call-count").textContent = `${calls.length} calls`;
-  $("call-list").innerHTML = calls.map((call, i) => `<button class="call-entry ${i === selectedCall ? "selected" : ""}" data-call="${i}"><b>${escape(call.method)} ${call.status}</b>${escape(call.label)}<small>${call.duration} ms · ${escape(call.time)}</small></button>`).join("");
+  $("call-list").innerHTML = calls.map((call, i) => `<button class="call-entry ${i === selectedCall ? "selected" : ""}" data-call="${i}"><b>${escapeHtml(call.method)} ${call.status}</b>${escapeHtml(call.label)}<small>${call.duration} ms · ${escapeHtml(call.time)}</small></button>`).join("");
   const call = calls[selectedCall];
   if (call) {
     $("call-title").textContent = `${call.method} ${call.path} → ${call.status}`;
@@ -173,8 +194,12 @@ const control = async (action) => {
   renderWorker();
   return result.data;
 };
-function payload(recipients = state.recipients, title = state.course) {
-  return { certificate: { title, issuer: state.issuer, issued_on: new Date().toISOString().slice(0, 10) }, recipients };
+function payload() {
+  return { certificate: { title: state.course, issuer: state.issuer, issued_on: today() }, recipients: state.recipients };
+}
+function scenarioPayload(kind, issuer) {
+  const { title, recipients } = SCENARIOS[kind];
+  return { certificate: { title, issuer, issued_on: today() }, recipients };
 }
 async function submit(body, key, label) {
   const result = await request(JOBS, { method: "POST", body, headers: { "Idempotency-Key": key }, label });
@@ -214,7 +239,7 @@ function render() {
   $("takeaway").textContent = step.notice;
   $("speaker-note").textContent = step.note;
   $("action-caption").textContent = step.caption;
-  $("next").innerHTML = `${escape(busy ? "Working…" : step.action)} <span>${busy ? "…" : "→"}</span>`;
+  $("next").innerHTML = `${escapeHtml(busy ? "Working…" : step.action)} <span>${busy ? "…" : "→"}</span>`;
   $("next").disabled = busy || !server || ([3, 7, 8, 9].includes(stage) && !terminal(job)) || (stage === 1 && !state.dry?.would_create_job);
   $("restore").classList.toggle("hidden", stage !== 0);
   $("restore").disabled = busy;
@@ -278,11 +303,11 @@ function renderData() {
   $("recipients").innerHTML = rows.map((row) => {
     const editable = stage === 0 && !busy;
     const person = editable
-      ? `<input class="recipient-input recipient-name" data-row="${row.row_index}" data-field="name" aria-label="Recipient ${row.row_index + 1} name" maxlength="120" value="${escape(row.name)}"><input class="recipient-input email" data-row="${row.row_index}" data-field="email" aria-label="Recipient ${row.row_index + 1} email" maxlength="254" value="${escape(row.email)}">`
-      : `<span class="recipient-name">${escape(row.name)}</span><span class="recipient-email">${escape(row.email)}</span>`;
+      ? `<input class="recipient-input recipient-name" data-row="${row.row_index}" data-field="name" aria-label="Recipient ${row.row_index + 1} name" maxlength="120" value="${escapeHtml(row.name)}"><input class="recipient-input email" data-row="${row.row_index}" data-field="email" aria-label="Recipient ${row.row_index + 1} email" maxlength="254" value="${escapeHtml(row.email)}">`
+      : `<span class="recipient-name">${escapeHtml(row.name)}</span><span class="recipient-email">${escapeHtml(row.email)}</span>`;
     const error = (row.errors || []).map((e) => friendlyError(e, row.status)).join(" · ");
     const recovered = state.stage === 7 && row.certificate_id === server?.crashed_certificate && row.status === "succeeded";
-    return `<tr class="${row.status === "processing" ? "processing-row" : ""}"><td>${String(row.row_index + 1).padStart(2, "0")}</td><td>${person}</td><td><span class="badge ${row.status === "unvalidated" ? "neutral" : row.status}">${escape(labels[row.status])}</span>${row.status === "succeeded" ? `<button class="pdf-link" data-pdf="${escape(row.certificate_id)}" aria-label="Preview certificate for ${escape(row.name)}">PDF ↗</button>` : ""}${error ? `<p class="row-error">${escape(error)}</p>` : ""}${recovered ? '<span class="recovered">Recovered · same certificate ID</span>' : ""}${row.attempts ? `<span class="mobile-attempt">Attempt ${row.attempts}</span>` : ""}</td><td>${row.attempts ?? "—"}</td></tr>`;
+    return `<tr class="${row.status === "processing" ? "processing-row" : ""}"><td>${String(row.row_index + 1).padStart(2, "0")}</td><td>${person}</td><td><span class="badge ${row.status === "unvalidated" ? "neutral" : row.status}">${escapeHtml(labels[row.status])}</span>${row.status === "succeeded" ? `<button class="pdf-link" data-pdf="${escapeHtml(row.certificate_id)}" aria-label="Preview certificate for ${escapeHtml(row.name)}">PDF ↗</button>` : ""}${error ? `<p class="row-error">${escapeHtml(error)}</p>` : ""}${recovered ? '<span class="recovered">Recovered · same certificate ID</span>' : ""}${row.attempts ? `<span class="mobile-attempt">Attempt ${row.attempts}</span>` : ""}</td><td>${row.attempts ?? "—"}</td></tr>`;
   }).join("");
   $("table-note").textContent = job ? `Job ${job.id.slice(0, 12)}… · ${rows.length} rows · live updates every 650 ms` : dry ? "Dry run only. Nothing has been added to the queue." : "Illustrative recipients. Edit a name or email before validating.";
   const hasFiles = Boolean(counts?.succeeded);
@@ -304,7 +329,7 @@ async function refresh(log = false) {
     request("/demo/state", { log: false }),
     ...(id ? [request(`${JOBS}/${id}`, { log, label: "Read job status" }), request(`${JOBS}/${id}/items?limit=1000`, { log, label: "Read recipient outcomes" })] : []),
   ]);
-  // A previous poll must not overwrite a newly selected scenario.
+  // Drop a stale poll that raced with a newly selected scenario.
   if (id !== state.jobId) return;
   server = results[0].data;
   if (id) { job = results[1].data; items = results[2].data.items; }
@@ -338,32 +363,18 @@ async function poll() {
   } finally { pollTimer = setTimeout(poll, 650); }
 }
 
-async function runCrashScenario() {
+async function runScenario(kind) {
   await control("stop");
-  const recipients = ["Ada Lovelace", "Alan Turing", "Katherine Johnson", "Margaret Hamilton", "Donald Knuth", "Barbara Liskov"].map((name, i) => ({ name, email: `recovery${i + 1}@example.org` }));
-  state.crashPayload ??= payload(recipients, "Building Resilient Systems");
+  state[`${kind}Payload`] ??= scenarioPayload(kind, state.issuer);
   save();
-  const result = await submit(state.crashPayload, state.crashKey || `${state.key}-crash`, "Queue the crash recovery batch");
-  state.crashJobId = result.data.id;
-  await control("crash");
-  setStage(6);
-  proof("Worker killed after a committed claim. The API still responds; no recovery rows were edited by the demo.");
+  await submit(state[`${kind}Payload`], state[`${kind}Key`] || `${state.key}-${kind}`, SCENARIOS[kind].label);
+  await control(kind);
+  if (kind === "crash") {
+    setStage(6);
+    proof("Worker killed after a committed claim. The API still responds; no recovery rows were edited by the demo.");
+  } else setStage(8);
 }
-async function runFailureScenario() {
-  await control("stop");
-  state.failurePayload ??= payload([
-    { name: "Grace Hopper", email: "grace@example.org" },
-    { name: "James Gosling", email: "james@example.org" },
-    { name: "Radia Perlman", email: "radia@example.org" },
-    { name: "Tim Berners-Lee", email: "tim@example.org" },
-  ], "Reliable Software Engineering");
-  save();
-  const result = await submit(state.failurePayload, state.failureKey || `${state.key}-failure`, "Queue the failure isolation batch");
-  state.failureJobId = result.data.id;
-  await control("failure");
-  setStage(8);
-}
-async function directScenario(kind) {
+async function runDirectScenario(kind) {
   if (busy || !server || (job && !terminal(job))) return;
   busy = true;
   render();
@@ -371,22 +382,15 @@ async function directScenario(kind) {
   try {
     state.directScenario = true;
     state.skippedChapters = Array.from({ length: kind === "crash" ? 3 : 4 }, (_, i) => i);
-    // Direct runs get fresh jobs. Fault scenarios use their own valid certificate
-    // metadata even if the editable starter batch has an invalid title or issuer.
-    const recipients = kind === "crash"
-      ? ["Ada Lovelace", "Alan Turing", "Katherine Johnson", "Margaret Hamilton", "Donald Knuth", "Barbara Liskov"].map((name, i) => ({ name, email: `recovery${i + 1}@example.org` }))
-      : [{ name: "Grace Hopper", email: "grace@example.org" }, { name: "James Gosling", email: "james@example.org" }, { name: "Radia Perlman", email: "radia@example.org" }, { name: "Tim Berners-Lee", email: "tim@example.org" }];
-    state[`${kind}Payload`] = {
-      certificate: { title: kind === "crash" ? "Building Resilient Systems" : "Reliable Software Engineering", issuer: "Acme Academy", issued_on: new Date().toISOString().slice(0, 10) },
-      recipients,
-    };
+    // Direct runs always start fresh jobs with valid metadata, even if the editable batch is invalid.
+    state[`${kind}Payload`] = scenarioPayload(kind, "Acme Academy");
     state[`${kind}Key`] = `${state.key}-${kind}-${crypto.randomUUID()}`;
     if (kind === "crash") {
-      // Its subsequent failure chapter must also be a fresh run.
+      // The failure chapter that follows must also be a fresh run.
       state.failurePayload = null;
       state.failureKey = `${state.key}-failure-${crypto.randomUUID()}`;
-      await runCrashScenario();
-    } else await runFailureScenario();
+    }
+    await runScenario(kind);
     await refresh(true);
   } catch (error) { proof(error.message, true); }
   finally { busy = false; render(); save(); }
@@ -424,9 +428,9 @@ async function advance() {
         proof(`HTTP ${result.response.status} · Idempotent-Replayed: true · Same job ID: ${result.data.id.slice(0, 12)}…`);
         break;
       }
-      case 5: await runCrashScenario(); break;
+      case 5: await runScenario("crash"); break;
       case 6: await control("start"); setStage(7); break;
-      case 7: await runFailureScenario(); break;
+      case 7: await runScenario("failure"); break;
       case 8: {
         state.retryIds = Object.fromEntries(items.map((row) => [row.row_index, row.certificate_id]));
         save();
@@ -451,8 +455,7 @@ async function advance() {
 async function preview(certificateId) {
   const url = `/api/v1/certificates/${encodeURIComponent(certificateId)}`;
   try {
-    // The production download uses Content-Disposition: attachment. A Blob URL
-    // embeds those exact bytes without changing the API's download contract.
+    // The API serves PDFs as attachments; a Blob URL lets the dialog embed the same bytes.
     const response = await fetch(url, { signal: AbortSignal.timeout(12000) });
     if (!response.ok) throw new Error(`PDF download failed (${response.status})`);
     const blob = await response.blob();
@@ -464,8 +467,8 @@ async function preview(certificateId) {
   } catch (error) { proof(error.message, true); }
 }
 $("next").addEventListener("click", advance);
-$("run-crash").addEventListener("click", () => directScenario("crash"));
-$("run-failure").addEventListener("click", () => directScenario("failure"));
+$("run-crash").addEventListener("click", () => runDirectScenario("crash"));
+$("run-failure").addEventListener("click", () => runDirectScenario("failure"));
 $("reload-demo").addEventListener("click", () => { if (!busy) { save(); if (storageAvailable) location.reload(); } });
 $("recipients").addEventListener("input", (event) => {
   const { row, field } = event.target.dataset;
@@ -502,7 +505,7 @@ $("confirm-restart").addEventListener("click", async () => {
   busy = true;
   $("confirm-restart").disabled = true;
   try {
-    // Do not stop an active generation and strand its queued items.
+    // Stopping now would strand queued items.
     if (job && !terminal(job)) {
       throw new Error("Finish this batch before restarting the walkthrough. Continue with the next walkthrough action.");
     }

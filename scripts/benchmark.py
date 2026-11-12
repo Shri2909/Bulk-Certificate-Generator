@@ -1,16 +1,7 @@
-"""Benchmark -> tests/fixtures/benchmarks/benchmark-*.json (§17, §24.14).
+"""Benchmark certificate generation and write the evidence JSON the README figures come from.
 
-README numbers come only from these files. Defaults: 1,000 recipients, one process.
-
-    python scripts/benchmark.py --output tests/fixtures/benchmarks/benchmark-1p.json
-
-Two phases on fresh temporary data directories:
-  A. Per-item cost: one in-process worker drains the corpus single-threaded; each item's full
-     claim -> render -> write -> complete time is measured, with render and storage timed separately.
-  B. Throughput: the corpus is submitted through the API (embedded workers off), then N
-     `python -m certgen.worker` processes drain it; wall time runs from spawning them to the last item.
-Exits non-zero if any item did not succeed, a PDF exceeds MAX_PDF_BYTES, or the slowest item took
-10% of the lease or more (§7.3: that would require an amendment, never a silent change).
+Phase A times each item through one in-process worker; phase B drains the same corpus with N worker
+processes. Exits non-zero if any acceptance check fails.
 """
 
 from __future__ import annotations
@@ -20,7 +11,6 @@ import json
 import os
 import platform
 import secrets
-import signal
 import sqlite3
 import statistics
 import subprocess
@@ -38,6 +28,7 @@ sys.path.insert(0, str(ROOT))  # run from a checkout without installing the pack
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from certgen.clock import system_clock  # noqa: E402
 from certgen.config import Settings  # noqa: E402
 from certgen.main import create_app  # noqa: E402
 from certgen.rendering import CertificateData, render_certificate  # noqa: E402
@@ -64,7 +55,7 @@ def stats(values: list[float]) -> dict[str, float]:
 
 
 def submit(data_dir: Path, recipients: int) -> float:
-    """POST the corpus once; returns the request latency in ms."""
+    """POST the corpus once and return the request latency in ms."""
     token = secrets.token_urlsafe(32)
     settings = Settings(
         data_dir=data_dir, embedded_worker=False, max_recipients=max(recipients, 1), api_tokens=(token,)
@@ -104,13 +95,12 @@ def phase_a(work: Path, recipients: int) -> dict[str, dict[str, float]]:
         render_ms.append((time.perf_counter() - started) * 1000)
         return pdf
 
-    with TestClient(create_app(settings)) as _client:
-        app_state = _client.app.state  # type: ignore[attr-defined]
+    with TestClient(create_app(settings)) as client:
         worker = Worker(
-            app_state.engines,
+            client.app.state.engines,  # type: ignore[attr-defined]
             TimedStorage(settings.certificates_dir, storage_ms),
             settings,
-            lambda: time.time_ns() // 1_000_000,
+            system_clock,
             timed_render,
         )
         while True:
@@ -155,7 +145,7 @@ def phase_b(work: Path, recipients: int, processes: int) -> dict[str, Any]:
         wall_ms = (time.perf_counter() - started) * 1000
     finally:
         for w in workers:
-            w.send_signal(signal.SIGTERM) if os.name == "posix" else w.terminate()
+            w.terminate()
         for w in workers:
             w.wait(timeout=30)
     rows = query(db, "SELECT status, attempts FROM items")
@@ -175,7 +165,7 @@ def peak_rss_bytes() -> int | None:
         import resource
     except ImportError:  # Windows
         return None
-    # ru_maxrss is KiB on Linux, bytes on macOS.
+    # ru_maxrss: KiB on Linux, bytes on macOS.
     scale = 1 if sys.platform == "darwin" else 1024
     usage = max(
         resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
@@ -216,7 +206,7 @@ def main() -> int:
         "git_commit": subprocess.run(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=False
         ).stdout.strip(),
-        # True if the code that ran differs from git_commit (uncommitted changes under certgen/ or scripts/).
+        # True if certgen/ or scripts/ differ from git_commit.
         "git_dirty": bool(
             subprocess.run(
                 ["git", "status", "--porcelain", "--", "certgen", "scripts"],
@@ -233,7 +223,7 @@ def main() -> int:
         "recipients": args.recipients,
         **throughput,
         **per_item,
-        # A synchronous POST would take at least this long; an estimate from the median, not a measurement.
+        # Estimate (median x count) of a synchronous POST, not a measurement.
         "serial_estimate_ms": round(args.recipients * per_item["per_item_ms"]["p50"], 1),
         "peak_rss_bytes": peak_rss_bytes(),
         "lease_ms": lease_ms,

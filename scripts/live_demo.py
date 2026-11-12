@@ -1,7 +1,6 @@
-"""Local presentation server. Run with .venv/bin/python scripts/live_demo.py.
+"""Local presentation server: the real API at /api plus demo-only worker controls at /demo.
 
-The production API is mounted unchanged at /api. Only this launcher exposes demo
-controls. Workers use the real queue, renderer, storage and recovery logic.
+Run with .venv/bin/python scripts/live_demo.py.
 """
 
 from __future__ import annotations
@@ -57,7 +56,7 @@ def demo_settings(data_dir: Path, api_token: str | None = None) -> Settings:
 
 
 def run_worker(data_dir: Path, mode: str) -> None:
-    """Fault injection stays in the demo; certgen itself is never patched."""
+    """Worker child process; crash/failure injection lives here so certgen itself stays unpatched."""
     settings = demo_settings(data_dir)
     prepare_data_dir(settings.data_dir, settings.certificates_dir)
     engines = create_engines(settings.db_path)
@@ -68,8 +67,7 @@ def run_worker(data_dir: Path, mode: str) -> None:
 
     def render(data: CertificateData) -> bytes:
         if mode == "crash":
-            # Tell the controller a real claim has committed, then keep this
-            # render in flight until it kills this exact child process.
+            # Signal that a claim has committed, then hang until the controller kills this process.
             marker = data_dir / "claimed.tmp"
             marker.write_text(data.certificate_id)
             marker.replace(data_dir / "claimed")
@@ -130,6 +128,7 @@ class DemoController:
 
     def state(self) -> dict[str, Any]:
         with self.lock, self.api.state.engines.read.connect() as conn:
+            running = self.worker is not None and self.worker.poll() is None
             leases = (
                 conn.execute(
                     text("SELECT certificate_id, lease_expires_at FROM items WHERE status = 'processing'")
@@ -139,8 +138,8 @@ class DemoController:
             )
             jobs = conn.execute(text("SELECT id FROM jobs ORDER BY created_at DESC")).scalars().all()
             return {
-                "worker_running": self.worker is not None and self.worker.poll() is None,
-                "worker_pid": self.worker.pid if self.worker and self.worker.poll() is None else None,
+                "worker_running": running,
+                "worker_pid": self.worker.pid if running and self.worker else None,
                 "mode": self.mode,
                 "lease_seconds": LEASE_SECONDS,
                 "render_delay_ms": int(RENDER_SECONDS * 1000),
@@ -172,12 +171,7 @@ class DemoController:
 
 
 def with_token(app: ASGIApp, token: str) -> ASGIApp:
-    """Attach the session's API token to every request the page makes to the mounted API.
-
-    The API requires a bearer token; the browser page (including plain download links) cannot send
-    one, so this local launcher adds it. It is reachable only on 127.0.0.1 with the Host and
-    same-origin checks below.
-    """
+    """Add the session token to API requests; the page and its download links cannot send one."""
     header = (b"authorization", f"Bearer {token}".encode())
 
     async def wrapped(scope: Scope, receive: Receive, send: Send) -> None:
@@ -190,7 +184,7 @@ def with_token(app: ASGIApp, token: str) -> ASGIApp:
 
 
 def build_demo(data_dir: Path) -> FastAPI:
-    token = secrets.token_urlsafe(32)  # per launch; never shown or stored outside this process
+    token = secrets.token_urlsafe(32)  # per launch, kept in memory only
     api = create_app(demo_settings(data_dir, token))
     controller = DemoController(data_dir, api)
 

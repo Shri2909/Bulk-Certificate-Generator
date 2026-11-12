@@ -1,7 +1,6 @@
-"""Exercise the demo over real HTTP, including real process death and recovery.
+"""End-to-end check of the live demo over real HTTP, including a real worker kill and recovery.
 
-Run: .venv/bin/python scripts/check_live_demo.py
-Uses a temporary data directory and stops its server and worker on completion.
+Run with .venv/bin/python scripts/check_live_demo.py; it uses a temporary data directory.
 """
 
 from __future__ import annotations
@@ -25,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def check(condition: object, detail: object = "check failed") -> None:
-    """An explicit check: unlike `assert`, it still runs under `python -O`."""
+    """Like `assert`, but still runs under `python -O`."""
     if not condition:
         raise AssertionError(detail)
 

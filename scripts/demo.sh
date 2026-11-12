@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# Live demo of certgen: run it from the repository root and narrate each step.
-#
-#   scripts/demo.sh          pause before each step (press Enter to continue)
-#   scripts/demo.sh --auto   no pauses (rehearsal)
-#
-# Uses its own port (8010) and data dir (data/demo), so it never touches a server you already run.
-# Renders are slowed to 400 ms each with the test-only CERTGEN_TEST_SLOW_RENDER_MS knob, purely so
-# progress and the crash recovery are visible to the audience. Real renders take a few milliseconds.
+# Terminal walkthrough of certgen. Run from anywhere: scripts/demo.sh [--auto]  (--auto skips the pauses).
+# Uses port 8010 and data/demo; renders are slowed to 400 ms so progress and crash recovery are visible.
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -41,7 +35,7 @@ step() {
   if [[ $AUTO -eq 0 ]]; then read -r -p "${DIM}[Enter]${RESET} " _; fi
 }
 
-show() {  # print a command the script runs itself on the next line
+show() {  # print a command that the script runs itself on the next line
   echo "${GREEN}\$ $*${RESET}"
 }
 
@@ -92,7 +86,7 @@ show "CERTGEN_EMBEDDED_WORKER=false $PY -m certgen &"
 CERTGEN_EMBEDDED_WORKER=false "$PY" -m certgen > "$DATA/api.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 1 100); do curl -s "$BASE/healthz" >/dev/null && break; sleep 0.1; done
-# Every /v1 call needs the API token the server created in its data dir on first start.
+# /v1 calls need the token the server wrote to its data dir on first start.
 TOKEN=$(cat "$DATA/api-token")
 AUTH="Authorization: Bearer $TOKEN"
 run "curl -s $BASE/healthz | json"

@@ -46,6 +46,7 @@ ENV_NAMES = {
     "max_concurrent_submissions": "CERTGEN_MAX_CONCURRENT_SUBMISSIONS",
     "api_tokens": "CERTGEN_API_TOKENS",
     "max_requests_per_client": "CERTGEN_MAX_REQUESTS_PER_TOKEN",
+    "worker_metrics_port": "CERTGEN_WORKER_METRICS_PORT",
 }
 TOKEN = re.compile(r"[A-Za-z0-9._~+/-]{16,256}=*")  # RFC 6750 token68, at least 16 characters
 HOSTNAME = re.compile(
@@ -66,6 +67,7 @@ RANGES: dict[str, tuple[float, float]] = {
     "min_free_disk_mb": (0, 1_000_000),
     "max_concurrent_submissions": (1, 64),
     "max_requests_per_client": (1, MAX_CONCURRENT_REQUESTS),
+    "worker_metrics_port": (0, 65_535),
 }
 
 
@@ -95,6 +97,8 @@ class Settings:
     api_tokens: tuple[str, ...] = ()
     # Requests in progress per API token, so one token cannot hold every slot.
     max_requests_per_client: int = 32
+    # `python -m certgen.worker` serves its own /metrics on this port (bound to CERTGEN_HOST); 0 = off.
+    worker_metrics_port: int = 0
 
     def __post_init__(self) -> None:
         for name, (low, high) in RANGES.items():

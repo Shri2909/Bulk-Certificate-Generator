@@ -15,6 +15,7 @@ from sqlalchemy.exc import OperationalError
 
 from certgen import archive, service
 from certgen.errors import ApiError, FieldCode, FieldError, ProblemCode, body_errors_from_pydantic
+from certgen.metrics import CONTENT_TYPE
 from certgen.models import (
     CertificateOut,
     Counts,
@@ -37,8 +38,10 @@ BEARER = HTTPBearer(
 )
 router = APIRouter(dependencies=[Security(BEARER)])
 health_router = APIRouter()  # open: no token
+metrics_router = APIRouter(dependencies=[Security(BEARER)])  # same token as /v1; counts only, no PII
 
 JOBS_PATH = "/v1/certificate-jobs"
+METRICS_PATH = "/metrics"
 ItemStatus = Literal["rejected", "pending", "processing", "succeeded", "failed"]
 SQLITE_MAX_INTEGER = 2**63 - 1  # a larger bound parameter raises OverflowError in sqlite3
 
@@ -237,6 +240,12 @@ def healthz(request: Request) -> Health:
         embedded_workers_alive=alive,
         embedded_workers_expected=expected,
     )
+
+
+@metrics_router.get(METRICS_PATH, response_class=Response)
+def metrics(request: Request) -> Response:
+    """Prometheus text format: queue depth, items by status, render time, lease losses."""
+    return Response(request.app.state.metrics.render(), media_type=CONTENT_TYPE)
 
 
 @router.get(JOBS_PATH + "/{job_id}/items", response_model=ItemsPage)

@@ -87,6 +87,7 @@ Rows without a path prefix are files in `certgen/`; the last three are repo-root
 | `middleware.py` | Pure ASGI: Host allowlist, token auth, concurrency, body size and time, send deadline, no-store. |
 | `auth.py` | Token store (SHA-256 digests, constant-time compare), token file creation. |
 | `service.py` | All database use cases: create job, replay, list, retry, archive rows. No FastAPI, no rendering. |
+| `metrics.py` | Prometheus registry: queue gauges read from the database at scrape time, render histogram, lease-loss counter ([ADR-014](docs/decisions/ADR-014-metrics.md)). |
 | `worker.py` | Claim, render, fenced result writes, `WorkerPool` and monitor thread, `python -m certgen.worker`. |
 | `status.py` | Pure function: item counts to job status and progress. |
 | `db.py` | Two SQLAlchemy engines (read: `BEGIN`; write: `BEGIN IMMEDIATE`), WAL, schema version check. |

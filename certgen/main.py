@@ -15,7 +15,7 @@ from sqlalchemy.exc import OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from certgen import __version__
-from certgen.api import JOBS_PATH, health_router, router
+from certgen.api import JOBS_PATH, METRICS_PATH, health_router, metrics_router, router
 from certgen.auth import TokenStore, load_or_create_token
 from certgen.clock import Clock, system_clock
 from certgen.config import (
@@ -34,6 +34,7 @@ from certgen.errors import (
     request_validation_handler,
     unhandled_exception_handler,
 )
+from certgen.metrics import Metrics
 from certgen.middleware import (
     BodySizeLimitMiddleware,
     ConcurrencyLimitMiddleware,
@@ -65,11 +66,13 @@ def create_app(
         storage = Storage(settings.certificates_dir)
         app.state.engines = engines
         app.state.storage = storage
+        metrics = Metrics(engines)
+        app.state.metrics = metrics
         pool = None
         if settings.embedded_worker:
             slow_renderer = with_slow_render(renderer, settings.test_slow_render_ms)
             pool = WorkerPool(
-                lambda: Worker(engines, storage, settings, clock, slow_renderer),
+                lambda: Worker(engines, storage, settings, clock, slow_renderer, metrics=metrics),
                 settings.worker_threads,
                 engines,
                 settings,
@@ -106,7 +109,7 @@ def create_app(
         max_per_client=settings.max_requests_per_client,
     )
     # Token check before a request slot is taken or a body is read.
-    app.add_middleware(TokenAuthMiddleware, store=tokens, prefix="/v1/")
+    app.add_middleware(TokenAuthMiddleware, store=tokens, prefix=("/v1/", METRICS_PATH))
     # Host check before any body is read: a rebinding page cannot even get its upload buffered.
     app.add_middleware(HostAllowlistMiddleware, allowed_hosts=settings.trusted_hosts)
     app.add_middleware(NoStoreMiddleware)  # added last = outermost, so it also covers 400/413 responses
@@ -116,6 +119,7 @@ def create_app(
     app.add_exception_handler(OperationalError, operational_error_handler)
     app.add_exception_handler(Exception, unhandled_exception_handler)
     app.include_router(health_router)
+    app.include_router(metrics_router)
     app.include_router(router)
     return app
 

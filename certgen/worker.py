@@ -19,6 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from types import FrameType
 
+from prometheus_client import start_http_server
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
@@ -26,6 +27,7 @@ from certgen.clock import Clock, system_clock
 from certgen.config import Settings
 from certgen.db import Engines, check_sqlite_version, create_engines, create_schema
 from certgen.errors import FieldCode, FieldError
+from certgen.metrics import Metrics
 from certgen.rendering import CertificateData, render_certificate
 from certgen.service import dump_errors
 from certgen.storage import MAX_PDF_BYTES as MAX_PDF_BYTES  # re-exported: tests and benchmark use it
@@ -120,7 +122,9 @@ class Worker:
         clock: Clock,
         renderer: Renderer,
         worker_id: str | None = None,
+        metrics: Metrics | None = None,
     ) -> None:
+        self.metrics = metrics
         self.engines = engines
         self.storage = storage
         self.settings = settings
@@ -156,7 +160,7 @@ class Worker:
     def process(self, claim: Claim) -> None:
         data = self.load_certificate_data(claim.item_id)
         try:
-            pdf = self.renderer(data)  # no DB transaction is open here
+            pdf = self._timed_render(data)  # no DB transaction is open here
             if len(pdf) > MAX_PDF_BYTES:
                 raise ValueError(f"rendered PDF is {len(pdf)} bytes; limit is {MAX_PDF_BYTES}")
             self.storage.save_atomic(data.job_id, data.certificate_id, pdf)
@@ -164,6 +168,15 @@ class Worker:
             self.record_failure(claim, exc)
             return
         self.record_success(claim)
+
+    def _timed_render(self, data: CertificateData) -> bytes:
+        # perf_counter, not the injected clock: this measures real elapsed time, and tests fake the clock.
+        started = time.perf_counter()
+        try:
+            return self.renderer(data)
+        finally:
+            if self.metrics is not None:
+                self.metrics.render_seconds.observe(time.perf_counter() - started)
 
     def claim_next(self) -> Claim | None:
         """One BEGIN IMMEDIATE transaction: retire, pick, claim. Atomic across threads and processes."""
@@ -247,6 +260,8 @@ class Worker:
 
     def _check_fence(self, claim: Claim, rowcount: int) -> None:
         if rowcount == 0:
+            if self.metrics is not None:
+                self.metrics.lease_lost.inc()
             log.warning("lease_lost item_id=%s worker_id=%s", claim.item_id, self.worker_id)
 
 
@@ -380,7 +395,13 @@ def main() -> None:
     engines = create_engines(settings.db_path)
     create_schema(engines)
     renderer = with_slow_render(render_certificate, settings.test_slow_render_ms)
-    worker = Worker(engines, Storage(settings.certificates_dir), settings, system_clock, renderer)
+    metrics = Metrics()  # no queue gauges here: the API process reads those from the database
+    if settings.worker_metrics_port:
+        start_http_server(settings.worker_metrics_port, addr=settings.host, registry=metrics.registry)
+        log.info("worker_metrics_listening host=%s port=%s", settings.host, settings.worker_metrics_port)
+    worker = Worker(
+        engines, Storage(settings.certificates_dir), settings, system_clock, renderer, metrics=metrics
+    )
     log.info("worker_started worker_id=%s", worker.worker_id)
     try:
         worker.run_forever(stop)

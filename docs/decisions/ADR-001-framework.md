@@ -3,7 +3,7 @@
 Status: Accepted · Requirements: R1, R2, R13
 
 ## Context
-The assignment allows FastAPI, Django+DRF, or Flask. The API is small: seven endpoints (ADR-009) and JSON in/out. The hard part is bulk validation and background processing, not CRUD.
+The assignment allows FastAPI, Django+DRF, or Flask. The API is small: eight endpoints (ADR-009, ADR-014) and JSON in/out. The hard part is bulk validation and background processing, not CRUD.
 
 ## Options
 | | Flask (simplest) | Django + DRF | FastAPI |

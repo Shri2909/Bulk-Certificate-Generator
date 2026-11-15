@@ -71,10 +71,12 @@ def _strip_port(host: str) -> str:
 class TokenAuthMiddleware:
     """Require `Authorization: Bearer <token>` on routes under `prefix`, with 401 UNAUTHORIZED.
 
+    `prefix` may be a tuple: every route starting with any of them is protected.
+
     A valid token's client id is put in the request state; it scopes Idempotency-Keys.
     """
 
-    def __init__(self, app: ASGIApp, store: TokenStore, prefix: str) -> None:
+    def __init__(self, app: ASGIApp, store: TokenStore, prefix: str | tuple[str, ...]) -> None:
         self.app = app
         self.store = store
         self.prefix = prefix

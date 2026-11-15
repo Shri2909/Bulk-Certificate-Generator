@@ -94,6 +94,9 @@ stable `code` values ([ADR-010](docs/decisions/ADR-010-error-model.md)).
 | `GET /v1/certificate-jobs/{job_id}/archive` | ZIP of all succeeded PDFs plus `manifest.csv`. |
 | `POST /v1/certificate-jobs/{job_id}/retry` | Re-queue the job's `failed` items. |
 | `GET /healthz` | Open health check: database and live embedded workers. |
+| `GET /metrics` | Prometheus text format (needs the token): queue depth, items by status, render-time histogram, lease losses. |
+
+Standalone workers serve their own `/metrics` when `CERTGEN_WORKER_METRICS_PORT` is set ([ADR-014](docs/decisions/ADR-014-metrics.md)).
 
 Request shape and rules: [ADR-005](docs/decisions/ADR-005-validation.md),
 [ADR-006](docs/decisions/ADR-006-idempotency.md), [ADR-009](docs/decisions/ADR-009-retrieval-api.md).
@@ -144,13 +147,14 @@ machine; this table is checked against the evidence files by `tests/test_docs.py
 - **SQLite as database and queue,** with claim, lease and fence for crash recovery ([ADR-002](docs/decisions/ADR-002-database-and-schema.md), [ADR-004](docs/decisions/ADR-004-worker-model-and-crash-recovery.md)).
 - **Partial acceptance:** per-row errors, `422` only for structural problems ([ADR-005](docs/decisions/ADR-005-validation.md)); idempotent submits ([ADR-006](docs/decisions/ADR-006-idempotency.md)).
 - **ReportLab, vendored fonts, one fixed template** ([ADR-007](docs/decisions/ADR-007-pdf-library-and-template.md)); atomic file writes ([ADR-008](docs/decisions/ADR-008-file-storage.md)).
+- **Metrics without extra services:** queue gauges read from the database at scrape time, worker timings per process ([ADR-014](docs/decisions/ADR-014-metrics.md)).
 - **Explicit limits** on rows, body size, queue depth, disk and concurrent requests ([ADR-011](docs/decisions/ADR-011-limits.md)).
 
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): components, codemap, data flow, invariants.
 - [METHODOLOGY.md](METHODOLOGY.md): requirements, decisions, tests and how they are verified.
-- [docs/decisions/](docs/decisions/): thirteen decision records, including the full
+- [docs/decisions/](docs/decisions/): fourteen decision records, including the full
   [error-code tables](docs/decisions/ADR-010-error-model.md) and
   [supported characters](docs/decisions/ADR-005-validation.md).
 - [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), [docs/problem_statement.md](docs/problem_statement.md): the assignment and its traceability.
@@ -166,6 +170,8 @@ machine; this table is checked against the evidence files by `tests/test_docs.py
 - **No lease renewal:** an item stalled longer than the lease is re-run, and after 3 expiries ends `WORKER_LOST`.
   With zero workers running, an expired item stays `processing`.
 - **Scripts:** Latin, Greek and Cyrillic; no CJK, right-to-left scripts or emoji (`UNSUPPORTED_CHARACTERS`).
+- **Metrics are counts and durations only:** no tracing, alert rules or dashboard, and a scrape scans every
+  item's status index, so its cost grows with total items (no retention).
 - **FIFO claiming:** a very large job delays smaller jobs submitted after it. No retention or cleanup;
   idempotency keys never expire.
 - Emails are printed by default (`CERTGEN_PRINT_EMAIL_ON_CERTIFICATE=false` opts out). PDF checks cover text

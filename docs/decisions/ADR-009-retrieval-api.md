@@ -20,7 +20,7 @@ Every `/v1` route requires `Authorization: Bearer <token>` (see "Authentication"
 | `POST /v1/certificate-jobs/{job_id}/retry` | Re-queue `failed` items | 202, 404, 409, 503 |
 | `GET /healthz` | Open, no token. `{"status":"ok"\|"degraded","db":"ok","embedded_workers_alive":n,"embedded_workers_expected":m}`. 503 if the database is unreachable. Worker liveness is reported, not judged: 0 alive is correct when workers run as a separate process. | 200, 503 |
 
-That is seven endpoints; `/docs` and `/openapi.json` are also served without a token.
+That is seven endpoints, plus `GET /metrics` ([ADR-014](ADR-014-metrics.md)); `/docs` and `/openapi.json` are also served without a token.
 
 ### Authentication
 Anything but a valid bearer token gets `401 UNAUTHORIZED`; `/healthz`, `/docs` and `/openapi.json` are open. Tokens come from `CERTGEN_API_TOKENS` (comma-separated, 16-256 characters). If it is unset, the server creates a random token in `{CERTGEN_DATA_DIR}/api-token` (mode `0600`) on first start and reuses it; the log shows the file's path, never the token. To rotate, change `CERTGEN_API_TOKENS` (or delete the file) and restart. Only SHA-256 digests are kept in memory. Every valid token can read every job (ids are unguessable); only idempotency keys are per token.

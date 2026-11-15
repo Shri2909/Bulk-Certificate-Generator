@@ -7,20 +7,20 @@ This is the evidence file. Every claim below names a test, a file or a command. 
 | Claim | Evidence |
 |-------|----------|
 | Spec first | The assignment is transcribed in [docs/problem_statement.md](docs/problem_statement.md) and split into 25 atomic requirements (R1-R25) in [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md), with 10 binding interpretations of ambiguous wording (A1-A10). |
-| Decisions recorded | 13 ADRs in [docs/decisions/](docs/decisions/), each with options, a decision and consequences. |
+| Decisions recorded | 14 ADRs in [docs/decisions/](docs/decisions/), each with options, a decision and consequences. |
 | Requirement traced to a test | Every test carries `@pytest.mark.req("R#")`; `tests/test_spec_traceability.py` fails if any R1-R25 has no test or a test cites an unknown ID. |
 | Failure injected on purpose | Renderer, storage, lease clock, SIGKILL of a real worker process, low disk and damaged files are all injected (table below). |
 | Measured, not guessed | `scripts/benchmark.py` writes JSON evidence; the README benchmark table is checked against it by `test_readme_numbers_match_evidence`. |
 | Security-reviewed | Auth, Host allowlist, body and slot limits, slow-client deadlines, symlink refusal and per-token limits each have named regression tests. |
 
-Result of the gates on this checkout: the full suite (450+ tests) passes in about 22 s (about 15 s with `-m 'not slow'`); ruff, ruff format and `mypy --strict` are clean.
+Result of the gates on this checkout: the full suite (473 tests) passes in about 22 s (about 15 s with `-m 'not slow'`); ruff, ruff format and `mypy --strict certgen` are clean (source only; `mypy --strict tests` reports 11 errors in 6 files, so the tests are not held to it).
 
 ## The workflow
 
 ```mermaid
 flowchart LR
     P[Problem statement] --> R[Requirements R1-R25]
-    R --> A[ADRs 001-013]
+    R --> A[ADRs 001-014]
     A --> I[Implementation]
     I --> T[Tests tagged with R#]
     T --> H[Review and hardening]
@@ -65,7 +65,7 @@ Not requirements, but tested features: idempotent submit ([006](docs/decisions/A
 | Static docs checks | README sections, links and anchors, curl example, benchmark table versus fixtures | `tests/test_docs.py` | in the default run |
 | Live demo, end to end | Real HTTP, ZIP and manifest, real worker kill, retry, replay | Temp data dir, owned processes cleaned up | `.venv/bin/python scripts/check_live_demo.py` |
 
-Counts (`pytest --collect-only -q`): 450+ tests in 22 files. Largest files: `test_audit_regressions.py` 80, `test_validation.py` 76, `test_hardening.py` 70, `test_jobs_api.py` 29. `-m slow` selects 6; the rest run in about 14 s. There are no property-based tests (no `hypothesis` dependency); table-driven `parametrize` is used for boundaries (name 120/121 characters, host variants, token header variants). Coverage is not measured.
+Counts (`pytest --collect-only -q`): 473 tests in 23 files. Largest files: `test_audit_regressions.py` 80, `test_validation.py` 76, `test_hardening.py` 71, `test_jobs_api.py` 29. `-m slow` selects 7; the rest run in about 15 s. There are no property-based tests (no `hypothesis` dependency); table-driven `parametrize` is used for boundaries (name 120/121 characters, host variants, token header variants). Coverage is not measured.
 
 ## Failure injection
 
@@ -93,7 +93,7 @@ Counts (`pytest --collect-only -q`): 450+ tests in 22 files. Largest files: `tes
 .venv/bin/ruff format --check .
 .venv/bin/mypy --strict certgen
 .venv/bin/python -m pytest -q                 # all layers, 450+ tests
-.venv/bin/python -m pytest -q -m 'not slow'   # everything except the 6 slow tests
+.venv/bin/python -m pytest -q -m 'not slow'   # everything except the 7 slow tests
 .venv/bin/python scripts/check_live_demo.py   # end-to-end, includes a real worker kill
 ```
 
@@ -156,6 +156,7 @@ Nygard-style: status, options, decision, consequences. Superseding is preferred 
 | [011](docs/decisions/ADR-011-limits.md) | Explicit limits |
 | [012](docs/decisions/ADR-012-test-strategy.md) | Deterministic, no sleeps, requirement-tagged tests |
 | [013](docs/decisions/ADR-013-certificate-identity-and-verification.md) | Unguessable ids now, public verification deferred |
+| [014](docs/decisions/ADR-014-metrics.md) | Metrics: gauges read from the database, worker timings per process |
 
 ## Known gaps
 

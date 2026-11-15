@@ -195,7 +195,7 @@ def test_readme_api_table_lists_every_endpoint(app: FastAPI) -> None:
         (method.upper(), path)
         for path, ops in app.openapi()["paths"].items()
         for method in ops
-        if path.startswith(("/v1", "/healthz"))
+        if path.startswith(("/v1", "/healthz", "/metrics"))
     }
     assert documented == served
 
